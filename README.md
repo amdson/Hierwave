@@ -12,11 +12,10 @@ vmapped batch. Or locally: `python -m castlegen.e2e`.
 
 ## What exists
 
-- `castlegen/core.py` — tile encoding (802 tiles: 50 types × 16 door masks, wall, gateway),
+- `castlegen/core.py` — tile encoding (52 tiles: 50 room types with fixed entrance/exit masks, wall, gateway),
   coordinate-hashed noise (murmur3 finaliser; chunk-invariant), checkerboard coordinates.
-- `castlegen/base.py` — dense masked base conditional (all 802 tiles scored per active site,
-  with the reachability term), Gumbel-max site update, door-bit sync (doors are edge variables
-  owned by the colour just updated), Jacobi step of the distance equality, violation count.
+- `castlegen/base.py` — dense base conditional (all 52 tiles scored per active site, with the
+  reachability term), Gumbel-max site update, Jacobi step of the distance equality, violation count.
 - `castlegen/e2e.py` — full-size run, invariant checks against exact BFS, batch timing.
 - `castlegen/schedule.py` — hashed random init, 20-step base schedule with temperature and pin
   ramps, d relaxation, a fixed number of fallback rounds. Enough to run the oracle-plan experiment.
@@ -40,9 +39,9 @@ loader (`params/`), and the stress-test harness. Order of work: offline referenc
 - Noise: `noise(castle, level, step, colour, y, x, slot)` → uniform in (0,1); sampling by Gumbel-max.
 - Gateway on the top row with a south-facing door (`GATE_MASK = 4`); perimeter is wall.
 - `d` is int16 with 32767 as ∞; walls hold ∞, gateway holds 0.
-- Door bits: 0 north, 1 east, 2 south, 3 west. Doors are edge variables: the cell being updated
-  chooses its bits, and after each checkerboard step the other colour copies its facing bits
-  (`sync_bits`), so facing bits agree on every edge. A bit toward a wall is infeasible.
+- Door bits: 0 north, 1 east, 2 south, 3 west, fixed per room type (`core.TILE_MASK`, replace with
+  `core.set_type_masks` for a designed set). A door exists on an edge iff both facing bits are set;
+  it is a function of the two types, so nothing is modelled on edges.
 - Base-level behaviour without a coarse plan: the castle grows only within the light cone of the
   d relaxation from the gateway; everything else is walled by the fallback. That is expected, and
   is what the coarse levels exist to fix.

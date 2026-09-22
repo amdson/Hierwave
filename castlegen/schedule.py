@@ -24,7 +24,6 @@ N_FALLBACK_ROUNDS = 6
 
 class Presets(NamedTuple):
     M: float = 20.0
-    M_door: float = 2.0
     M_reach: float = 20.0
     room_density: float = 0.33
     u_wall: float = 0.7
@@ -68,8 +67,7 @@ def run_base(castle_id, tiles0, d0, gate_yx, A, P, h_plan, Lam, presets: Presets
         c = jnp.where(colour == 0, coords[0], coords[1])
         hist = type_hist_per_block(tiles, block_of, n_blocks)
         g = (hist @ P.T - h_plan) @ Lam                          # (n_blocks, 8)
-        p = base.BaseParams(M=jnp.float32(presets.M), M_door=jnp.float32(presets.M_door),
-                            M_reach=jnp.float32(presets.M_reach), A=A,
+        p = base.BaseParams(M=jnp.float32(presets.M), M_reach=jnp.float32(presets.M_reach), A=A,
                             u_type=jnp.zeros(N_TYPES, jnp.float32),
                             u_wall=jnp.float32(presets.u_wall),
                             w_door=jnp.float32(presets.w_door),
@@ -79,7 +77,6 @@ def run_base(castle_id, tiles0, d0, gate_yx, A, P, h_plan, Lam, presets: Presets
                   jnp.arange(N_TILES)[None, :])
         new = base.sample_sites(logits, u, T)
         tiles = base.scatter_tiles(tiles, c, new)
-        tiles = base.sync_bits(tiles, colour)
         d = base.d_step(d, tiles)
         return (tiles, d), None
 
@@ -98,7 +95,6 @@ def run_base(castle_id, tiles0, d0, gate_yx, A, P, h_plan, Lam, presets: Presets
         v = base.violations(d, tiles)
         tiles = jnp.where((v > 0) & ~is_gate, WALL, tiles)
         tiles = jnp.where(is_room & (d == INF) & ~is_gate, WALL, tiles)
-        tiles = base.clear_half_doors(tiles)
         for _ in range(2):
             d = base.d_step(d, tiles)
         return (tiles, d), None
@@ -112,12 +108,9 @@ def init_random(castle_id, size, gate_yx, presets: Presets):
     u_room = noise(castle_id, 0, 999, 0, ys, xs, 0)
     u_type = noise(castle_id, 0, 999, 0, ys, xs, 1)
     typ = jnp.minimum((u_type * N_TYPES).astype(jnp.int32), N_TYPES - 1)
-    mask = jnp.zeros_like(typ)
-    for b in range(4):
-        mask = mask | ((noise(castle_id, 0, 999, 0, ys, xs, 2 + b) < 0.5).astype(jnp.int32) << b)
     is_room = u_room < presets.room_density
     perim = (ys == 0) | (ys == size - 1) | (xs == 0) | (xs == size - 1)
-    tiles = jnp.where(is_room & ~perim, typ * 16 + mask, WALL)
+    tiles = jnp.where(is_room & ~perim, typ, WALL)
     tiles = tiles.at[gate_yx[0], gate_yx[1]].set(GATE)
     d = jnp.full((size, size), INF, jnp.int16).at[gate_yx[0], gate_yx[1]].set(0)
     return tiles, d

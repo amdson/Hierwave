@@ -42,15 +42,20 @@ def check(tiles, d):
     mism = int((got[np.asarray(is_room)] != exact[np.asarray(is_room)]).sum())
     return dict(
         violations=int(v.sum()),
-        half_doors=int(base.half_doors(tiles).sum()),
         gateways=int(is_gate.sum()),
         rooms=n_rooms,
         room_density=n_rooms / tiles.size,
         unreached_rooms=unreached,
         d_mismatch_vs_bfs=mism,
-        doors_per_room=float(core.POP[np.asarray(mask)][np.asarray(is_room)].mean()) if n_rooms else 0.0,
+        doors_per_room=float(_doors_per_room(tiles)) if n_rooms else 0.0,
         max_d=int(np.asarray(d)[np.asarray(is_room)].max()) if n_rooms else 0,
     )
+
+
+def _doors_per_room(tiles):
+    _, _, is_room, _, _ = core.split_tile(tiles)
+    doors = sum(base._door_field(tiles))
+    return doors[is_room].mean()
 
 
 def _exact_bfs(tiles):
