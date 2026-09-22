@@ -84,10 +84,12 @@ def test_base_run_smoke():
     n_blocks = (S // schedule.BLOCK) ** 2
     h_plan = jnp.zeros((n_blocks, 8), jnp.float32)
     Lam = 4.0 * jnp.eye(8, dtype=jnp.float32)
-    tiles0 = jnp.full((S, S), core.WALL, jnp.int32).at[0, S // 2].set(core.GATE)
-    d0 = jnp.full((S, S), core.INF, jnp.int16).at[0, S // 2].set(0)
-    tiles, d = schedule.run_base(3, tiles0, d0, jnp.array([0, S // 2]), A, P,
-                                 h_plan, Lam, schedule.Presets())
+    gate = jnp.array([0, S // 2])
+    tiles0, d0 = schedule.init_random(3, S, gate, schedule.Presets())
+    tiles, d = schedule.run_base(3, tiles0, d0, gate, A, P, h_plan, Lam, schedule.Presets())
     v = base.violations(d, tiles)
     assert int(v.sum()) == 0
+    assert int(base.half_doors(tiles).sum()) == 0
     assert int((tiles == core.GATE).sum()) == 1
+    _, _, is_room, _, _ = core.split_tile(tiles)
+    assert int(is_room.sum()) > 20            # not the degenerate all-wall castle
