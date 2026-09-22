@@ -6,7 +6,14 @@ requires-python = ">=3.10"
 dependencies = ["jax>=0.4.30", "numpy"]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+render = ["pillow"]
+dev = ["pytest", "pillow"]
+
+[tool.setuptools]
+packages = ["castlegen"]
+
+[tool.setuptools.package-data]
+castlegen = ["tilesets/*.json", "tilesets/img/*.png"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
