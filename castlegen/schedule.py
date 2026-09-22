@@ -1,0 +1,99 @@
+"""Fixed-step base schedule: 20 Gibbs steps, d relaxation, fallback.
+
+Coarse levels, window resampling and count splitting are not implemented
+yet; this is the minimum needed for the oracle-plan experiment, where the
+level-1 plan (h per block, entry-side d) is taken from a reference sample.
+"""
+from __future__ import annotations
+
+from typing import NamedTuple
+
+import jax
+import jax.numpy as jnp
+
+from . import base
+from .core import (GATE, INF, N_TILES, N_TYPES, WALL, checkerboard_coords,
+                   noise, split_tile)
+
+SIZE = 192
+BLOCK = 4
+N_BASE_STEPS = 20
+N_D_STEPS_AFTER = 8   # stands in for the validity phase until it exists
+
+
+class Presets(NamedTuple):
+    M: float = 20.0
+    u_wall: float = 0.7
+    w_door: float = 0.0
+    T_start: float = 1.5
+    T_end: float = 1.0
+    T_steps: int = 12
+
+
+def block_index(size=SIZE, block=BLOCK):
+    ys, xs = jnp.meshgrid(jnp.arange(size), jnp.arange(size), indexing="ij")
+    return (ys // block) * (size // block) + (xs // block)
+
+
+def type_hist_per_block(tiles, block_of, n_blocks):
+    typ, _, is_room, _, _ = split_tile(tiles)
+    onehot = jax.nn.one_hot(typ, N_TYPES) * is_room[..., None]
+    return jax.ops.segment_sum(onehot.reshape(-1, N_TYPES), block_of.reshape(-1),
+                               num_segments=n_blocks) / (BLOCK * BLOCK)
+
+
+def run_base(castle_id, tiles0, d0, gate_yx, A, P, h_plan, Lam, presets: Presets):
+    """Run the base schedule from an initial state.
+
+    tiles0, d0 : initial grids (from a plan or a random init)
+    h_plan     : (n_blocks, 8) level-1 plan for the type histogram projection
+    Lam        : (8, 8) pin precision
+    Returns final tiles and d (after fallback).
+    """
+    size = tiles0.shape[0]
+    block_of = block_index(size)
+    n_blocks = (size // BLOCK) ** 2
+    coords = [checkerboard_coords(size, 0), checkerboard_coords(size, 1)]
+
+    def step(carry, s):
+        tiles, d = carry
+        frac = jnp.minimum(s / presets.T_steps, 1.0)
+        T = presets.T_start + (presets.T_end - presets.T_start) * frac
+        lam = 1.0 - s / N_BASE_STEPS
+        colour = s % 2
+        c = jnp.where(colour == 0, coords[0], coords[1])
+        hist = type_hist_per_block(tiles, block_of, n_blocks)
+        g = (hist @ P.T - h_plan) @ Lam                          # (n_blocks, 8)
+        p = base.BaseParams(M=jnp.float32(presets.M), A=A,
+                            u_type=jnp.zeros(N_TYPES, jnp.float32),
+                            u_wall=jnp.float32(presets.u_wall),
+                            w_door=jnp.float32(presets.w_door),
+                            P=P, lam=jnp.float32(lam), T=jnp.float32(T))
+        logits = base.base_logits(tiles, c, block_of, g, p, gate_yx)
+        u = noise(castle_id, 0, s, colour, c[:, 0][:, None], c[:, 1][:, None],
+                  jnp.arange(N_TILES)[None, :])
+        new = base.sample_sites(logits, u, T)
+        tiles = base.scatter_tiles(tiles, c, new)
+        d = base.d_step(d, tiles)
+        return (tiles, d), None
+
+    (tiles, d), _ = jax.lax.scan(step, (tiles0, d0), jnp.arange(N_BASE_STEPS))
+    for _ in range(N_D_STEPS_AFTER):
+        d = base.d_step(d, tiles)
+
+    # fallback 1: violating cells become wall (gateway exempt)
+    v = base.violations(d, tiles)
+    _, _, _, _, is_gate = split_tile(tiles)
+    tiles = jnp.where((v > 0) & ~is_gate, WALL, tiles)
+    d = base.d_step(d, tiles)
+    # fallback 2: unreached rooms become wall
+    _, _, is_room, _, is_gate = split_tile(tiles)
+    tiles = jnp.where(is_room & (d == INF) & ~is_gate, WALL, tiles)
+    d = base.d_step(d, tiles)
+    return tiles, d
+
+
+def rooms_lost(tiles_before_fallback, tiles_after):
+    _, _, r0, _, _ = split_tile(tiles_before_fallback)
+    _, _, r1, _, _ = split_tile(tiles_after)
+    return 1.0 - r1.sum() / jnp.maximum(r0.sum(), 1)
