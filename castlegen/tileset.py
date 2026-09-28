@@ -15,7 +15,15 @@ Spec, top level:
   wall      : {"unary": 0.0, "render": {...}}           built-in solid tile
   gate      : {"socket": "door", "render": {...}}       built-in, south side
   kinds     : [kind, ...]
-  rules     : [{"a": tag, "b": tag, "when": "door" | "contact", "energy": x}]
+  rules     : [{"a": tag, "b": tag, "when": "door" | "contact" | "above" | "beside", "energy": x}]
+  structures: [structure, ...]  multi-cell footprints, expanded into kinds
+Structure:
+  name, size [rows, cols], tags, unary (per piece), seam (dangling energy of
+  every internal socket), doors [{"piece": [r, c], "side": "S", "socket":
+  "door"}] (outer sides default to "wall"), glyph, render.  Each piece becomes
+  a kind "<name>_r<r>c<c>" tagged with the structure's tags and name; every
+  internal edge gets its own socket that connects only to itself, so a piece
+  pays `seam` for each neighbour that is not its partner.  No rotations.
 Kind:
   name, tags, sides {"N","E","S","W": socket}, rotations [0, 90, ...] | "all",
   solid (not a room: never on a path, no reachability; its sockets still
@@ -25,9 +33,23 @@ Kind:
   rotation), render {"color": "#rrggbb"} | {"image": "file.png"} (default: a
   random colour per variant), variants {axis: [value | {"name", "weight",
   "render"}]}.
+  flow: water.  "N" | "E" | "S" | "W": the side the tile flows out of
+  (rotated with the tile; a list of sides makes one kind per side, named
+  <name>_<side> after the first, sharing the kind's mass); "lake": still
+  water (a source and a sink, exempt from the flow rule).  source: true marks
+  a spring (needs no inflow).  Flow is part of the signature, so a river's
+  four rotations are four signatures although their sockets agree.
+  flow_rules (top level): {"into_water", "into_dry", "head_on", "parallel",
+  "anti"}: pair energies for a flowing tile pointing into water / into a
+  non-water tile, two tiles pointing into each other, and side-by-side
+  neighbours flowing the same / opposite way (all soft).
 Rule tags match a kind's tags or its name; "*" matches anything and "!x"
 anything without x.  A rule applies once per unordered neighbour pair, "door"
-only when the facing sockets connect, "contact" always.  All matching rules add.
+only when the facing sockets connect, "contact" always; "above" only when a
+is directly above b (vertical pairs, ordered: side-view tile sets), "beside"
+only for horizontal neighbours.  All matching rules add.
+A kind (or the built-in wall, "wall": {"tags": [...]}) tagged "solid" is
+matter for the side-view support rule: `ts.solid` (S,) bool.
 """
 from __future__ import annotations
 
@@ -78,6 +100,9 @@ class Kind:
     glyphs: tuple            # one per rotation
     render: dict
     axes: list = field(default_factory=list)   # [(axis, [(value, weight, render)])]
+    flow: int = -1           # side the tile flows out of at rotation 0 (-1: none)
+    lake: bool = False
+    source: bool = False
 
     @property
     def n_variants(self):
@@ -100,6 +125,12 @@ class TileSet:
     GATE: int
     jt: Tables
     np_tables: dict
+    structures: list = field(default_factory=list)   # [(name, (rows, cols) array of kind ids)]
+    flow_dir: np.ndarray = None   # (S,) side the signature flows out of, -1 if none
+    water: np.ndarray = None      # (S,) bool: flowing water or lake
+    lake: np.ndarray = None       # (S,) bool: still water, exempt from the flow rule
+    source: np.ndarray = None     # (S,) bool: spring, needs no inflow
+    solid: np.ndarray = None      # (S,) bool: tagged "solid" (side-view matter, support rule)
 
     @property
     def n_sig(self):
@@ -169,7 +200,61 @@ def _parse_value(v):
     return (v["name"], float(v.get("weight", 1.0)), v.get("render", {}))
 
 
+def _expand_structures(spec):
+    """Structures -> extra sockets, connects, dangling and kinds (a new spec)."""
+    spec = dict(spec)
+    sockets = list(spec["sockets"])
+    connects = list(spec.get("connects", []))
+    dangling = dict(spec.get("dangling", {}))
+    kinds = list(spec["kinds"])
+    layout = []
+    for st in spec.get("structures", []):
+        name, (R, C) = st["name"], st["size"]
+        sides = {(r, c): {s: "wall" for s in SIDES} for r in range(R) for c in range(C)}
+        for r in range(R):
+            for c in range(C):
+                if c + 1 < C:
+                    s = f"{name}.h{r}.{c}"
+                    sides[r, c]["E"] = sides[r, c + 1]["W"] = s
+                    sockets.append({"name": s, "draw": "none"}); connects.append([s, s])
+                    dangling[s] = float(st.get("seam", 10.0))
+                if r + 1 < R:
+                    s = f"{name}.v{r}.{c}"
+                    sides[r, c]["S"] = sides[r + 1, c]["N"] = s
+                    sockets.append({"name": s, "draw": "none"}); connects.append([s, s])
+                    dangling[s] = float(st.get("seam", 10.0))
+        for dspec in st.get("doors", []):
+            r, c = dspec["piece"]
+            if not (r in (0, R - 1) or c in (0, C - 1)):
+                raise ValueError(f"{name}: door on an interior piece {r, c}")
+            sides[r, c][dspec["side"]] = dspec.get("socket", "door")
+        names = [[f"{name}_r{r}c{c}" for c in range(C)] for r in range(R)]
+        for r in range(R):
+            for c in range(C):
+                kinds.append({"name": names[r][c], "tags": list(st.get("tags", [])) + [name],
+                              "unary": st.get("unary", 0.0), "sides": sides[r, c],
+                              "glyph": st.get("glyph", name[0]), "render": st.get("render", {})})
+        layout.append((name, names))
+    spec.update(sockets=sockets, connects=connects, dangling=dangling, kinds=kinds)
+    return spec, layout
+
+
+def _expand_flow(spec):
+    """Kinds with a list of flow sides -> one kind per side (mass shared)."""
+    kinds = []
+    for ks in spec["kinds"]:
+        f = ks.get("flow")
+        if isinstance(f, list):
+            for i, side in enumerate(f):
+                kinds.append(dict(ks, flow=side, name=ks["name"] if i == 0 else f"{ks['name']}_{side.lower()}",
+                                  unary=float(ks.get("unary", 0.0)) + math.log(len(f))))
+        else:
+            kinds.append(ks)
+    return dict(spec, kinds=kinds)
+
+
 def compile_spec(spec: dict, base_dir: str = ".") -> TileSet:
+    spec, layout = _expand_structures(_expand_flow(spec))
     # sockets
     sockets, draw = [], []
     for s in spec["sockets"]:
@@ -209,10 +294,14 @@ def compile_spec(spec: dict, base_dir: str = ".") -> TileSet:
             if not vals or any(w <= 0 for _, w, _ in vals):
                 raise ValueError(f"{name}.{axis}: variant weights must be positive")
             axes.append((axis, vals))
+        flow = ks.get("flow")
+        if flow is not None and flow != "lake" and flow not in SIDES:
+            raise ValueError(f'{name}: flow must be a side or "lake", got {flow!r}')
         kinds.append(Kind(name, frozenset(ks.get("tags", [])) | {name}, sides, rots, solid,
-                          float(ks.get("unary", 0.0)), tuple(glyphs), ks.get("render", {}), axes))
+                          float(ks.get("unary", 0.0)), tuple(glyphs), ks.get("render", {}), axes,
+                          SIDES.index(flow) if flow in SIDES else -1, flow == "lake", bool(ks.get("source", False))))
     wall_spec, gate_spec = spec.get("wall", {}), spec.get("gate", {})
-    kinds.append(Kind("wall", frozenset({"wall"}), (sid["wall"],) * 4, (0,), True,
+    kinds.append(Kind("wall", frozenset({"wall"}) | frozenset(wall_spec.get("tags", [])), (sid["wall"],) * 4, (0,), True,
                       float(wall_spec.get("unary", 0.0)), (wall_spec.get("glyph", "█"),),
                       wall_spec.get("render", {"color": "#3b3632"})))
     gsock = sid[gate_spec.get("socket", "door")]
@@ -221,16 +310,17 @@ def compile_spec(spec: dict, base_dir: str = ".") -> TileSet:
                       gate_spec.get("render", {"color": "#c0392b"})))
     K = len(kinds)
 
-    # signatures: one per (kind, distinct rotated sockets)
-    sig_kind, sig_rots, sig_sockets = [], [], []
+    # signatures: one per (kind, distinct rotated sockets and flow side)
+    sig_kind, sig_rots, sig_sockets, sig_flow = [], [], [], []
     type_sig = np.zeros((K, 4), np.int32)
     for ki, k in enumerate(kinds):
         seen = {}
         for ri, deg in enumerate(k.rotations):
-            key = _rotate(k.sides, deg)
+            f = (k.flow + deg // 90) % 4 if k.flow >= 0 else -1
+            key = (_rotate(k.sides, deg), f)
             if key not in seen:
                 seen[key] = len(sig_kind)
-                sig_kind.append(ki); sig_rots.append([]); sig_sockets.append(key)
+                sig_kind.append(ki); sig_rots.append([]); sig_sockets.append(key[0]); sig_flow.append(f)
             sig_rots[seen[key]].append(ri)
             type_sig[ki, ri] = seen[key]
     S = len(sig_kind)
@@ -255,21 +345,48 @@ def compile_spec(spec: dict, base_dir: str = ".") -> TileSet:
         return ~m if neg else m
     R_door = np.zeros((S, S), np.float32)
     R_contact = np.zeros((S, S), np.float32)
+    R_above = np.zeros((S, S), np.float32)            # [top, bottom], vertical pairs only
+    R_beside = np.zeros((S, S), np.float32)           # horizontal pairs only
     for r in spec.get("rules", []):
         ma, mb = match(r["a"]), match(r["b"])
         M = (ma[:, None] & mb[None, :]) | (mb[:, None] & ma[None, :])
         when = r.get("when", "door")
-        if when not in ("door", "contact"):
-            raise ValueError(f'rule "when" must be "door" or "contact", got {when!r}')
-        (R_door if when == "door" else R_contact)[M] += float(r["energy"])
+        if when == "above":
+            R_above[ma[:, None] & mb[None, :]] += float(r["energy"])
+            continue
+        if when not in ("door", "contact", "beside"):
+            raise ValueError(f'rule "when" must be "door", "contact", "above" or "beside", got {when!r}')
+        {"door": R_door, "contact": R_contact, "beside": R_beside}[when][M] += float(r["energy"])
+
+    flow_dir = np.asarray(sig_flow, np.int32)
+    lake = np.array([kinds[k].lake for k in sig_kind])
+    source = np.array([kinds[k].source for k in sig_kind])
+    water = (flow_dir >= 0) | lake
+    solid = np.array(["solid" in kinds[k].tags for k in sig_kind])
+    fr = spec.get("flow_rules", {})
+
+    def flow_pair(side_a, side_b):
+        """(S, S) flow energy of a (left/top) next to b (right/bottom); side_a
+        is a's side facing b."""
+        fa, fb = flow_dir[:, None], flow_dir[None, :]
+        wa, wb = water[:, None], water[None, :]
+        E = np.zeros((S, S), np.float32)
+        E += np.where(fa == side_a, np.where(wb, fr.get("into_water", 0.0), fr.get("into_dry", 0.0)), 0.0)
+        E += np.where(fb == side_b, np.where(wa, fr.get("into_water", 0.0), fr.get("into_dry", 0.0)), 0.0)
+        E += np.where((fa == side_a) & (fb == side_b), fr.get("head_on", 0.0), 0.0)
+        perp = (fa >= 0) & (fa % 2 != side_a % 2)
+        E += np.where(perp & (fa == fb), fr.get("parallel", 0.0), 0.0)
+        E += np.where(perp & (fb == (fa + 2) % 4), fr.get("anti", 0.0), 0.0)
+        return E
 
     def pair_tables(side_a, side_b):
         sa, sb = sig_sockets[:, side_a][:, None], sig_sockets[:, side_b][None, :]
         door = conn[sa, sb]
-        E = np.where(door, R_door, dang[sa] + dang[sb]) + R_contact
+        E = np.where(door, R_door, dang[sa] + dang[sb]) + R_contact + flow_pair(side_a, side_b)
         return E.astype(np.float32), door
     Eh, Dh = pair_tables(1, 3)   # left's E side against right's W side
     Ev, Dv = pair_tables(2, 0)   # top's S side against bottom's N side
+    Eh, Ev = (Eh + R_beside).astype(np.float32), (Ev + R_above).astype(np.float32)
 
     # type ids: kind-major, then rotation, then variants (first axis most significant)
     kind_V = np.array([k.n_variants for k in kinds], np.int64)
@@ -308,8 +425,31 @@ def compile_spec(spec: dict, base_dir: str = ".") -> TileSet:
         kind_offset=jnp.asarray(kind_offset, jnp.int32), kind_V=jnp.asarray(kind_V, jnp.int32),
         axis_start=jnp.asarray(axis_start), axis_n=jnp.asarray(axis_n),
         axis_stride=jnp.asarray(axis_stride), axis_cdf=jnp.asarray(np.concatenate(cdfs)))
+    kind_id = {k.name: i for i, k in enumerate(kinds)}
+    structures = [(name, np.array([[kind_id[n] for n in row] for row in names])) for name, names in layout]
     return TileSet(spec.get("name", "tileset"), base_dir, sockets, draw, kinds, sig_kind, sig_rots,
-                   sig_sockets, kind_offset, n_types, WALL, GATE, jt, np_tables)
+                   sig_sockets, kind_offset, n_types, WALL, GATE, jt, np_tables, structures,
+                   flow_dir, water, lake, source, solid)
+
+
+def structure_census(ts: TileSet, tiles):
+    """{structure: (complete, orphan_cells)} on a signature grid.  A structure is
+    complete when every piece sits at its offset from a top-left piece; orphan
+    cells are structure pieces not covered by a complete one."""
+    k = ts.sig_kind[np.asarray(tiles)]
+    H, W = k.shape
+    out = {}
+    for name, grid in ts.structures:
+        R, C = grid.shape
+        covered = np.zeros((H, W), bool)
+        complete = 0
+        for y, x in zip(*np.nonzero(k == grid[0, 0])):
+            if y + R <= H and x + C <= W and np.array_equal(k[y:y + R, x:x + C], grid):
+                complete += 1
+                covered[y:y + R, x:x + C] = True
+        pieces = np.isin(k, grid.ravel())
+        out[name] = (complete, int((pieces & ~covered).sum()))
+    return out
 
 
 # --------------------------------------------------------------------------

@@ -1,0 +1,13 @@
+{
+  "name": "castle_promise", "tileset": "demo", "exemplar": "castle",
+  "size": 128, "seed": 0,
+  "stages": [
+    {"stage": "hier", "K": 16, "h_top": 64, "tables": "corpus", "corpus_seeds": 24, "lam": 1.0,
+     "T": 1.0, "sweeps": 3, "kappa": 4.0, "r": [1, 1, 0, 0, 0, 0, 0]},
+    {"stage": "tiles", "phase": 1},
+    {"stage": "repair", "rounds": 20, "T": 0.4, "tau": 1.9, "clear_orphans": true},
+    {"stage": "fulfil", "protect_nodes": true},
+    {"stage": "repair", "rounds": 10, "T": 0.4, "tau": 1.9, "clear_orphans": true, "no_new_nodes": true},
+    {"stage": "fulfil"}
+  ]
+}

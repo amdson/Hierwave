@@ -3,7 +3,7 @@ name = "castlegen"
 version = "0.0.1"
 description = "Fixed-budget hierarchical Boltzmann sampling of tile-grid castles (JAX)"
 requires-python = ">=3.10"
-dependencies = ["jax>=0.4.30", "numpy"]
+dependencies = ["jax>=0.4.30", "numpy", "scipy"]
 
 [project.optional-dependencies]
 render = ["pillow"]

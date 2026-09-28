@@ -216,8 +216,11 @@ def make_sampler(ts, size, active, need, anchor, sweeps, gate_yx=None, enclose=T
         return jnp.where(act[:, None], one_comp & anchors_ok & door_ok, ~t.is_room[None, :])
 
     n_steps = sweeps * B * B
+    K = len(ts.kinds)
     @jax.jit
     def run(tiles):
+        """Returns final tiles and a per-sweep trace: energy per cell (sweeps,)
+        and cell counts per kind (sweeps, K)."""
         def step(tiles, s):
             c = s % (B * B)
             co = coords[c]
@@ -228,9 +231,15 @@ def make_sampler(ts, size, active, need, anchor, sweeps, gate_yx=None, enclose=T
             L = jnp.where(ok, L, -1e9)
             u = noise(seed, 1 + level, s, 0, co[:, 0][:, None], co[:, 1][:, None], cand[None, :])
             new = jnp.where(ok.any(1), base.sample_sites(L, u), tiles[co[:, 0], co[:, 1]])
-            return base.scatter_tiles(tiles, co, new), None
-        tiles, _ = jax.lax.scan(step, tiles, jnp.arange(n_steps))
-        return tiles
+            tiles = base.scatter_tiles(tiles, co, new)
+            return tiles, None
+        def sweep(tiles, i):
+            tiles, _ = jax.lax.scan(step, tiles, i * B * B + jnp.arange(B * B))
+            e = base.total_energy(ts, tiles) / tiles.size
+            counts = jnp.bincount(t.sig_kind[tiles].ravel(), length=K)
+            return tiles, (e, counts)
+        tiles, trace = jax.lax.scan(sweep, tiles, jnp.arange(sweeps))
+        return tiles, trace
     return run
 
 
@@ -261,9 +270,10 @@ def contract_ok(ts, tiles, active, need, anchor):
     return bad
 
 
-def run(seed=0, sweeps=1000, size=20, tileset_name="demo", log=print):
+def run(seed=0, sweeps=1000, size=20, tileset_name="demo", log=print, T0=4.0, T1=1.0):
     """Top level, then refine level by level down to the base.  Returns the base
-    tile set, the base tiles, and per level (links, active, need, anchor)."""
+    tile set, the base tiles, per level (links, active, need, anchor, failures),
+    and per level the sweep trace (energy per cell, kind counts)."""
     ts = tileset.load(tileset_name)
     mts, sig_mask = mask_tileset()
     rng = np.random.default_rng(seed)
@@ -277,6 +287,7 @@ def run(seed=0, sweeps=1000, size=20, tileset_name="demo", log=print):
     links = sample_coarse(sizes[top], gate_at(top), rng)
     log(f"level {top}: {sizes[top]} x {sizes[top]} blocks, {int((links != 0).sum())} linked")
     info = {top: (links,)}
+    traces = {}
     for lvl in range(top - 1, -1, -1):
         n = sizes[lvl]
         active = links != 0
@@ -293,14 +304,64 @@ def run(seed=0, sweeps=1000, size=20, tileset_name="demo", log=print):
         bad = contract_ok(lts, tiles, active, need, anchor)
         assert not bad, f"initial fill breaks the contract at level {lvl}: {bad[:3]}"
         sampler = make_sampler(lts, n, active, need, anchor, sweeps, gate_yx=(0, gx0) if lvl == 0 else None,
-                               enclose=(lvl == 0), seed=seed, level=lvl)
-        tiles = np.asarray(sampler(jnp.asarray(tiles)))
+                               enclose=(lvl == 0), T0=T0, T1=T1, seed=seed, level=lvl)
+        tiles, (energy, counts) = sampler(jnp.asarray(tiles))
+        tiles = np.asarray(tiles)
+        traces[lvl] = (np.asarray(energy), np.asarray(counts))
         bad = contract_ok(lts, tiles, active, need, anchor)
         info[lvl] = (links, active, need, anchor, bad)
         if lvl > 0:
             links = matched(sig_mask[tiles])
         log(f"level {lvl}: {n} x {n} {'cells' if lvl == 0 else 'blocks'}, contract failures {len(bad)}")
-    return ts, tiles, info
+    return ts, tiles, info, traces
+
+
+def kind_groups(ts):
+    """Group label per kind: its first tag other than its name (else the name).
+    The gateway is left out."""
+    out = []
+    for k in ts.kinds:
+        tags = sorted(k.tags - {k.name})
+        out.append(None if k.name == "gate" else (tags[0] if tags else k.name))
+    return out
+
+
+SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300"]   # fixed categorical order
+
+
+def plot_trace(ts, trace, path, title=""):
+    """Two stacked charts on one sweep axis: energy per cell, and the fraction
+    of cells per kind group."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    energy, counts = trace
+    sweeps = np.arange(1, len(energy) + 1)
+    groups = kind_groups(ts)
+    names = [g for g in dict.fromkeys(groups) if g is not None]
+    frac = np.stack([counts[:, [i for i, g in enumerate(groups) if g == n]].sum(1) for n in names], 1)
+    frac = frac / counts.sum(1, keepdims=True)
+    ink, muted, grid = "#1f1f1e", "#6b6a64", "#e4e3dc"
+    fig, (a1, a2) = plt.subplots(2, 1, figsize=(8, 7), sharex=True, gridspec_kw={"hspace": 0.25})
+    for a in (a1, a2):
+        a.grid(True, color=grid, lw=0.8); a.set_axisbelow(True)
+        for sp in ("top", "right"): a.spines[sp].set_visible(False)
+        for sp in ("left", "bottom"): a.spines[sp].set_color(muted)
+        a.tick_params(colors=muted, labelsize=9)
+    a1.plot(sweeps, energy, color=SERIES[0], lw=2)
+    a1.set_title(f"Energy per cell{title}", loc="left", color=ink, fontsize=11)
+    a1.set_ylabel("E / cell", color=muted, fontsize=9)
+    for i, n in enumerate(names):
+        c = SERIES[i % len(SERIES)] if i < len(SERIES) else muted
+        a2.plot(sweeps, frac[:, i], color=c, lw=2, label=n)
+        a2.annotate(n, (sweeps[-1], frac[-1, i]), xytext=(6, 0), textcoords="offset points",
+                    va="center", fontsize=8, color=ink)
+    a2.set_title("Fraction of cells by kind group", loc="left", color=ink, fontsize=11)
+    a2.set_ylabel("fraction of cells", color=muted, fontsize=9)
+    a2.set_xlabel("sweep (each cell updated once)", color=muted, fontsize=9)
+    a2.legend(frameon=False, fontsize=8, ncol=len(names), loc="upper center", bbox_to_anchor=(0.5, -0.18))
+    fig.savefig(path, dpi=130, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
 
 
 def block_overlay(img, px, size, every=B, colour=(200, 60, 60)):
@@ -319,8 +380,11 @@ if __name__ == "__main__":
     ap.add_argument("--tileset", default="demo")
     ap.add_argument("--png", default=None)
     ap.add_argument("--px", type=int, default=0, help="pixels per cell (default: 16 up to 32 cells, else 8)")
+    ap.add_argument("--t0", type=float, default=4.0, help="start temperature (anneal to --t1 over 70%% of sweeps)")
+    ap.add_argument("--t1", type=float, default=1.0)
+    ap.add_argument("--trace", default=None, help="write the base level's energy / composition curves here")
     args = ap.parse_args()
-    ts, tiles, info = run(args.seed, args.sweeps, args.size, args.tileset)
+    ts, tiles, info, traces = run(args.seed, args.sweeps, args.size, args.tileset, T0=args.t0, T1=args.t1)
     top = max(info)
     print("top-level links:")
     print("\n".join("".join(BOX[v] for v in row) for row in info[top][0]))
@@ -338,3 +402,6 @@ if __name__ == "__main__":
         every = B if top == 1 else B * B              # outline the level-1 or level-2 blocks
         render.save_png(block_overlay(render.image(ts, types, px), px, tiles.shape[0], every), args.png)
         print("wrote", args.png)
+    if args.trace:
+        plot_trace(ts, traces[0], args.trace, f" (base, {args.size} x {args.size}, T {args.t0:g} to {args.t1:g})")
+        print("wrote", args.trace)

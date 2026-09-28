@@ -1,0 +1,14 @@
+{
+  "name": "cliffs_promise", "tileset": "cliffs", "exemplar": "cliffs",
+  "size": 128, "seed": 0,
+  "stages": [
+    {"stage": "hier", "K": 16, "h_top": 64, "tables": "corpus", "corpus_seeds": 24, "corpus_source": "p",
+     "quantities": ["support"], "lam": 1.0, "T": 1.0, "sweeps": 3, "kappa": 4.0, "r": [1, 1, 0, 0, 0, 0, 0]},
+    {"stage": "tiles", "phase": 1},
+    {"stage": "ground", "tile": "stone"},
+    {"stage": "repair", "rounds": 20, "T": 0.4, "tau": 1.9},
+    {"stage": "fulfil"},
+    {"stage": "repair", "rounds": 10, "T": 0.4, "tau": 1.9, "keep_solidity": true},
+    {"stage": "fulfil"}
+  ]
+}

@@ -62,6 +62,13 @@ def sprite(ts: TileSet, tid: int, px: int) -> np.ndarray:
     if spec.get("borders", True) and not kind.solid and kind.name != "gate":
         sockets = ts.sig_sockets[ts.sig_of_type(tid)]
         _draw_borders(img, [ts.socket_draw[s] for s in sockets])
+    if kind.flow >= 0 and px >= 4:                       # flow mark: centre to the outflow side
+        d = (kind.flow + kind.rotations[r] // 90) % 4
+        c, w = px // 2, max(1, px // 8)
+        mark = np.minimum(255, img[c, c].astype(int) + 70).astype(np.uint8)
+        ys, xs = {0: (slice(0, c), slice(c - w, c + w - 1 or None)), 1: (slice(c - w, c + w - 1 or None), slice(c, px)),
+                  2: (slice(c, px), slice(c - w, c + w - 1 or None)), 3: (slice(c - w, c + w - 1 or None), slice(0, c))}[d]
+        img[ys, xs] = mark
     return img
 
 

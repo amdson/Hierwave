@@ -1,0 +1,9 @@
+{
+  "name": "wilds", "tileset": "wilds", "exemplar": "wilds",
+  "size": 128, "seed": 0,
+  "stages": [
+    {"stage": "synthesize", "kappa": 4.0, "r": [1, 1, 0, 0, 0, 0, 0]},
+    {"stage": "repair", "rounds": 20, "T": 0.4, "tau": 1.9, "clear_orphans": true},
+    {"stage": "connect", "mode": "all", "K": 16, "r": 4, "max_cost": 6, "tag": "road"}
+  ]
+}

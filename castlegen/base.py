@@ -133,6 +133,14 @@ def d_relax(ts: TileSet, tiles, n_iters: int):
     return jax.lax.fori_loop(0, n_iters, lambda _, d: d_step(ts, d, tiles), d0)
 
 
+def total_energy(ts: TileSet, tiles):
+    """E(x) = sum of pair energies over neighbour pairs - sum of log base mass:
+    -log of the unnormalised probability at T = 1 (hard constraints excluded)."""
+    t = ts.jt
+    return (t.Eh[tiles[:, :-1], tiles[:, 1:]].sum() + t.Ev[tiles[:-1, :], tiles[1:, :]].sum()
+            - t.logz[tiles].sum())
+
+
 def violations(ts: TileSet, d, tiles):
     """Per-cell count of violated hard terms (d equality, enclosure)."""
     is_room = ts.jt.is_room[tiles]

@@ -5,3 +5,4 @@ params/*.npz
 .venv/
 *.egg-info/
 images/
+cache/

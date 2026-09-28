@@ -19,8 +19,9 @@ from castlegen import base, render, tileset
 from castlegen.core import INF, checkerboard_coords, noise
 
 
-def sample_local(ts, size=64, sweeps=300, seed=0, T=1.0, T_hot=4.0):
-    """Signature grid (size, size) and its decorated type grid."""
+def sample_local(ts, size=64, sweeps=300, seed=0, T=1.0, T_hot=4.0, init=None):
+    """Signature grid (size, size) and its decorated type grid.  init: a
+    starting signature grid (default all wall)."""
     P = jnp.zeros((8, ts.n_sig), jnp.float32)
     g = jnp.zeros((1, 8), jnp.float32)
     block_of = jnp.zeros((size, size), jnp.int32)
@@ -28,9 +29,11 @@ def sample_local(ts, size=64, sweeps=300, seed=0, T=1.0, T_hot=4.0):
     no_gate = jnp.array([-10, -10])
     coords = [checkerboard_coords(size, 0), checkerboard_coords(size, 1)]
 
+    start = jnp.full((size, size), ts.WALL, jnp.int32) if init is None else jnp.asarray(init, jnp.int32)
+
     @jax.jit
     def run(seed):
-        tiles = jnp.full((size, size), ts.WALL, jnp.int32)
+        tiles = start
         def step(tiles, s):
             colour = s % 2
             c = jnp.where(colour == 0, coords[0], coords[1])

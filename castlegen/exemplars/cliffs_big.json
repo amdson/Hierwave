@@ -1,0 +1,18 @@
+{
+ "tileset": "cliffs",
+ "torus": true,
+ "T": 0.6,
+ "T_hot": 4.0,
+ "corpus_T": 0.9,
+ "clean": true,
+ "connect": false,
+ "support": true,
+ "ground": 8,
+ "sweeps": 300,
+ "seed": 0,
+ "size": [
+  256,
+  256
+ ],
+ "npy": "cliffs_big.npy"
+}

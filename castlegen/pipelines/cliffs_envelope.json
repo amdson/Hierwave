@@ -1,0 +1,10 @@
+{
+  "name": "cliffs_envelope", "tileset": "cliffs", "exemplar": "cliffs",
+  "size": 128, "seed": 0,
+  "stages": [
+    {"stage": "hier", "K": 16, "h_top": 64, "tables": "reference", "quantities": ["envelope"],
+     "lam": 1.0, "T": 1.0, "sweeps": 3, "top_sweeps": 10, "kappa": 4.0, "r": [1, 1, 0, 0, 0, 0, 0],
+     "first_corrected": 0},
+    {"stage": "heights", "T": 1.0, "w_tex": 1.0, "sweeps": 10}
+  ]
+}

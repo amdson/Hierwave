@@ -89,3 +89,19 @@ def test_render_and_preview(ts):
     assert len(txt) == 16 and all(len(r) == 16 for r in txt)
     tree = int(ts.kind_offset[[k.name for k in ts.kinds].index("tree")])
     assert render.sprite(ts, tree, 8).std() > 0                    # the image tile, not a flat colour
+
+
+def test_structure_expansion_and_census(ts):
+    name, grid = ts.structures[0]
+    assert name == "greenhouse" and grid.shape == (3, 4)
+    sig = {k: int(np.nonzero(ts.sig_kind == k)[0][0]) for k in grid.ravel()}
+    t = np.full((8, 8), ts.WALL, np.int32)
+    t[2:5, 1:5] = np.vectorize(sig.get)(grid)
+    assert tileset.structure_census(ts, t)["greenhouse"] == (1, 0)
+    Eh = ts.np_tables["Eh"]
+    # a seam joins only its partner: r0c0 | r0c1 bonds; r0c1 | r0c0 leaves r0c1's east seam
+    # facing r0c0's west wall (r0c0 is on the west edge), so one dangle
+    assert Eh[sig[grid[0, 0]], sig[grid[0, 1]]] == pytest.approx(-1.5)
+    assert Eh[sig[grid[0, 1]], sig[grid[0, 0]]] == pytest.approx(4.5)
+    t[2, 1] = ts.WALL
+    assert tileset.structure_census(ts, t)["greenhouse"] == (0, 11)
