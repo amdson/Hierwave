@@ -791,4 +791,145 @@ $w = 1$ for coherent candidates and $\kappa$ for jumps, by Gumbel-max:
   multiscale Markov random field, \emph{IEEE TIP} 7(6), 1998.
 \end{thebibliography}
 
+%-----------------------------------------------------------------------------
+\section{Connectivity in a block: local auxiliary fields}
+
+Code: \texttt{castlegen/blockfield.py}; test \texttt{notes/experiments/block\_field.py}.
+Port semantics: \texttt{castlegen/blockconn.py}; the pipeline that produces the patterns:
+\texttt{notes/experiments/maze.py}.
+
+\paragraph{Notation.} All symbols of this section, defined once.
+\begin{itemize}
+  \item $k = 16$: block side. $P = \{0,\dots,k-1\}^2$: the block's cells, written $p, q$.
+        $N(p) \subseteq P$: the in-block 4-neighbours of $p$.
+  \item $\mathcal T$: the tile set (signatures), $|\mathcal T| = 56$.
+        $t_p \in \mathcal T$: the tile at $p$; $x = (t_p)_{p \in P}$.
+  \item $\mathrm{node}(t) \in \{0,1\}$: tile $t$ is walkable (a room, hallway or courtyard tile).
+  \item $\mathrm{sock}_\sigma(t) \in \{0,1\}$: side $\sigma \in \{N,E,S,W\}$ of $t$ can join some walkable tile.
+  \item $J(p,q) \in \{0,1\}$ for $q \in N(p)$: $p$ and $q$ are joined, i.e.\ both walkable and
+        their facing sockets connect (the tile set's join tables).
+  \item Ports: the 8 half-sides of the block, $k/2$ edge cells each. The pattern
+        $\ell \in \{0, 1..4, \mathrm{OPEN}\}^8$ (from the promise, \S below) gives each port
+        \emph{closed} (0), a \emph{class} (1..4: openings joined outside the block), or
+        \texttt{OPEN} (must have openings, assumes nothing outside).
+  \item Opening: a walkable edge cell $p$ with $\mathrm{sock}_\sigma(t_p)$ on its outward side $\sigma$.
+        $\mathrm{exit}(p) \in \{0,1\}$: $p$ is an opening on a port with a class.
+  \item Fields: $g_p \in \{0,\dots,G\} \cup \{\infty\}$, the number of gaps on the route $p$
+        claims to an exit; $d_p \in \{0,\dots,D\}$, the route's step count (ignored when
+        $g_p = \infty$). Here $G = 8$, $D = 96$. $\tilde g = g$ with $\tilde\infty = G + 1$.
+  \item $s(p,q) = 1 - J(p,q)$: the gap cost of the step $p \to q$.
+  \item $\lambda \ge 0$: the guidance weight, ramped $0 \to \lambda_{\max} = 8$.
+        $\mu = \lambda$ (cost per gap, walkable cells), $\epsilon = 0.1\,\mu$ (walls),
+        $\delta = 0.05$ (per step), $L = 1000$ (per invalid cell).
+  \item $E_{\text{tile}}(x)$: the tile energy at $T = 1$: pair tables over in-block pairs,
+        closed ports facing wall, $-\log z(t)$ per tile, and the parent term
+        $\beta \sum_p -\log \hat p(t_p \mid W_p)$, where $W_p$ is the exemplar tiles within
+        2 of $p$'s coordinate in the parent window and $\hat p$ their smoothed frequencies.
+  \item $c(p) = (x+2y) \bmod 5$ for $p = (y,x)$: the update class.
+\end{itemize}
+
+\paragraph{Where the pattern comes from.} The promise levels ($h = 64, 32, 16$) give each
+16-block its open sides and a key; a side is \emph{downhill} if open into a lower key. Both
+halves of a downhill side get class 1, both halves of another open side \texttt{OPEN}, and
+closed sides 0. Every block but the root has a downhill side.
+
+\paragraph{Validity.} Cell $p$ is \emph{valid} when
+\[
+  V_p \;=\; [g_p = \infty] \;\lor\; \mathrm{exit}(p) \;\lor\; \exists\, q \in N(p):\;
+  g_q < \infty,\; d_q < d_p,\; g_q + s(p,q) \le g_p .
+\]
+Such a $q$ is a \emph{witness} of $p$. $V_p$ reads only $p$ and $N(p)$.
+
+\paragraph{Energy.}
+\[
+  E(x,g,d) = E_{\text{tile}}(x)
+  + \lambda\, n_{\text{closed}}(x) + \lambda\, n_{\text{empty}}(x)
+  + L \sum_p \1[\lnot V_p]
+  + \sum_p \Big( \mu_p\, \tilde g_p + \delta\, d_p\, \1[g_p < \infty] \Big),
+\]
+with $\mu_p = \mu$ if $\mathrm{node}(t_p)$, else $\epsilon$;
+$n_{\text{closed}}$ the openings on closed ports (a sum over edge cells);
+$n_{\text{empty}}$ the class or \texttt{OPEN} ports with no opening.
+
+\paragraph{What zero means.} If every cell is valid and $g_p = 0$ for every walkable $p$,
+then every walkable cell is joined inside the block to an exit: follow witnesses from $p$;
+$d$ strictly decreases, so the walk ends, and only at an exit; $g = 0$ forces every step to
+be a join ($s = 0$), since $g_q + s \le g_p = 0$. The check is local: count invalid cells and
+walkable cells with $g > 0$.
+
+\paragraph{The update.} Every term of $E$ but $n_{\text{empty}}$ spans a cell and its
+neighbours, so two cells interact only within distance 2. Cells of one class $c(p)$ are at
+least 3 apart, so they share no term, and drawing them simultaneously from their single-site
+conditionals is exact.
+
+\begin{algorithm}[h]
+\caption{One sweep of the field sampler}
+\begin{algorithmic}[1]
+\For{$c = 0, \dots, 4$}
+  \ForAll{$p$ with $c(p) = c$ \textbf{in parallel}}
+    \ForAll{$q \in N(p)$}
+      \State $b_q \gets V_q$ with $p$ excluded as a witness
+    \EndFor
+    \ForAll{candidates $(t, g, d) \in \mathcal T \times (\{0..G\} \cup \{\infty\}) \times \{0..D\}$}
+      \State $e \gets$ the terms of $E$ that involve $p$, with $(t_p, g_p, d_p) = (t, g, d)$:
+      \State \quad tile pairs with $N(p)$, $-\log z(t)$, parent term, port terms at $p$
+      \State \quad $+\,\mu_t\, \tilde g + \delta\, d\, \1[g < \infty]$
+      \State \quad $+\,L\, \1[\lnot V_p]$ \Comment{own validity under $(t,g,d)$}
+      \State \quad $+\,L \sum_{q \in N(p),\, \lnot b_q} \1\big[\lnot(g < \infty \land d < d_q \land g + s_t(q,p) \le g_q)\big]$
+    \EndFor
+    \State $(t_p, g_p, d_p) \gets \arg\max_{(t,g,d)} \big(-e(t,g,d) + \text{Gumbel}\big)$ \Comment{exact draw at $T = 1$}
+  \EndFor
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+\noindent Here $s_t(q,p)$ is the step cost with $p$'s tile set to $t$; $\mu_t = \mu$ if
+$\mathrm{node}(t)$, else $\epsilon$. The last line of the energy charges $L$ for each
+neighbour that relied on $p$ as its witness and would lose it. $n_{\text{empty}}$ couples the
+$k/2$ cells of a port; the update reads the port's other cells as they are, so it alone is
+not exact in parallel.
+
+\paragraph{Initialisation.} $x$ starts as the parent window. $(g,d)$ start at the least
+valid values: a Dijkstra from the exits, ordered lexicographically on $(g,d)$, with step
+$q \to p$ adding $(s(p,q), 1)$; values past $G$ or $D$ become $\infty$. The start is valid,
+and with $L$ large the chain stays valid.
+
+\paragraph{Why it guides.} Walkable cells of an orphan component can only claim routes that
+cross gaps, so each pays $\mu$ per gap. Walls relay routes for $\epsilon \ll \mu$. Turning a
+wall next to a joined region into a joined walkable tile costs that cell nothing (it takes
+$g = 0$ from its witness), and lets the cells behind it lower $g$ by one over the next
+sweeps. Paths grow toward orphans as a ratchet; the reward arrives a sweep or two later,
+through neighbour reads only. An invalid cell must cost a constant $L$: ramped with $\lambda$
+it is free early, and one invalid cell lets a whole orphan component claim $g = 0$.
+
+\paragraph{Closed form over $(g, d)$.} Enumerating the algorithm's candidates costs
+$|\mathcal T| (G+2) (D+1) \approx 54{,}000$ per site. The implementation draws the same
+conditional without enumerating. For a fixed tile $t$, the energy over the $(g,d)$ grid
+($g < \infty$) is
+\[
+  \mu_t\, g + \delta\, d + L\Big(\1[\lnot V_p(g,d)] + \sum_{q \text{ dependent}} \1[\lnot \mathrm{sat}_q(g,d)]\Big),
+\]
+where own validity is a union of quadrants, $V_p = \mathrm{exit}(p) \lor \bigvee_q
+\{g \ge g_q + s_q,\ d \ge d_q + 1\}$ over neighbours with $g_q < \infty$, and each dependent
+($b_q$ false) is satisfied on a rectangle, $\mathrm{sat}_q = \{g \le g_q - s_q,\ d \le d_q - 1\}$.
+Cutting the $g$ axis at every $g_q + s_q$ and $g_q - s_q + 1$, and the $d$ axis at every
+$d_q + 1$ and $d_q$, splits the grid into at most $9 \times 9$ rectangles of constant
+violation count $v$. A rectangle $[g_0, g_0 + n_g) \times [d_0, d_0 + n_d)$ has weight
+\[
+  e^{-Lv - \mu_t g_0 - \delta d_0}\;
+  \frac{1 - e^{-\mu_t n_g}}{1 - e^{-\mu_t}}\;
+  \frac{1 - e^{-\delta n_d}}{1 - e^{-\delta}}
+\]
+(a sum of $n$ terms when the rate is 0), and $g = \infty$ adds one entry,
+$e^{-\mu_t (G+1) - L\,n_{\text{dep}}}$. The sum depends on $t$ only through its key: the gap
+bits $s_q$, $\mathrm{exit}$ and $\mathrm{node}$, so each site computes it once per distinct
+key. A draw picks $t$ by its tile terms plus its key's log-sum, then a rectangle (or
+$\infty$) by weight, then $g$ and $d$ independently within it by inverting truncated
+geometrics. Tested against enumeration (\texttt{tests/test\_blockfield.py}); 8\,ms per
+sweep of a 16-block on one core, from 1.1\,s enumerated.
+
+\paragraph{Scope.} Every class exit is a root, so the field certifies that
+each walkable cell reaches \emph{some} class; required links between classes, and the root
+block (no class port: one component), need more (a field per group; a designated root cell).
+
 \end{document}

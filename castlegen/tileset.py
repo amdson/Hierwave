@@ -9,6 +9,8 @@ drawn once at the end (`decorate`), per cell, from the signature's members:
 rotation uniform, each variant axis from its own weights.
 
 Spec, top level:
+  extends   : a base tile set's name: its spec, each list extended and each
+              dict updated by this one's (load only)
   sockets   : ["wall", {"name": "door", "draw": "gap"}, ...]; "wall" required
   connects  : [["door", "door"], ...]  unordered pairs that form a door
   dangling  : {"door": 3.0}  energy per socket facing one it does not connect to
@@ -176,6 +178,13 @@ def load(name_or_path: str) -> TileSet:
     with open(path) as f:
         spec = json.load(f)
     spec.setdefault("name", os.path.splitext(os.path.basename(path))[0])
+    if "extends" in spec:                                                   # a base spec's lists and dicts, extended
+        with open(os.path.join(TILESET_DIR, spec.pop("extends") + ".json")) as f:
+            base = json.load(f)
+        for k, v in spec.items():
+            base[k] = (base.get(k, []) + v if isinstance(v, list)
+                       else dict(base.get(k, {}), **v) if isinstance(v, dict) else v)
+        spec = base
     return compile_spec(spec, base_dir=os.path.dirname(os.path.abspath(path)))
 
 

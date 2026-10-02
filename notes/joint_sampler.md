@@ -92,5 +92,18 @@ x ← E[u_1]
 - At h_top the 5-wide patch wraps a 4-wide periodic grid onto itself: count the self-overlap
   in ΔE_c.
 - Candidate proposal q (reuse TileChain's kNN + coherent + ε MH).
-- Weights: E_c vs E_par vs cost, and r per level.
+- Weights: E_c vs E_par vs cost, and r per level.  λ_c is a free parameter; generic.ex_weight
+  derives it from the target (λ_c = E_ex's w_h = 8 h² / 25 with E_ex's features; exact up
+  to fill = exemplar windows, finer E_ex terms and E_loc ignored).  Revisit: fit by
+  pseudo-likelihood on target samples (the exemplar alone sends λ_c → ∞).
 - A hard cross-level v relation, if a closed small-V value space turns up.
+
+## Status (2026-09-28)
+
+- Levels h = 16 → 1 run end to end (notes/experiments/joint_multi.py): kNN MH, free sides,
+  two padding rows above and below with their own patch terms and sampled columns.
+- h = 1: v = the tile's solid bit (E|E / F|F), hard cost, so compat is the support rule;
+  E_loc = E_pair / t_loc − Σ logz joins the conditional.  Output is support-valid.
+- Colours at spacing 5 are batched (JointLevel(fast=True), sweep_fast); the single-cell
+  methods are the reference, tested against it.  Speedup 1–4× (overhead per colour is
+  25 × 24 small gathers); slower than the reference at h = 16.

@@ -1,5 +1,5 @@
 # Fdb version 4
-["pdflatex"] 1790539222.98387 "coarse_to_fine.tex" "coarse_to_fine.pdf" "coarse_to_fine" 1790539223.49106 0
+["pdflatex"] 1790890318.01106 "coarse_to_fine.tex" "coarse_to_fine.pdf" "coarse_to_fine" 1790890319.01875 0
   "/usr/local/texlive/2026/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc" 1136849721 2900 1537cc8184ad1792082cd229ecc269f4 ""
   "/usr/local/texlive/2026/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/local/texlive/2026/texmf-dist/fonts/tfm/jknappen/ec/tcrm1095.tfm" 1136768653 1536 02c06700a42be0f5a28664c7273f82e7 ""
@@ -83,8 +83,8 @@
   "/usr/local/texlive/2026/texmf-var/fonts/map/pdftex/updmap/pdftex.map" 1787087090 5573038 b99aad5e4898a9034e953632f940512b ""
   "/usr/local/texlive/2026/texmf-var/web2c/pdftex/pdflatex.fmt" 1774209607 3636776 dc5fa9b6b1453b9d196cd42edf876004 ""
   "/usr/local/texlive/2026/texmf.cnf" 1774209515 577 648cd9f92f9c0eac486f4c71c85cfbbe ""
-  "coarse_to_fine.aux" 1790539223.40826 5601 2a7346a9cf4fee8528928cf279a39bf0 "pdflatex"
-  "coarse_to_fine.tex" 1790539222.91128 42176 0c3e419d109d7df747019ec08092898b ""
+  "coarse_to_fine.aux" 1790890318.89646 6776 bb833a33d11d0c98e7d487c4fe689f8b "pdflatex"
+  "coarse_to_fine.tex" 1790890316.32233 50779 473c9e7c625b8c67c11bd2e271e7b197 ""
   (generated)
   "coarse_to_fine.aux"
   "coarse_to_fine.log"

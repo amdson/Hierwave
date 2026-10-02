@@ -25,6 +25,12 @@ path       axis-aligned polyline of a tag's kinds (default "hallway"); pieces
            are chosen by which sides connect, including doors of anything
            already placed next to the path.
 cell       one signature by name, "kind@deg".
+grid       rows of characters, top-left at "at"; "legend" maps a character
+           to "kind@deg" (characters not in it are left alone).
+object     a rigid object, top-left at "at": layout "objects" {name: {"size",
+           "place": [...]}} compiles each to a template with its own place
+           list (unplaced cells wall).  castlegen/objects.py gives the
+           exemplar its object channel from these items.
 stroke     axis-aligned polyline of one signature ("kind@deg"), "width" cells
            wide (a square brush): rivers, walls.  A flowing kind (tile set
            "flow") is laid oriented along the polyline: every cell points to
@@ -161,6 +167,18 @@ def place(ts, layout):
                     put(y0 + r, x0 + c, sig_by_name(ts, ts.kinds[grid[r, c]].name))
         elif "cell" in item:
             put(*item["at"], sig_by_name(ts, item["cell"]))
+        elif "grid" in item:
+            y0, x0 = item["at"]
+            for r, row in enumerate(item["grid"]):
+                for c, ch in enumerate(row):
+                    if ch in item["legend"]:
+                        put(y0 + r, x0 + c, sig_by_name(ts, item["legend"][ch]))
+        elif "object" in item:
+            grid = object_grid(ts, layout, item["object"])
+            y0, x0 = item["at"]
+            for r in range(grid.shape[0]):
+                for c in range(grid.shape[1]):
+                    put(y0 + r, x0 + c, int(grid[r, c]))
         elif "stroke" in item:
             s, w = sig_by_name(ts, item["stroke"]), item.get("width", 1)
             lo = -(w // 2)
@@ -228,6 +246,25 @@ def place(ts, layout):
     if ts.water is not None and ts.water.any():
         _fix_placed_flow(ts, tiles, clamp)
     return tiles, clamp, seeded & ~clamp
+
+
+def object_grid(ts, layout, name):
+    """(h, w) signature grid of layout["objects"][name]: its own "place" list
+    on a "size" canvas (unplaced cells wall), every cell part of the object."""
+    spec = layout["objects"][name]
+    return place(ts, {"size": spec["size"], "place": spec["place"], "objects": layout["objects"]})[0]
+
+
+def object_mask(ts, layout):
+    """(H, W) cells covered by the layout's "object" items (wrapped)."""
+    H, W = layout["size"]
+    mask = np.zeros((H, W), bool)
+    for item in layout.get("place", []):
+        if "object" in item:
+            h, w = object_grid(ts, layout, item["object"]).shape
+            y0, x0 = item["at"]
+            mask[np.ix_((y0 + np.arange(h)) % H, (x0 + np.arange(w)) % W)] = True
+    return mask
 
 
 def _with_flow(ts, s, f):
@@ -475,7 +512,7 @@ def bridge_jump(ts, tiles, y, x, d, torus=True):
 
 
 def connect(ts, tiles, clamp=None, torus=True, max_cost=None, seed=0, tag="hallway", w_energy=1.0,
-            sources=None, targets=None, delete=True, void=None):
+            sources=None, targets=None, delete=True, void=None, fixed=None):
     """Join every component to the main one (the gate's, else the largest) by
     the cheapest set of edits along a shortest-path tree grown from it:
 
@@ -496,6 +533,7 @@ def connect(ts, tiles, clamp=None, torus=True, max_cost=None, seed=0, tag="hallw
     piece), so cheap openings win.  sources / targets: component labels (of
     connmetrics.labels) to grow from and to join; default the main component
     and all the others.  delete=False leaves unjoined components as they are.
+    fixed: (H, W) cells never edited (no door opened on them).
     Returns (tiles, unreached components left)."""
     import heapq
     from castlegen import connmetrics as cm
@@ -503,6 +541,8 @@ def connect(ts, tiles, clamp=None, torus=True, max_cost=None, seed=0, tag="hallw
     H, W = tiles.shape
     clamp = np.zeros((H, W), bool) if clamp is None else clamp
     OPEN = open_table(ts, tag)
+    fixed = np.zeros((H, W), bool) if fixed is None else fixed
+    op = lambda y, x, d: -1 if fixed[y, x] else OPEN[tiles[y, x], d]
     logz = ts.np_tables["logz"]
     ucost = np.where(OPEN >= 0, w_energy * np.maximum(0.0, logz[:, None] - logz[np.maximum(OPEN, 0)]), np.inf)
     node = cm._node(ts)
@@ -547,8 +587,8 @@ def connect(ts, tiles, clamp=None, torus=True, max_cost=None, seed=0, tag="hallw
                 if jb is None:
                     continue
                 r, (ly, lx), _ = jb
-                a_ok = OPEN[tiles[y, x], d] >= 0 if node[tiles[y, x]] else carvable[y, x]
-                if not a_ok or not node[tiles[ly, lx]] or OPEN[tiles[ly, lx], (d + 2) % 4] < 0:
+                a_ok = op(y, x, d) >= 0 if node[tiles[y, x]] else carvable[y, x]
+                if not a_ok or not node[tiles[ly, lx]] or op(ly, lx, (d + 2) % 4) < 0:
                     continue
                 c = r + (ucost[tiles[y, x], d] if node[tiles[y, x]] else 0.0) + ucost[tiles[ly, lx], (d + 2) % 4]
                 nd = du + c + jitter[ly, lx]
@@ -562,16 +602,16 @@ def connect(ts, tiles, clamp=None, torus=True, max_cost=None, seed=0, tag="hallw
                 if node[tiles[ny, nx]]:
                     if joined(y, x, d, ny, nx):
                         c = 0.0
-                    elif OPEN[tiles[y, x], d] >= 0 and OPEN[tiles[ny, nx], (d + 2) % 4] >= 0:
+                    elif op(y, x, d) >= 0 and op(ny, nx, (d + 2) % 4) >= 0:
                         c = 1.0 + ucost[tiles[y, x], d] + ucost[tiles[ny, nx], (d + 2) % 4]
                     else:
                         continue
-                elif carvable[ny, nx] and OPEN[tiles[y, x], d] >= 0:
+                elif carvable[ny, nx] and op(y, x, d) >= 0:
                     c = 1.0 + ucost[tiles[y, x], d]
                 else:
                     continue
             elif node[tiles[ny, nx]]:
-                if OPEN[tiles[ny, nx], (d + 2) % 4] < 0:
+                if op(ny, nx, (d + 2) % 4) < 0:
                     continue
                 c = ucost[tiles[ny, nx], (d + 2) % 4]
             elif carvable[ny, nx]:
@@ -737,7 +777,7 @@ def build(layout, ts=None, clean=None, join=None):
         c = join if isinstance(join, dict) else {}
         void = sig_by_name(ts, c["void"]) if "void" in c else None
         tiles, _ = connect(ts, tiles, clamp, torus, seed=seed + 3, tag=c.get("tag", "hallway"),
-                           w_energy=c.get("w_energy", 1.0), void=void)
+                           w_energy=c.get("w_energy", 1.0), void=void, fixed=object_mask(ts, layout))
     return ts, tiles, clamp
 
 

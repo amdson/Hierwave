@@ -71,9 +71,12 @@ class Analysis:
     Reads beyond it clamp to its edge rows, which is that continuation;
     coordinates stay inside it (`pad` > 0 would add pad rows of the
     continuation as coordinates).
+    levels: the sides h to analyse (default all; the others are None);
+    c2=False skips the second coherence candidates (C2 = None).
     self.E is the padded exemplar (my, m); coordinates are (y in [0, my), x mod m)."""
 
-    def __init__(self, ts, E, n_pca=32, min_jump=0.05, seed=0, bounds=None, pad=None, **feat):
+    def __init__(self, ts, E, n_pca=32, min_jump=0.05, seed=0, bounds=None, pad=None, levels=None, c2=True,
+                 **feat):
         E = np.asarray(E)
         m = E.shape[0]
         assert E.shape == (m, m) and m & (m - 1) == 0, "exemplar must be square, side a power of 2"
@@ -91,13 +94,16 @@ class Analysis:
         self.levels = []
         for l in range(self.L + 1):
             h = 2 ** (self.L - l)
+            if levels is not None and h not in levels:
+                self.levels.append(None)
+                continue
             El = _blur(F, 0.5 * h if h > 1 else 0, self.bounded)
             N = self._hood(El, yy, xx, h)                                  # (m*m, 25D)
             mean = N.mean(0)
             P = _pca(N - mean, n_pca, rng)
             NE = (N - mean) @ P                                            # (m*m, k)
             # second coherence candidate: best match at torus distance >= min_jump*m
-            C2 = _second_candidate(NE, m, min_jump, rng, my=self.my, bounded=self.bounded)
+            C2 = _second_candidate(NE, m, min_jump, rng, my=self.my, bounded=self.bounded) if c2 else None
             self.levels.append(dict(h=h, El=El, mean=mean, P=P, NE=NE, C2=C2))
 
     def _hood(self, El, ys, xs, h):
