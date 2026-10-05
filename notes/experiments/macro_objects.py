@@ -110,6 +110,7 @@ for v in VARIANTS:
         print(f"         block edits by the fine stage: {diff[near].mean():.3f} of blocks on window seams, "
               f"{diff[~near].mean():.3f} inside windows")
         full = MO.render(C, S)
+        np.savez(os.path.join("cache", OUT + "_hier.npz"), lab=S.lab, phy=S.phy, phx=S.phx, BY=S.BY, BX=S.BX)
     m = MO.measure(C, S)
     show(v, m, time.time() - t0)
     print(f"         sealed door share {sealed(S):.3f} (exemplar {sealed(X):.3f})")
