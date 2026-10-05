@@ -99,3 +99,19 @@ def test_forest_protection_never_splits():
         assert after["comps"] <= before["comps"]
         before = after
     assert np.array_equal(_occ_of(C, S), S.occ)
+
+
+def test_region_exits():
+    """A door facing an open half-side is attached to that half-side's
+    virtual node; facing a closed one it is unmatched; nothing fits outside."""
+    C = MO.load("macro_dense")
+    S = MO.State(8, 8)
+    S.region(C.tb, 16, 16, 32, 32, [1, 0, 0, 0, 0, 0, 0, 2])        # N left half class 1, W top half class 2
+    NB = S.lab.size
+    k = next(k for k in range(C.K) if C.PN[k] == 1 and C.PD[k, 0] == 0)   # one door, facing N
+    for ax, want in ((16, NB + 1), (48 - C.KW[k], -1)):                    # flush left: door under N's left
+        ay = 16 - C.PY[k, 0]                                               # half; flush right: right half
+        assert (ax + C.PX[k, 0] < 32) == (want > 0)
+        assert MO._fits(k, ay, ax, C.tb, S.st)
+        assert MO._match(k, ay, ax, 0, C.tb, S.st) == want
+    assert not MO._fits(k, 15 - C.PY[k, 0], 16, C.tb, S.st)

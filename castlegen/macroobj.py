@@ -45,6 +45,16 @@ Candidates also pay -beta per extra structure they join (union-find merged
 during the sweep), +gamma when they join none, +gsmall when all they join
 have fewer than smin rooms.
 
+Regions (State.region): objects confined to a rectangle; the cells around it
+are OUTSIDE (occ = NB).  Each of its 8 half-sides is closed or a class; a door
+facing out across an open half-side q is attached to the virtual node
+NB + 1 + q (an exit), across a closed one it is unmatched.  In the heuristic,
+exits of one class are joined (outside), the exits of the root class are
+roots (size VBIG: with smin = VBIG, gsmall falls on joining no rooted
+structure), the first opening of a half-side earns beta and never counts as
+an orphan, and a room holding a protected exit door is pinned (counts as two
+protected doors).
+
 Coarse level: a coordinate U per R x R window of blocks into an exemplar
 block lattice (exemplar windows hold whole exemplar labels and phases).
 paste(U) copies the window's labels in raster order and drops an object that
@@ -76,8 +86,8 @@ RAD = 3       # block radius of interaction: centres of touching objects differ 
 DY = np.array([-1, 0, 1, 0], np.int64)
 DX = np.array([0, 1, 0, -1], np.int64)
 VOID, WALL, FLOOR, PORT = -1, 0, 1, 2
-Tabs = namedtuple("Tabs", "KH KW CY CX KC PN PY PX PD PL PCELL compat ATTP ATTK ATTJ MAXP NF FY FX FD")
-St = namedtuple("St", "lab phy phx occ BY BX")
+Tabs = namedtuple("Tabs", "KH KW CY CX KC PN PY PX PD PL PCELL compat ATTP ATTK ATTJ MAXP NF FY FX FD DLP DLK DLJ")
+St = namedtuple("St", "lab phy phx occ BY BX ext exy exx exd")
 
 
 class Comps:
@@ -180,8 +190,17 @@ def load(name="macro_rooms"):
                             ak.append(k)
                             aj.append(j)
             ptr.append(len(ak))
+    dptr, dk, dj = [0], [], []                    # ports facing side d (exits: any letter)
+    for d in range(4):
+        for k in range(K):
+            for j in range(PN[k]):
+                if PD[k, j] == d:
+                    dk.append(k)
+                    dj.append(j)
+        dptr.append(len(dk))
     C.tb = Tabs(KH, KW, KH // 2, KW // 2, KC, PN, PY, PX, PD, PL, PCELL, compat, np.array(ptr, np.int64),
-                np.array(ak, np.int64), np.array(aj, np.int64), np.int64(MAXP), NF, FY, FX, FD)
+                np.array(ak, np.int64), np.array(aj, np.int64), np.int64(MAXP), NF, FY, FX, FD,
+                np.array(dptr, np.int64), np.array(dk, np.int64), np.array(dj, np.int64))
     for f in Tabs._fields:
         setattr(C, f, getattr(C.tb, f))
     return C
@@ -194,15 +213,51 @@ class State:
         self.phy = np.zeros(BY * BX, np.int64)
         self.phx = np.zeros(BY * BX, np.int64)
         self.occ = np.full(BY * BS * BX * BS, -1, np.int64)
+        self.ext = np.zeros(1, np.int64)
+        self.exy = self.exx = self.exd = np.zeros(0, np.int64)
 
     @property
     def st(self):
-        return St(self.lab, self.phy, self.phx, self.occ, np.int64(self.BY), np.int64(self.BX))
+        return St(self.lab, self.phy, self.phx, self.occ, np.int64(self.BY), np.int64(self.BX), self.ext,
+                  self.exy, self.exx, self.exd)
 
     def copy(self):
         s = State(self.BY, self.BX)
         s.lab[:], s.phy[:], s.phx[:], s.occ[:] = self.lab, self.phy, self.phx, self.occ
+        s.ext, s.exy, s.exx, s.exd = self.ext.copy(), self.exy, self.exx, self.exd
         return s
+
+    def region(self, tb, y0, x0, h, w, lab8):
+        """Confine objects to the h x w cells at (y0, x0): every other cell is
+        OUTSIDE (occ = NB), objects that do not fit are removed.  lab8: the 8
+        half-side ports q = 2 d + i (side d = N, E, S, W; half i = 0 the
+        top / left half); lab8[q] > 0 makes the outside cells along that half
+        EXITS (a door facing one is attached to virtual node NB + 1 + q),
+        0 leaves them walls."""
+        NB, H, W = self.BY * self.BX, self.BY * BS, self.BX * BS
+        inside = np.zeros((H, W), bool)
+        inside[y0:y0 + h, x0:x0 + w] = True
+        for o in np.nonzero(self.lab >= 0)[0]:
+            _lift(o, tb, self.st)
+        occ = self.occ.reshape(H, W)
+        occ[~inside] = NB
+        ext = np.zeros((H, W), np.int64)
+        ext[~inside] = -1
+        ys, xs, ds = [], [], []
+        for q in range(8):
+            if lab8[q] <= 0:
+                continue
+            d, i = divmod(q, 2)
+            n = w if d % 2 == 0 else h
+            t = np.arange(i * (n // 2), (i + 1) * (n // 2) if i == 0 else n)
+            cy, cx = ((y0 - 1 + 0 * t, x0 + t), (y0 + t, x0 + w + 0 * t), (y0 + h + 0 * t, x0 + t),
+                      (y0 + t, x0 - 1 + 0 * t))[d]
+            ext[cy, cx] = q + 1
+            ys += list(cy)
+            xs += list(cx)
+            ds += [(d + 2) % 4] * len(t)                 # the exit faces into the region
+        self.ext = ext.ravel()
+        self.exy, self.exx, self.exd = (np.array(a, np.int64) for a in (ys, xs, ds))
 
 
 # ---------------------------------------------------------------- primitives
@@ -257,10 +312,17 @@ def _lift(b, tb, st):
 
 @njit(cache=True)
 def _port_at(gy, gx, d, tb, st):
-    """(block, port) of a port at cell (gy, gx) facing side d, else (-1, -1)."""
+    """(block, port) of a port at cell (gy, gx) facing side d, else (-1, -1);
+    an exit facing d: (NB + 1 + q, -1) for its half-side q."""
     H, W = st.BY * BS, st.BX * BS
+    NB = st.lab.shape[0]
     o = st.occ[gy * W + gx]
     if o < 0:
+        return -1, -1
+    if o == NB:
+        v = st.ext[gy * W + gx]
+        if v > 0 and d == ((v - 1) // 2 + 2) % 4:
+            return NB + v, -1
         return -1, -1
     k2 = st.lab[o]
     oy, ox = _anchor(o, tb, st)
@@ -276,7 +338,7 @@ def _match(k, ay, ax, j, tb, st):
     H, W = st.BY * BS, st.BX * BS
     d = tb.PD[k, j]
     o, j2 = _port_at((ay + tb.PY[k, j] + DY[d]) % H, (ax + tb.PX[k, j] + DX[d]) % W, (d + 2) % 4, tb, st)
-    if o >= 0 and tb.compat[tb.PL[k, j], tb.PL[st.lab[o], j2]]:
+    if o > st.lab.shape[0] or (o >= 0 and tb.compat[tb.PL[k, j], tb.PL[st.lab[o], j2]]):
         return o
     return -1
 
@@ -305,7 +367,7 @@ def _blocked(k, ay, ax, tb, st):
         mine = j >= 0 and tb.PD[k, j] == d
         o, j2 = _port_at(gy, gx, (d + 2) % 4, tb, st)
         theirs = o >= 0
-        if mine and theirs and tb.compat[tb.PL[k, j], tb.PL[st.lab[o], j2]]:
+        if mine and theirs and (o > st.lab.shape[0] or tb.compat[tb.PL[k, j], tb.PL[st.lab[o], j2]]):
             continue
         if mine:
             n += 1
@@ -323,16 +385,22 @@ def _unmatched(o, tb, st):
 
 # ---------------------------------------------------------------- block Gibbs
 
-Cn = namedtuple("Cn", "on beta gamma gsmall smin comp cu csz nid npr pry prx prd cb")
+Cn = namedtuple("Cn", "on beta gamma gsmall smin comp cu csz nid npr pry prx prd cb vcls vroot hasopen")
+VBIG = 1 << 40                                   # size of a virtual (exit) node: rooted
 
 
-def conn_state(NB, MAXP, beta=0.0, gamma=0.0, gsmall=0.0, smin=0, on=True):
+def conn_state(NB, MAXP, beta=0.0, gamma=0.0, gsmall=0.0, smin=0, on=True, vcls=None, root=None):
     """Connectivity heuristic state (see _snapshot and _cand_e); on=False
-    disables it."""
+    disables it.  vcls (8,): the external class of each half-side exit (0:
+    none); exits of one class are joined outside.  root: the class whose
+    exits are ROOTS (default: every class); smin = VBIG puts gsmall on
+    joining no structure that reaches a root."""
     i = lambda *sh: np.zeros(sh, np.int64)
+    vc = i(8) if vcls is None else np.asarray(vcls, np.int64)
+    vr = (vc > 0) if root is None else (vc == root)
     return Cn(on, float(beta), float(gamma), float(gsmall), np.int64(smin), i(NB),
-              np.arange(2 * NB + 1, dtype=np.int64), i(2 * NB + 1), i(1), i(NB), i(NB, MAXP), i(NB, MAXP),
-              i(NB, MAXP), i(MAXP))
+              np.arange(2 * NB + 16, dtype=np.int64), i(2 * NB + 16), i(1), i(NB), i(NB, MAXP), i(NB, MAXP),
+              i(NB, MAXP), i(MAXP), vc, vr.astype(np.bool_), i(8))
 
 
 @njit(cache=True)
@@ -358,8 +426,10 @@ def _snapshot(tb, st, cn):
     ex = np.empty(E, np.int64)
     ed = np.empty(E, np.int64)
     ne = 0
-    for o in range(2 * NB + 1):
+    for o in range(cn.cu.shape[0]):
         cn.cu[o] = o
+    for q in range(8):
+        cn.hasopen[q] = 0
     for o in range(NB):
         cn.npr[o] = 0
         k = st.lab[o]
@@ -368,6 +438,8 @@ def _snapshot(tb, st, cn):
         ay, ax = _anchor(o, tb, st)
         for j in range(tb.PN[k]):
             q = _match(k, ay, ax, j, tb, st)
+            if q > NB:
+                cn.hasopen[q - NB - 1] = 1
             if q > o:
                 eo[ne], eq[ne], ed[ne] = o, q, tb.PD[k, j]
                 ey[ne], ex[ne] = (ay + tb.PY[k, j]) % H, (ax + tb.PX[k, j]) % W
@@ -376,29 +448,37 @@ def _snapshot(tb, st, cn):
         ra, rb = _find(cn.cu, eo[i]), _find(cn.cu, eq[i])
         if ra != rb:
             cn.cu[ra] = rb
-    for o in range(2 * NB + 1):
+    for q in range(8):                                    # exits of one class: joined outside
+        for q2 in range(q):
+            if cn.vcls[q] > 0 and cn.vcls[q] == cn.vcls[q2]:
+                ra, rb = _find(cn.cu, NB + 1 + q), _find(cn.cu, NB + 1 + q2)
+                if ra != rb:
+                    cn.cu[ra] = rb
+    for o in range(cn.csz.shape[0]):
         cn.csz[o] = 0
+    for q in range(8):
+        if cn.vroot[q]:
+            cn.csz[_find(cn.cu, NB + 1 + q)] = VBIG
     for o in range(NB):
         cn.comp[o] = _find(cn.cu, o)
         if st.lab[o] >= 0:
             cn.csz[cn.comp[o]] += 1
-    for o in range(2 * NB + 1):
-        cn.cu[o] = o
-    tree = np.arange(NB)
+    tree = np.arange(NB + 9)
     for i in np.random.permutation(ne):                   # random spanning forest
         ra, rb = _find(tree, eo[i]), _find(tree, eq[i])
         if ra == rb:
             continue
         tree[ra] = rb
         o, q, d = eo[i], eq[i], ed[i]
-        if cn.npr[o] < tb.MAXP and cn.npr[q] < tb.MAXP:
+        if cn.npr[o] < tb.MAXP:
             n = cn.npr[o]
             cn.pry[o, n], cn.prx[o, n], cn.prd[o, n] = ey[i], ex[i], d
             cn.npr[o] += 1
+        if q < NB and cn.npr[q] < tb.MAXP:
             n = cn.npr[q]
             cn.pry[q, n], cn.prx[q, n], cn.prd[q, n] = (ey[i] + DY[d]) % H, (ex[i] + DX[d]) % W, (d + 2) % 4
             cn.npr[q] += 1
-    cn.nid[0] = NB
+    cn.nid[0] = NB + 9
 
 
 @njit(cache=True)
@@ -410,15 +490,20 @@ def _live(b, i, tb, st, cn):
     o, j2 = _port_at((cn.pry[b, i] + DY[d]) % H, (cn.prx[b, i] + DX[d]) % W, (d + 2) % 4, tb, st)
     if o < 0 or o == b:
         return -1
+    if o > st.lab.shape[0]:
+        return tb.compat.shape[0]                         # an exit: any letter
     return tb.PL[st.lab[o], j2]
 
 
 @njit(cache=True)
 def _nlive(b, tb, st, cn):
+    """Live protected doors of b; a door to an exit counts 2 (pins the room:
+    the half-side keeps its opening)."""
     n = 0
     for i in range(cn.npr[b]):
-        if _live(b, i, tb, st, cn) >= 0:
-            n += 1
+        lp = _live(b, i, tb, st, cn)
+        if lp >= 0:
+            n += 2 if lp == tb.compat.shape[0] else 1
     return n
 
 
@@ -441,18 +526,21 @@ def _cand_e(b, k, py, px, lam, mu, fam, pa, nu, cn, tb, st):
             if ly >= tb.KH[k] or lx >= tb.KW[k]:
                 return np.inf
             j = tb.PCELL[k, ly, lx]
-            if j < 0 or tb.PD[k, j] != cn.prd[b, i] or not tb.compat[tb.PL[k, j], lp]:
+            if j < 0 or tb.PD[k, j] != cn.prd[b, i] or (lp < tb.compat.shape[0] and not tb.compat[tb.PL[k, j], lp]):
                 return np.inf
     if not _fits(k, ay, ax, tb, st):
         return np.inf
-    m, nc, big = 0, 0, 0
+    NB = st.lab.shape[0]
+    m, nc, big, nopen = 0, 0, 0, 0
     for j in range(tb.PN[k]):
         o = _match(k, ay, ax, j, tb, st)
         if o < 0:
             continue
         m += 1
         if cn.on:
-            c = _find(cn.cu, cn.comp[o])
+            if o > NB and cn.hasopen[o - NB - 1] == 0:
+                nopen += 1                                # the first opening of a half-side
+            c = _find(cn.cu, o if o > NB else cn.comp[o])
             new = True
             for i in range(nc):
                 if cn.cb[i] == c:
@@ -465,8 +553,8 @@ def _cand_e(b, k, py, px, lam, mu, fam, pa, nu, cn, tb, st):
     if nu != 0 and not (pa[0][b] == k and pa[1][b] == py and pa[2][b] == px):
         e += nu
     if cn.on:
-        e += cn.gamma if nc == 0 else -cn.beta * (nc - 1)
-        if big < cn.smin:
+        e += (cn.gamma if nc == 0 else -cn.beta * (nc - 1)) - cn.beta * nopen
+        if big < cn.smin and nopen == 0:                  # a first opening is never an orphan
             e += cn.gsmall
     return e
 
@@ -478,12 +566,15 @@ def _join(b, tb, st, cn):
     if k < 0:
         return
     ay, ax = _anchor(b, tb, st)
+    NB = st.lab.shape[0]
     r = -1
     for j in range(tb.PN[k]):
         o = _match(k, ay, ax, j, tb, st)
         if o < 0:
             continue
-        c = _find(cn.cu, cn.comp[o])
+        if o > NB:
+            cn.hasopen[o - NB - 1] = 1
+        c = _find(cn.cu, o if o > NB else cn.comp[o])
         if r < 0:
             r = c
         elif c != r:
@@ -491,7 +582,7 @@ def _join(b, tb, st, cn):
             cn.csz[r] += cn.csz[c]
     if r < 0:
         r = cn.nid[0]
-        cn.nid[0] = min(cn.nid[0] + 1, 2 * st.lab.shape[0])
+        cn.nid[0] = min(cn.nid[0] + 1, cn.cu.shape[0] - 1)
         cn.cu[r] = r
         cn.csz[r] = 1
     cn.comp[b] = r
@@ -533,6 +624,27 @@ def _enumerate(b, tb, st, ck, cy, cx):
                         continue
                     ck[n], cy[n], cx[n] = k, ry, rx
                     n += 1
+    for e in range(st.exy.shape[0]):                      # exits: any port facing out at them
+        din = st.exd[e]
+        fy, fx = (st.exy[e] + DY[din]) % H, (st.exx[e] + DX[din]) % W
+        if abs(fy // BS - by) > RAD + 1 or abs(fx // BS - bx) > RAD + 1 or st.occ[fy * W + fx] >= 0:
+            continue
+        dout = (din + 2) % 4
+        for a in range(tb.DLP[dout], tb.DLP[dout + 1]):
+            k, j = tb.DLK[a], tb.DLJ[a]
+            ry = (fy - tb.PY[k, j] + tb.CY[k] - by * BS) % H
+            rx = (fx - tb.PX[k, j] + tb.CX[k] - bx * BS) % W
+            if ry >= BS or rx >= BS:
+                continue
+            dup = False
+            for i in range(n):
+                if ck[i] == k and cy[i] == ry and cx[i] == rx:
+                    dup = True
+                    break
+            if dup or n >= ck.shape[0]:
+                continue
+            ck[n], cy[n], cx[n] = k, ry, rx
+            n += 1
     return n
 
 
@@ -816,6 +928,8 @@ def stats(tb, st, par):
             q = _match(k, ay, ax, j, tb, st)
             if q < 0:
                 bad += 1
+                continue
+            if q >= NB:
                 continue
             a, b = o, q
             while par[a] != a:
