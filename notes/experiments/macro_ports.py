@@ -38,6 +38,7 @@ EB = int(os.environ.get("EB", 64))
 SEEDS = int(os.environ.get("SEEDS", 4))
 NRAND = int(os.environ.get("NRAND", 8))
 SW, HARD, NU = int(os.environ.get("SW", 60)), float(os.environ.get("HARD", 1000)), float(os.environ.get("NU", 1.0))
+LOWF, LAMLOW = float(os.environ.get("LOWF", 0.0)), float(os.environ.get("LAMLOW", 2.0))
 BETA, GAMMA, GSMALL = (float(os.environ.get(k, v)) for k, v in (("BETA", 8), ("GAMMA", 8), ("GSMALL", 30)))
 FIT, LAMFIT = 32, 8.0
 METHODS = os.environ.get("METHODS", "plain,forest").split(",")
@@ -124,7 +125,8 @@ def run(lab8, c, method, seed):
         g, gs = GAMMA, GSMALL
     cn = MO.conn_state(S.lab.size, C.MAXP, BETA, g, gs, MO.VBIG, on=method != "plain", vcls=lab8,
                        root=lab8[lab8 > 0][0])                # one root class: the rest must reach it
-    lams = np.geomspace(2, HARD, SW)
+    a = int(LOWF * SW)                                     # lam held at LAMLOW, then -> HARD
+    lams = np.concatenate([np.full(a, LAMLOW), np.geomspace(LAMLOW, HARD, SW - a)])
     first = None
     for s in range(SW):
         MO.sweeps(lams[s:s + 1], np.ones(1), mu, grp, C.tb, S.st, seed * 1000 + s, pa, NU, cn)
