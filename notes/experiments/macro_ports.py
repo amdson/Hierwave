@@ -20,9 +20,12 @@ Per pattern and seed: a parent exemplar window (uniform on the exemplar
 torus) pasted, then SW block sweeps at T = 1, lam 2 -> HARD, NU off the
 parent, with (forest) or without (plain) the spanning-forest heuristic rooted
 at the exits (BETA merge / first-opening bonus, GAMMA island, GSMALL joining
-no structure that reaches an exit).  Reports per method: success rate, the
+no structure that reaches an exit), or (count) the pure component count:
+energy BETA x (components of rooms + exit classes, + unopened open
+half-sides), i.e. GAMMA = BETA, GSMALL = 0, splits still barred by the
+forest's protection.  Reports per method: success rate, the
 first successful sweep (median), components left on failures.
-images/macro_ports.png: per pattern (rows) the parent window, plain, forest;
+images/macro_ports.png: per pattern (rows) the parent window, then METHODS;
 exits drawn as bars coloured by class (grey: closed)."""
 import os, time
 import numpy as np
@@ -115,7 +118,11 @@ def region_state(lab8, c):
 def run(lab8, c, method, seed):
     S = region_state(lab8, c)
     pa = (S.lab.copy(), S.phy.copy(), S.phx.copy())
-    cn = MO.conn_state(S.lab.size, C.MAXP, BETA, GAMMA, GSMALL, MO.VBIG, on=method == "forest", vcls=lab8,
+    if method == "count":                                  # pure count: beta per component / unopened half-side
+        g, gs = BETA, 0.0
+    else:
+        g, gs = GAMMA, GSMALL
+    cn = MO.conn_state(S.lab.size, C.MAXP, BETA, g, gs, MO.VBIG, on=method != "plain", vcls=lab8,
                        root=lab8[lab8 > 0][0])                # one root class: the rest must reach it
     lams = np.geomspace(2, HARD, SW)
     first = None
@@ -169,4 +176,5 @@ for m in METHODS:
           f"  failures' components {comps}")
 print(f"{time.time() - t0:.1f}s")
 hgap = np.full((8, rows[0].shape[1], 3), 255, np.uint8)
-Image.fromarray(np.concatenate(sum([[r, hgap] for r in rows], [])[:-1], 0)).save(os.path.join(IMG, "macro_ports.png"))
+Image.fromarray(np.concatenate(sum([[r, hgap] for r in rows], [])[:-1], 0)).save(
+    os.path.join(IMG, os.environ.get("OUT", "macro_ports") + ".png"))
