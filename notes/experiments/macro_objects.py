@@ -36,8 +36,10 @@ KAPPA, NU = float(os.environ.get("KAPPA", 0.3)), float(os.environ.get("NU", 3.0)
 SEED = int(os.environ.get("SEED", 1))
 VARIANTS = os.environ.get("VARIANTS", "rules,hier").split(",")
 IMG = os.environ.get("IMG", "/Users/amdson/dev/Hierwave/images")
+TILES = os.environ.get("TILES", "macro_rooms")
+OUT = os.environ.get("OUT", "macro_objects")
 
-C = MO.load()
+C = MO.load(TILES)
 F = len(C.fams)
 print(f"{C.K} oriented components ({C.FULL.sum()} with every port) in {F} families, max {C.MAXP} ports")
 
@@ -52,7 +54,7 @@ def show(name, m, dt=None):
 t0 = time.time()
 X = MO.State(EB, EB)
 fam = C.fam
-k0 = int(np.nonzero((fam == C.fams.index("hall")) & C.FULL)[0][0])
+k0 = int(np.nonzero((fam == 0) & C.FULL)[0][0])        # the first family seeds growth
 MO.grow(k0, EB * EB, C.weight.astype(np.float64), fam, C.FULL, C.tb, X.st, SEED, 2000000)
 left = MO.close(C.SEAL, C.tb, X.st, SEED, 50)
 mx = MO.measure(C, X)
@@ -119,7 +121,7 @@ for v in VARIANTS:
 gap = np.full((CROP * PX, 12, 3), 255, np.uint8)
 row = np.concatenate(sum([[p, gap] for p in panels], [])[:-1], 1)
 os.makedirs(IMG, exist_ok=True)
-Image.fromarray(row).save(os.path.join(IMG, "macro_objects.png"))
+Image.fromarray(row).save(os.path.join(IMG, OUT + ".png"))
 if full is not None:
-    Image.fromarray(full).save(os.path.join(IMG, "macro_objects_full.png"))
-print("saved", os.path.join(IMG, "macro_objects.png"))
+    Image.fromarray(full).save(os.path.join(IMG, OUT + "_full.png"))
+print("saved", os.path.join(IMG, OUT + ".png"))

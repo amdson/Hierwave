@@ -99,7 +99,8 @@ def load(name="macro_rooms"):
                     g[y, x] = "#"
             for r in range(4):
                 gr = np.rot90(g, -r)
-                same = [k for k in range(len(grids)) if grids[k].shape == gr.shape and (grids[k] == gr).all()]
+                same = [k for k in range(len(grids)) if fam[k] == f and grids[k].shape == gr.shape
+                        and (grids[k] == gr).all()]
                 if same:
                     index[f, r, m] = same[0]
                     continue
