@@ -385,22 +385,42 @@ def _unmatched(o, tb, st):
 
 # ---------------------------------------------------------------- block Gibbs
 
-Cn = namedtuple("Cn", "on beta gamma gsmall smin comp cu csz nid npr pry prx prd cb vcls vroot hasopen")
-VBIG = 1 << 40                                   # size of a virtual (exit) node: rooted
+Cn = namedtuple("Cn", "on beta gamma gsmall smin comp cu csz nid npr pry prx prd prv cb vcls vroot hasopen "
+                      "win nwy nwx prom wsmin")
+VBIG = 1 << 40                                   # size of a rooted virtual node
 
 
-def conn_state(NB, MAXP, beta=0.0, gamma=0.0, gsmall=0.0, smin=0, on=True, vcls=None, root=None):
+def conn_state(NB, MAXP, beta=0.0, gamma=0.0, gsmall=0.0, smin=0, on=True, vcls=None, root=None,
+               win=None, nwin=(1, 1), prom=None, vroot=None, wsmin=None):
     """Connectivity heuristic state (see _snapshot and _cand_e); on=False
-    disables it.  vcls (8,): the external class of each half-side exit (0:
-    none); exits of one class are joined outside.  root: the class whose
-    exits are ROOTS (default: every class); smin = VBIG puts gsmall on
-    joining no structure that reaches a root."""
+    disables it; smin = VBIG puts gsmall on joining no rooted structure.
+    Region mode (State.region): vcls (8,) the class of each half-side exit (0:
+    none), exits of one class are joined outside; root the class whose exits
+    are roots (default every class).
+    Window mode: win (NB,) the window of each block on an nwin = (NWY, NWX)
+    torus of windows; prom (NW, 4) the sides whose crossings count, vroot
+    (NW, 4) those that are roots (both: each window's side toward its tree
+    parent); wsmin (NW,) smin per window (default smin; the root window, with
+    no parent side, takes a room count).  Connectivity is then per window: an
+    attachment inside a window is an edge, one across a counted side d of
+    window w an edge to the virtual node of (w, d) (from each side), any other
+    is ignored."""
     i = lambda *sh: np.zeros(sh, np.int64)
-    vc = i(8) if vcls is None else np.asarray(vcls, np.int64)
-    vr = (vc > 0) if root is None else (vc == root)
-    return Cn(on, float(beta), float(gamma), float(gsmall), np.int64(smin), i(NB),
-              np.arange(2 * NB + 16, dtype=np.int64), i(2 * NB + 16), i(1), i(NB), i(NB, MAXP), i(NB, MAXP),
-              i(NB, MAXP), i(MAXP), vc, vr.astype(np.bool_), i(8))
+    if win is None:
+        NV = 8
+        vc = i(8) if vcls is None else np.asarray(vcls, np.int64)
+        vr = (vc > 0) if root is None else (vc == root)
+        win, pr = np.full(1, -1, np.int64), np.zeros(1, np.bool_)
+        ws = np.full(1, smin, np.int64)
+    else:
+        NV = 4 * nwin[0] * nwin[1]
+        vc, vr = i(NV), np.asarray(vroot, np.bool_).ravel()
+        win, pr = np.asarray(win, np.int64), np.asarray(prom, np.bool_).ravel()
+        ws = np.full(nwin[0] * nwin[1], smin, np.int64) if wsmin is None else np.asarray(wsmin, np.int64)
+    T = NB + 1 + NV + NB + 1
+    return Cn(on, float(beta), float(gamma), float(gsmall), np.int64(smin), i(NB), np.arange(T, dtype=np.int64),
+              i(T), i(1), i(NB), i(NB, MAXP), i(NB, MAXP), i(NB, MAXP), i(NB, MAXP), i(MAXP), vc,
+              vr.astype(np.bool_), i(NV), win, np.int64(nwin[0]), np.int64(nwin[1]), pr, ws)
 
 
 @njit(cache=True)
@@ -412,12 +432,40 @@ def _find(cu, a):
 
 
 @njit(cache=True)
+def _node(b, q, cn, NB):
+    """The connectivity node of block b's attachment to q (a block or a region
+    exit): q itself, a window side's virtual node, or -2 (ignored)."""
+    if q > NB or cn.win[0] < 0:
+        return q
+    A, B = cn.win[b], cn.win[q]
+    if A == B:
+        return q
+    dy = (B // cn.nwx - A // cn.nwx) % cn.nwy
+    dx = (B % cn.nwx - A % cn.nwx) % cn.nwx
+    if dy == cn.nwy - 1 and dx == 0:
+        d = 0
+    elif dx == 1 and dy == 0:
+        d = 1
+    elif dy == 1 and dx == 0:
+        d = 2
+    elif dx == cn.nwx - 1 and dy == 0:
+        d = 3
+    else:
+        return -2
+    if cn.prom[4 * A + d]:
+        return NB + 1 + 4 * A + d
+    return -2
+
+
+@njit(cache=True)
 def _snapshot(tb, st, cn):
     """Per sweep: components of the attachment graph (comp, union-find cu)
     and a random spanning forest of each (random-order Kruskal).  Each forest
-    edge protects its two door cells: block b must keep a door at (pry, prx)
-    facing prd while the partner still has one facing back."""
+    edge protects its door cells: block b must keep a door at (pry, prx)
+    facing prd while the partner still has one facing back; prv marks a door
+    to a virtual node (an exit or a promised side), which pins the room."""
     NB = st.lab.shape[0]
+    NV = cn.vroot.shape[0]
     H, W = st.BY * BS, st.BX * BS
     E = NB * tb.MAXP
     eo = np.empty(E, np.int64)
@@ -428,8 +476,8 @@ def _snapshot(tb, st, cn):
     ne = 0
     for o in range(cn.cu.shape[0]):
         cn.cu[o] = o
-    for q in range(8):
-        cn.hasopen[q] = 0
+    for v in range(NV):
+        cn.hasopen[v] = 0
     for o in range(NB):
         cn.npr[o] = 0
         k = st.lab[o]
@@ -438,32 +486,36 @@ def _snapshot(tb, st, cn):
         ay, ax = _anchor(o, tb, st)
         for j in range(tb.PN[k]):
             q = _match(k, ay, ax, j, tb, st)
-            if q > NB:
-                cn.hasopen[q - NB - 1] = 1
-            if q > o:
-                eo[ne], eq[ne], ed[ne] = o, q, tb.PD[k, j]
+            if q < 0:
+                continue
+            v = _node(o, q, cn, NB)
+            if v > NB:
+                cn.hasopen[v - NB - 1] = 1
+            if v > o:                                     # a virtual edge from each end, a block edge once
+                eo[ne], eq[ne], ed[ne] = o, v, tb.PD[k, j]
                 ey[ne], ex[ne] = (ay + tb.PY[k, j]) % H, (ax + tb.PX[k, j]) % W
                 ne += 1
     for i in range(ne):                                   # components
         ra, rb = _find(cn.cu, eo[i]), _find(cn.cu, eq[i])
         if ra != rb:
             cn.cu[ra] = rb
-    for q in range(8):                                    # exits of one class: joined outside
-        for q2 in range(q):
-            if cn.vcls[q] > 0 and cn.vcls[q] == cn.vcls[q2]:
-                ra, rb = _find(cn.cu, NB + 1 + q), _find(cn.cu, NB + 1 + q2)
-                if ra != rb:
-                    cn.cu[ra] = rb
+    if NV == 8:                                           # region: exits of one class joined outside
+        for q in range(8):
+            for q2 in range(q):
+                if cn.vcls[q] > 0 and cn.vcls[q] == cn.vcls[q2]:
+                    ra, rb = _find(cn.cu, NB + 1 + q), _find(cn.cu, NB + 1 + q2)
+                    if ra != rb:
+                        cn.cu[ra] = rb
     for o in range(cn.csz.shape[0]):
         cn.csz[o] = 0
-    for q in range(8):
-        if cn.vroot[q]:
-            cn.csz[_find(cn.cu, NB + 1 + q)] = VBIG
+    for v in range(NV):
+        if cn.vroot[v]:
+            cn.csz[_find(cn.cu, NB + 1 + v)] = VBIG
     for o in range(NB):
         cn.comp[o] = _find(cn.cu, o)
         if st.lab[o] >= 0:
             cn.csz[cn.comp[o]] += 1
-    tree = np.arange(NB + 9)
+    tree = np.arange(NB + 1 + NV)
     for i in np.random.permutation(ne):                   # random spanning forest
         ra, rb = _find(tree, eo[i]), _find(tree, eq[i])
         if ra == rb:
@@ -472,38 +524,38 @@ def _snapshot(tb, st, cn):
         o, q, d = eo[i], eq[i], ed[i]
         if cn.npr[o] < tb.MAXP:
             n = cn.npr[o]
-            cn.pry[o, n], cn.prx[o, n], cn.prd[o, n] = ey[i], ex[i], d
+            cn.pry[o, n], cn.prx[o, n], cn.prd[o, n], cn.prv[o, n] = ey[i], ex[i], d, q > NB
             cn.npr[o] += 1
         if q < NB and cn.npr[q] < tb.MAXP:
             n = cn.npr[q]
-            cn.pry[q, n], cn.prx[q, n], cn.prd[q, n] = (ey[i] + DY[d]) % H, (ex[i] + DX[d]) % W, (d + 2) % 4
+            cn.pry[q, n], cn.prx[q, n] = (ey[i] + DY[d]) % H, (ex[i] + DX[d]) % W
+            cn.prd[q, n], cn.prv[q, n] = (d + 2) % 4, 0
             cn.npr[q] += 1
-    cn.nid[0] = NB + 9
+    cn.nid[0] = NB + 1 + NV
 
 
 @njit(cache=True)
 def _live(b, i, tb, st, cn):
     """Protection i of block b still holds on the partner's side: -> the
-    partner's door letter, else -1."""
+    partner's door letter (an exit: any, len(compat)), else -1."""
     H, W = st.BY * BS, st.BX * BS
     d = cn.prd[b, i]
     o, j2 = _port_at((cn.pry[b, i] + DY[d]) % H, (cn.prx[b, i] + DX[d]) % W, (d + 2) % 4, tb, st)
     if o < 0 or o == b:
         return -1
     if o > st.lab.shape[0]:
-        return tb.compat.shape[0]                         # an exit: any letter
+        return tb.compat.shape[0]
     return tb.PL[st.lab[o], j2]
 
 
 @njit(cache=True)
 def _nlive(b, tb, st, cn):
-    """Live protected doors of b; a door to an exit counts 2 (pins the room:
-    the half-side keeps its opening)."""
+    """Live protected doors of b; a door to a virtual node counts 2 (pins
+    the room: the side keeps its opening)."""
     n = 0
     for i in range(cn.npr[b]):
-        lp = _live(b, i, tb, st, cn)
-        if lp >= 0:
-            n += 2 if lp == tb.compat.shape[0] else 1
+        if _live(b, i, tb, st, cn) >= 0:
+            n += 2 if cn.prv[b, i] else 1
     return n
 
 
@@ -512,8 +564,9 @@ def _cand_e(b, k, py, px, lam, mu, fam, pa, nu, cn, tb, st):
     """Energy change of k at centre phase (py, px) in block b (lifted), with
     nu if it differs from the parent's label pa (lab, phy, phx); with cn.on,
     inf unless it keeps b's live protected doors, -beta per extra component
-    it joins, +gamma if it joins none, +gsmall if all it joins have fewer
-    than smin rooms."""
+    it joins and per first opening of a virtual node, +gamma if it joins
+    none, +gsmall if all it joins have fewer than smin rooms (a first
+    opening excepted)."""
     H, W = st.BY * BS, st.BX * BS
     ay = (b // st.BX) * BS + py - tb.CY[k]
     ax = (b % st.BX) * BS + px - tb.CX[k]
@@ -538,9 +591,12 @@ def _cand_e(b, k, py, px, lam, mu, fam, pa, nu, cn, tb, st):
             continue
         m += 1
         if cn.on:
-            if o > NB and cn.hasopen[o - NB - 1] == 0:
-                nopen += 1                                # the first opening of a half-side
-            c = _find(cn.cu, o if o > NB else cn.comp[o])
+            v = _node(b, o, cn, NB)
+            if v == -2:
+                continue
+            if v > NB and cn.hasopen[v - NB - 1] == 0:
+                nopen += 1
+            c = _find(cn.cu, v if v > NB else cn.comp[v])
             new = True
             for i in range(nc):
                 if cn.cb[i] == c:
@@ -554,7 +610,8 @@ def _cand_e(b, k, py, px, lam, mu, fam, pa, nu, cn, tb, st):
         e += nu
     if cn.on:
         e += (cn.gamma if nc == 0 else -cn.beta * (nc - 1)) - cn.beta * nopen
-        if big < cn.smin and nopen == 0:                  # a first opening is never an orphan
+        smin = cn.wsmin[cn.win[b]] if cn.win[0] >= 0 else cn.smin
+        if big < smin and nopen == 0:
             e += cn.gsmall
     return e
 
@@ -572,9 +629,12 @@ def _join(b, tb, st, cn):
         o = _match(k, ay, ax, j, tb, st)
         if o < 0:
             continue
-        if o > NB:
-            cn.hasopen[o - NB - 1] = 1
-        c = _find(cn.cu, o if o > NB else cn.comp[o])
+        v = _node(b, o, cn, NB)
+        if v == -2:
+            continue
+        if v > NB:
+            cn.hasopen[v - NB - 1] = 1
+        c = _find(cn.cu, v if v > NB else cn.comp[v])
         if r < 0:
             r = c
         elif c != r:
@@ -715,10 +775,10 @@ def sweeps(lams, Ts, mu, fam, tb, st, seed, pa=None, nu=0.0, cn=None):
 def _sweeps(lams, Ts, mu, fam, pa, nu, cn, tb, st, seed):
     np.random.seed(seed)
     NB = st.lab.shape[0]
-    ck = np.empty(1024, np.int64)
-    cy = np.empty(1024, np.int64)
-    cx = np.empty(1024, np.int64)
-    ce = np.empty(1024, np.float64)
+    ck = np.empty(8192, np.int64)
+    cy = np.empty(8192, np.int64)
+    cx = np.empty(8192, np.int64)
+    ce = np.empty(8192, np.float64)
     for s in range(lams.shape[0]):
         if cn.on:
             _snapshot(tb, st, cn)
