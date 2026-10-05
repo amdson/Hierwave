@@ -79,3 +79,23 @@ def test_coarse_paste_and_sweeps_consistent():
     MO.coarse_sweeps(U, 8, np.array([2.0, 4.0]), np.array([1.0, 0.5]), 6, np.full(G, -0.6), C.fam, X.st, 24,
                      C.tb, S.st, 1)
     assert np.array_equal(_occ_of(C, S), S.occ)
+
+
+def test_forest_protection_never_splits():
+    """With new islands forbidden, the protected spanning forest keeps the
+    number of components from growing: leaves may retract, structures merge."""
+    C = MO.load("macro_dense")
+    G = len(C.fams)
+    X, _ = _exemplar(C)
+    S = MO.State(32, 32)
+    U = np.random.default_rng(0).integers(0, 24, (4, 4, 2)).astype(np.int64)
+    MO.paste_all(U, 8, X.st, 24, C.tb, S.st)
+    MO.sweeps(np.full(3, 1000.0), np.ones(3), np.full(G, -2.0), C.fam, C.tb, S.st, 1)
+    before = MO.measure(C, S)
+    cn = MO.conn_state(S.lab.size, C.MAXP, beta=2.0, gamma=1e9)
+    for seed in range(4):
+        MO.sweeps(np.full(1, 1000.0), np.full(1, 2.0), np.full(G, -2.0), C.fam, C.tb, S.st, seed, cn=cn)
+        after = MO.measure(C, S)
+        assert after["comps"] <= before["comps"]
+        before = after
+    assert np.array_equal(_occ_of(C, S), S.occ)

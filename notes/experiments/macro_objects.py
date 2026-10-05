@@ -14,6 +14,9 @@ Variants on an N x N block torus (default 200: 1600^2 cells):
           U pasted, CSW coarse sweeps on lam (unmatched - KAPPA objects), lam
           2 -> 8, T 2 -> 0.3; then FSW block sweeps at T = 1, lam 2 -> HARD,
           plus NU per block off the pasted labels (the parent term).
+With CONN (default on) every block stage runs the spanning-forest heuristic
+(macroobj._snapshot): no split, BETA per merge, GAMMA per new island, GSMALL
+for joining only structures of < SMIN rooms.
 Reports per variant: seconds, objects, unmatched ports, density, components,
 the largest, the share of objects in components of >= 20, the share of
 doors walled up, family frequencies vs the exemplar; for hier the share of
@@ -28,11 +31,14 @@ from castlegen import macroobj as MO
 N = int(os.environ.get("N", 200))
 EB = int(os.environ.get("EB", 96))
 R = int(os.environ.get("R", 8))
-SW, CSW, FSW = int(os.environ.get("SW", 40)), int(os.environ.get("CSW", 8)), int(os.environ.get("FSW", 20))
+SW, CSW, FSW = int(os.environ.get("SW", 40)), int(os.environ.get("CSW", 8)), int(os.environ.get("FSW", 40))
 HARD = float(os.environ.get("HARD", 1000))
 FIT, LAMFIT = int(os.environ.get("FIT", 32)), float(os.environ.get("LAMFIT", 8))
 CROP, PX = int(os.environ.get("CROP", 384)), int(os.environ.get("PX", 2))
 KAPPA, NU = float(os.environ.get("KAPPA", 0.3)), float(os.environ.get("NU", 3.0))
+CONN = int(os.environ.get("CONN", 1))
+BETA, GAMMA = float(os.environ.get("BETA", 8.0)), float(os.environ.get("GAMMA", 4.0))
+GSMALL, SMIN = float(os.environ.get("GSMALL", 8.0)), int(os.environ.get("SMIN", 20))
 SEED = int(os.environ.get("SEED", 1))
 VARIANTS = os.environ.get("VARIANTS", "rules,hier").split(",")
 IMG = os.environ.get("IMG", "/Users/amdson/dev/Hierwave/images")
@@ -86,7 +92,8 @@ for v in VARIANTS:
         a = 2 * SW // 3
         lams = np.concatenate([np.linspace(0.5, 4, a), np.geomspace(4, HARD, SW - a)])
         Ts = np.concatenate([np.geomspace(3, 1, a), np.ones(SW - a)])
-        MO.sweeps(lams, Ts, mu, grp, C.tb, S.st, SEED)
+        cn = MO.conn_state(N * N, C.MAXP, BETA, GAMMA, GSMALL, SMIN, on=bool(CONN))
+        MO.sweeps(lams, Ts, mu, grp, C.tb, S.st, SEED, cn=cn)
     else:
         rng = np.random.default_rng(SEED)
         U = rng.integers(0, EB, (N // R, N // R, 2)).astype(np.int64)
@@ -103,7 +110,8 @@ for v in VARIANTS:
         print(f"         coherent window seams {coh:.2f}, distinct exemplar windows {len(np.unique(U.reshape(-1, 2), axis=0))}"
               f" of {U.shape[0] * U.shape[1]}")
         pa = (S.lab.copy(), S.phy.copy(), S.phx.copy())
-        MO.sweeps(np.geomspace(2, HARD, FSW), np.ones(FSW), mu, grp, C.tb, S.st, SEED, pa, NU)
+        cn = MO.conn_state(N * N, C.MAXP, BETA, GAMMA, GSMALL, SMIN, on=bool(CONN))
+        MO.sweeps(np.geomspace(2, HARD, FSW), np.ones(FSW), mu, grp, C.tb, S.st, SEED, pa, NU, cn)
         diff = ((S.lab != pa[0]) | (S.phy != pa[1]) | (S.phx != pa[2])).reshape(N, N)
         by, bx = np.mgrid[:N, :N]
         near = (np.minimum(by % R, R - 1 - by % R) < 1) | (np.minimum(bx % R, R - 1 - bx % R) < 1)

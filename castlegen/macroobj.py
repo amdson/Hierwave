@@ -35,6 +35,16 @@ Block update (each kernel leaves exp(-E / T) invariant):
      (k, phase), accept min(1, pi(y) q(x) / (pi(x) q(y))).
 Cost: tens of candidates, each a footprint overlap scan and P_k port checks.
 
+Connectivity heuristic (cn = conn_state(...), not exact): before each
+sweep, the components of the attachment graph and a random spanning forest of
+each (random-order Kruskal).  Each forest edge protects its two door cells
+for the sweep: a candidate for block b must keep a door at each of b's
+protected cells whose partner still faces back, and b may not go empty while
+two such doors hold (a leaf may retract).  So no move splits a structure.
+Candidates also pay -beta per extra structure they join (union-find merged
+during the sweep), +gamma when they join none, +gsmall when all they join
+have fewer than smin rooms.
+
 Coarse level: a coordinate U per R x R window of blocks into an exemplar
 block lattice (exemplar windows hold whole exemplar labels and phases).
 paste(U) copies the window's labels in raster order and drops an object that
@@ -313,19 +323,178 @@ def _unmatched(o, tb, st):
 
 # ---------------------------------------------------------------- block Gibbs
 
+Cn = namedtuple("Cn", "on beta gamma gsmall smin comp cu csz nid npr pry prx prd cb")
+
+
+def conn_state(NB, MAXP, beta=0.0, gamma=0.0, gsmall=0.0, smin=0, on=True):
+    """Connectivity heuristic state (see _snapshot and _cand_e); on=False
+    disables it."""
+    i = lambda *sh: np.zeros(sh, np.int64)
+    return Cn(on, float(beta), float(gamma), float(gsmall), np.int64(smin), i(NB),
+              np.arange(2 * NB + 1, dtype=np.int64), i(2 * NB + 1), i(1), i(NB), i(NB, MAXP), i(NB, MAXP),
+              i(NB, MAXP), i(MAXP))
+
+
 @njit(cache=True)
-def _cand_e(b, k, py, px, lam, mu, fam, pa, nu, tb, st):
+def _find(cu, a):
+    while cu[a] != a:
+        cu[a] = cu[cu[a]]
+        a = cu[a]
+    return a
+
+
+@njit(cache=True)
+def _snapshot(tb, st, cn):
+    """Per sweep: components of the attachment graph (comp, union-find cu)
+    and a random spanning forest of each (random-order Kruskal).  Each forest
+    edge protects its two door cells: block b must keep a door at (pry, prx)
+    facing prd while the partner still has one facing back."""
+    NB = st.lab.shape[0]
+    H, W = st.BY * BS, st.BX * BS
+    E = NB * tb.MAXP
+    eo = np.empty(E, np.int64)
+    eq = np.empty(E, np.int64)
+    ey = np.empty(E, np.int64)
+    ex = np.empty(E, np.int64)
+    ed = np.empty(E, np.int64)
+    ne = 0
+    for o in range(2 * NB + 1):
+        cn.cu[o] = o
+    for o in range(NB):
+        cn.npr[o] = 0
+        k = st.lab[o]
+        if k < 0:
+            continue
+        ay, ax = _anchor(o, tb, st)
+        for j in range(tb.PN[k]):
+            q = _match(k, ay, ax, j, tb, st)
+            if q > o:
+                eo[ne], eq[ne], ed[ne] = o, q, tb.PD[k, j]
+                ey[ne], ex[ne] = (ay + tb.PY[k, j]) % H, (ax + tb.PX[k, j]) % W
+                ne += 1
+    for i in range(ne):                                   # components
+        ra, rb = _find(cn.cu, eo[i]), _find(cn.cu, eq[i])
+        if ra != rb:
+            cn.cu[ra] = rb
+    for o in range(2 * NB + 1):
+        cn.csz[o] = 0
+    for o in range(NB):
+        cn.comp[o] = _find(cn.cu, o)
+        if st.lab[o] >= 0:
+            cn.csz[cn.comp[o]] += 1
+    for o in range(2 * NB + 1):
+        cn.cu[o] = o
+    tree = np.arange(NB)
+    for i in np.random.permutation(ne):                   # random spanning forest
+        ra, rb = _find(tree, eo[i]), _find(tree, eq[i])
+        if ra == rb:
+            continue
+        tree[ra] = rb
+        o, q, d = eo[i], eq[i], ed[i]
+        if cn.npr[o] < tb.MAXP and cn.npr[q] < tb.MAXP:
+            n = cn.npr[o]
+            cn.pry[o, n], cn.prx[o, n], cn.prd[o, n] = ey[i], ex[i], d
+            cn.npr[o] += 1
+            n = cn.npr[q]
+            cn.pry[q, n], cn.prx[q, n], cn.prd[q, n] = (ey[i] + DY[d]) % H, (ex[i] + DX[d]) % W, (d + 2) % 4
+            cn.npr[q] += 1
+    cn.nid[0] = NB
+
+
+@njit(cache=True)
+def _live(b, i, tb, st, cn):
+    """Protection i of block b still holds on the partner's side: -> the
+    partner's door letter, else -1."""
+    H, W = st.BY * BS, st.BX * BS
+    d = cn.prd[b, i]
+    o, j2 = _port_at((cn.pry[b, i] + DY[d]) % H, (cn.prx[b, i] + DX[d]) % W, (d + 2) % 4, tb, st)
+    if o < 0 or o == b:
+        return -1
+    return tb.PL[st.lab[o], j2]
+
+
+@njit(cache=True)
+def _nlive(b, tb, st, cn):
+    n = 0
+    for i in range(cn.npr[b]):
+        if _live(b, i, tb, st, cn) >= 0:
+            n += 1
+    return n
+
+
+@njit(cache=True)
+def _cand_e(b, k, py, px, lam, mu, fam, pa, nu, cn, tb, st):
     """Energy change of k at centre phase (py, px) in block b (lifted), with
-    nu if it differs from the parent's label pa (lab, phy, phx)."""
+    nu if it differs from the parent's label pa (lab, phy, phx); with cn.on,
+    inf unless it keeps b's live protected doors, -beta per extra component
+    it joins, +gamma if it joins none, +gsmall if all it joins have fewer
+    than smin rooms."""
+    H, W = st.BY * BS, st.BX * BS
     ay = (b // st.BX) * BS + py - tb.CY[k]
     ax = (b % st.BX) * BS + px - tb.CX[k]
+    if cn.on:
+        for i in range(cn.npr[b]):
+            lp = _live(b, i, tb, st, cn)
+            if lp < 0:
+                continue
+            ly, lx = (cn.pry[b, i] - ay) % H, (cn.prx[b, i] - ax) % W
+            if ly >= tb.KH[k] or lx >= tb.KW[k]:
+                return np.inf
+            j = tb.PCELL[k, ly, lx]
+            if j < 0 or tb.PD[k, j] != cn.prd[b, i] or not tb.compat[tb.PL[k, j], lp]:
+                return np.inf
     if not _fits(k, ay, ax, tb, st):
         return np.inf
-    m = _nmatch(k, ay, ax, tb, st)
+    m, nc, big = 0, 0, 0
+    for j in range(tb.PN[k]):
+        o = _match(k, ay, ax, j, tb, st)
+        if o < 0:
+            continue
+        m += 1
+        if cn.on:
+            c = _find(cn.cu, cn.comp[o])
+            new = True
+            for i in range(nc):
+                if cn.cb[i] == c:
+                    new = False
+            if new:
+                cn.cb[nc] = c
+                nc += 1
+                big += cn.csz[c]
     e = lam * (tb.PN[k] - 2 * m) + mu[fam[k]]
     if nu != 0 and not (pa[0][b] == k and pa[1][b] == py and pa[2][b] == px):
         e += nu
+    if cn.on:
+        e += cn.gamma if nc == 0 else -cn.beta * (nc - 1)
+        if big < cn.smin:
+            e += cn.gsmall
     return e
+
+
+@njit(cache=True)
+def _join(b, tb, st, cn):
+    """After block b is set: its component id, merging those it touches."""
+    k = st.lab[b]
+    if k < 0:
+        return
+    ay, ax = _anchor(b, tb, st)
+    r = -1
+    for j in range(tb.PN[k]):
+        o = _match(k, ay, ax, j, tb, st)
+        if o < 0:
+            continue
+        c = _find(cn.cu, cn.comp[o])
+        if r < 0:
+            r = c
+        elif c != r:
+            cn.cu[c] = r
+            cn.csz[r] += cn.csz[c]
+    if r < 0:
+        r = cn.nid[0]
+        cn.nid[0] = min(cn.nid[0] + 1, 2 * st.lab.shape[0])
+        cn.cu[r] = r
+        cn.csz[r] = 1
+    cn.comp[b] = r
 
 
 @njit(cache=True)
@@ -368,24 +537,27 @@ def _enumerate(b, tb, st, ck, cy, cx):
 
 
 @njit(cache=True)
-def _site(b, lam, T, mu, fam, pa, nu, tb, st, ck, cy, cx, ce):
+def _site(b, lam, T, mu, fam, pa, nu, cn, tb, st, ck, cy, cx, ce):
     """Kernels A then B at block b."""
     K = tb.KH.shape[0]
     xk, xy, xx = st.lab[b], st.phy[b], st.phx[b]
     _lift(b, tb, st)
+    # empty: forbidden for a block holding two live protected doors
+    e0 = nu if nu != 0 and pa[0][b] >= 0 else 0.0
+    if cn.on and _nlive(b, tb, st, cn) >= 2:
+        e0 = np.inf
     # A: heat-bath over {empty} + attached states, if the current state is among them
     n = _enumerate(b, tb, st, ck, cy, cx)
     inset = xk < 0
-    e0 = nu if nu != 0 and pa[0][b] >= 0 else 0.0          # empty
     emin = e0
     for i in range(n):
-        e = _cand_e(b, ck[i], cy[i], cx[i], lam, mu, fam, pa, nu, tb, st)
+        e = _cand_e(b, ck[i], cy[i], cx[i], lam, mu, fam, pa, nu, cn, tb, st)
         ce[i] = e
         if e < emin:
             emin = e
         if ck[i] == xk and cy[i] == xy and cx[i] == xx:
             inset = True
-    if inset:
+    if inset and np.isfinite(emin):
         z = np.exp(-(e0 - emin) / T)
         for i in range(n):
             z += np.exp(-(ce[i] - emin) / T)
@@ -398,33 +570,37 @@ def _site(b, lam, T, mu, fam, pa, nu, tb, st, ck, cy, cx, ce):
                 if r < 0 or i == n - 1:
                     xk, xy, xx = ck[i], cy[i], cx[i]
                     break
-    # B: independence MH, q(empty) = 1/2, q(k, phase) = 1 / (2 K 256)
-    ex = e0 if xk < 0 else _cand_e(b, xk, xy, xx, lam, mu, fam, pa, nu, tb, st)
+    # B: independence MH, q(empty) = 1/2, q(k, phase) = 1 / (2 K BS^2)
+    ex = e0 if xk < 0 else _cand_e(b, xk, xy, xx, lam, mu, fam, pa, nu, cn, tb, st)
     if np.random.random() < 0.5:
         yk, yy, yx, ey = -1, 0, 0, e0
     else:
         yk = np.random.randint(K)
         yy, yx = np.random.randint(BS), np.random.randint(BS)
-        ey = _cand_e(b, yk, yy, yx, lam, mu, fam, pa, nu, tb, st)
+        ey = _cand_e(b, yk, yy, yx, lam, mu, fam, pa, nu, cn, tb, st)
     if np.isfinite(ey) and not (yk == xk and (yk < 0 or (yy == xy and yx == xx))):
         qx = 0.5 if xk < 0 else 0.5 / (K * BS * BS)
         qy = 0.5 if yk < 0 else 0.5 / (K * BS * BS)
-        if np.random.random() < np.exp(-(ey - ex) / T) * qx / qy:
+        if not np.isfinite(ex) or np.random.random() < np.exp(-(ey - ex) / T) * qx / qy:
             xk, xy, xx = yk, yy, yx
     _set(b, xk, xy, xx, tb, st)
+    if cn.on:
+        _join(b, tb, st, cn)
 
 
-@njit(cache=True)
-def sweeps(lams, Ts, mu, fam, tb, st, seed, pa=None, nu=0.0):
+def sweeps(lams, Ts, mu, fam, tb, st, seed, pa=None, nu=0.0, cn=None):
     """One sweep per (lam, T), blocks in random order; pa (lab, phy, phx) a
-    parent labelling, nu the cost of differing from it."""
+    parent labelling, nu the cost of differing from it; cn (conn_state) the
+    spanning-forest connectivity heuristic, snapshotted before each sweep."""
     if pa is None:
         pa = (st.lab, st.phy, st.phx)
-    _sweeps(lams, Ts, mu, fam, pa, float(nu), tb, st, seed)
+    if cn is None:
+        cn = conn_state(1, 1, on=False)
+    _sweeps(np.asarray(lams, np.float64), np.asarray(Ts, np.float64), mu, fam, pa, float(nu), cn, tb, st, seed)
 
 
 @njit(cache=True)
-def _sweeps(lams, Ts, mu, fam, pa, nu, tb, st, seed):
+def _sweeps(lams, Ts, mu, fam, pa, nu, cn, tb, st, seed):
     np.random.seed(seed)
     NB = st.lab.shape[0]
     ck = np.empty(1024, np.int64)
@@ -432,8 +608,10 @@ def _sweeps(lams, Ts, mu, fam, pa, nu, tb, st, seed):
     cx = np.empty(1024, np.int64)
     ce = np.empty(1024, np.float64)
     for s in range(lams.shape[0]):
+        if cn.on:
+            _snapshot(tb, st, cn)
         for b in np.random.permutation(NB):
-            _site(b, lams[s], Ts[s], mu, fam, pa, nu, tb, st, ck, cy, cx, ce)
+            _site(b, lams[s], Ts[s], mu, fam, pa, nu, cn, tb, st, ck, cy, cx, ce)
 
 
 # ---------------------------------------------------------------- coarse level
