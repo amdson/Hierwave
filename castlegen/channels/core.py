@@ -113,6 +113,7 @@ class Certificate:
     cert: str                     # the d channel (same level, D = Dmax + 2, INF = Dmax + 1)
     Dmax: int
     delta: float = 0.0            # soft cost per unit of d
+    ports: tuple = None           # 4 views (N, E, S, W), 1 = a port on that side; None: every pair joined
 
 
 @dataclass
@@ -128,6 +129,7 @@ class Packed:
     colours: np.ndarray           # (rows, cols) int64 colour class per site
     ncol: int
     cert: np.ndarray              # (5,) int64: massview, trunkview, certchan, Dmax, 1/0 present
+    joins: np.ndarray             # (4, D, D) bool: t at p joined to t' across side d
     delta: float
     radius: int
 
@@ -171,6 +173,7 @@ class Model:
             t, d = self.chan(c.tile), self.chan(c.cert)
             assert t.h == 1 and d.h == 1 and d.D == c.Dmax + 2, c
             assert c.mass in t.views and c.trunk in t.views
+            assert c.ports is None or all(p in t.views for p in c.ports), c
 
     # ----------------------------------------------------------- packing
     def compile(self, home: str) -> Packed:
@@ -206,12 +209,18 @@ class Model:
             else:
                 add(COUNT, cidx[f.b[0]], vidx[f.a], vidx[f.b], 0, 0, -1, f.table)
         cert = np.array([-1, -1, -1, 0, 0], np.int64)
+        joins = np.ones((4, 1, 1), np.bool_)
         delta = 0.0
         for c in self.certs:
             if c.tile == home:
                 cert = np.array([vidx[home, c.mass], vidx[home, c.trunk], cidx[c.cert], c.Dmax, 1], np.int64)
                 delta = c.delta
                 radius = max(radius, 2)
+                joins = np.ones((4, hc.D, hc.D), np.bool_)
+                if c.ports is not None:
+                    P4 = [hc.views[v].astype(bool) for v in c.ports]
+                    for d in range(4):
+                        joins[d] = P4[d][:, None] & P4[(d + 2) % 4][None, :]
         rows_, cols_ = hc.grid.shape
         yy, xx = np.mgrid[:rows_, :cols_]
         if radius == 0:
@@ -226,7 +235,8 @@ class Model:
         return Packed(cidx[home], tuple(np.ascontiguousarray(c.grid, np.int32) for c in self.channels),
                       np.array([c.h for c in self.channels], np.int64), tuple(views), fac,
                       tuple(tabs) if tabs else (np.zeros((1, 1)),), np.ascontiguousarray(hc.fixed),
-                      np.ascontiguousarray(colours, np.int64), ncol, cert, float(delta), radius)
+                      np.ascontiguousarray(colours, np.int64), ncol, cert, np.ascontiguousarray(joins),
+                      float(delta), radius)
 
     # ---------------------------------------------------------- sampling
     def sweep(self, home: str, n: int, seed: int = 0, T: float = 1.0):
@@ -241,7 +251,7 @@ class Model:
         bad = 0
         for _ in range(n):
             bad = kernel.sweep(P.home, P.grids, P.hs, P.views, P.fac, P.tabs, P.fixed, P.colours, P.ncol,
-                               P.cert, P.delta, T)
+                               P.cert, P.joins, P.delta, T)
         return bad
 
     def energy(self, home: str):
@@ -249,7 +259,7 @@ class Model:
         state, each pair once, finite part summed and inf entries counted."""
         from . import kernel
         P = self.compile(home)
-        return kernel.total_energy(P.home, P.grids, P.hs, P.views, P.fac, P.tabs, P.cert, P.delta)
+        return kernel.total_energy(P.home, P.grids, P.hs, P.views, P.fac, P.tabs, P.cert, P.joins, P.delta)
 
     def site_energies(self, home: str, y: int, x: int):
         """(D,) conditional energies of site (y, x) of `home` over its domain

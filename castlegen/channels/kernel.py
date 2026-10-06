@@ -4,10 +4,19 @@ tables, and knows nothing about which channel set wrote them.
 
 Per site, colour by colour: the energy of every candidate value is the sum
 of its factor rows (pair / count / unary), then one Gumbel-max draw over the
-finite candidates.  With a certificate the candidates are (t, d) and the
-validity of the site and of its four neighbours (the dependants, whose
-other witnesses are precomputed) is added as inf per violation; the
-neighbours' d are read as they are, so the colouring needs radius 2."""
+finite candidates.
+
+Certificate (channels.tex, 14): the home channel's cells carry a mass, a
+trunk flag and join bits (joins[d, t, t']: t at p is joined to t' across
+side d), and a d channel holds a certificate per cell.  A cell is valid iff
+  mass = 0 and d = INF, or a trunk with d = 0, or
+  d < INF and some joined neighbour q has mass_q >= mass_p and d_q < d_p.
+The site draws (t, d) jointly: for each t the valid d form an interval
+(above the smallest witness d, below the smallest d of a dependant that p
+must keep valid), whose geometric sum in exp(-delta d) is closed form; t is
+drawn by Gumbel-max over the summed weights, then d within its interval.
+Neighbours' d are read as they are and dependants read their other
+neighbours, so the colouring needs radius 2."""
 import numpy as np
 from numba import njit
 
@@ -70,28 +79,49 @@ def site_energies(y, x, home, grids, hs, views, fac, tabs, D):
 
 
 @njit(cache=True, inline="always")
-def _witnessed(y, x, m, dd, g_t, g_d, mass, rows, cols, skip):
-    """A neighbour q (side != skip) with mass_q >= m > 0 and d_q < dd."""
+def _witnessed(y, x, t, dd, g_t, g_d, mass, joins, rows, cols, skip):
+    """A joined neighbour q (side != skip) with mass_q >= mass_t > 0 and d_q < dd."""
+    m = mass[t]
     for d in range(4):
         if d == skip:
             continue
         ny, nx = y + DIRS[d][0], x + DIRS[d][1]
         if ny < 0 or ny >= rows or nx < 0 or nx >= cols:
             continue
-        if mass[g_t[ny, nx]] >= m and g_d[ny, nx] < dd:
+        tq = g_t[ny, nx]
+        if mass[tq] >= m and g_d[ny, nx] < dd and joins[d, t, tq]:
             return True
     return False
 
 
 @njit(cache=True, inline="always")
-def _own_valid(m, is_trunk, dd, INF):
-    """Validity of a cell by itself: mass 0 holds d = INF; a trunk holds d = 0;
-    anything else needs a witness (checked by the caller) and d < INF."""
+def _cell_valid(y, x, g_t, g_d, mass, trunk, joins, rows, cols, INF):
+    t = g_t[y, x]
+    m, dd = mass[t], g_d[y, x]
     if m == 0:
         return dd == INF
-    if is_trunk:
+    if trunk[t]:
         return dd == 0
-    return dd < INF
+    return dd < INF and _witnessed(y, x, t, dd, g_t, g_d, mass, joins, rows, cols, -1)
+
+
+@njit(cache=True, inline="always")
+def _lgeom(n, rate):
+    """log sum_{j < n} exp(-rate j), n >= 1."""
+    if rate == 0.0:
+        return np.log(n)
+    return np.log(-np.expm1(-rate * n)) - np.log(-np.expm1(-rate))
+
+
+@njit(cache=True, inline="always")
+def _tgeom(n, rate):
+    """j < n with p(j) ~ exp(-rate j)."""
+    u = np.random.random()
+    if rate == 0.0:
+        j = int(u * n)
+    else:
+        j = int(np.floor(-np.log1p(u * np.expm1(-rate * n)) / rate))
+    return min(max(j, 0), n - 1)
 
 
 @njit(cache=True)
@@ -108,19 +138,20 @@ def _draw(e, n):
 
 
 @njit(cache=True)
-def sweep(home, grids, hs, views, fac, tabs, fixed, colours, ncol, cert, delta, T):
+def sweep(home, grids, hs, views, fac, tabs, fixed, colours, ncol, cert, joins, delta, T):
     g = grids[home]
     rows, cols = g.shape
     D = views[fac[0, 2]].shape[0] if fac.shape[0] > 0 else 0
-    if cert[4]:
+    has_cert = cert[4] == 1
+    if has_cert:
         D = views[cert[0]].shape[0]
     e = np.empty(D)
-    has_cert = cert[4] == 1
+    w = np.empty(D)
+    lo = np.empty(D, np.int64)
+    hi = np.empty(D, np.int64)
     Dmax = cert[3]
     INF = Dmax + 1
-    ND = Dmax + 2
-    ej = np.empty(D * ND)
-    base = np.empty(4, np.bool_)
+    need = np.empty(4, np.bool_)
     bad = 0
     for col in range(ncol):
         for y in range(rows):
@@ -138,61 +169,83 @@ def sweep(home, grids, hs, views, fac, tabs, fixed, colours, ncol, cert, delta, 
                         g[y, x] = pick
                     continue
                 mass, trunk, g_d = views[cert[0]], views[cert[1]], grids[cert[2]]
-                # dependants: neighbour q with mass > 0, not a trunk, valid only through p
+                # dependants: a root neighbour q (not a trunk) with no witness but p
                 for d in range(4):
                     ny, nx = y + DIRS[d][0], x + DIRS[d][1]
-                    base[d] = True
+                    need[d] = False
                     if 0 <= ny < rows and 0 <= nx < cols:
                         tq = g[ny, nx]
-                        mq = mass[tq]
-                        if mq > 0 and not trunk[tq]:
+                        if mass[tq] > 0 and not trunk[tq]:
                             dq = g_d[ny, nx]
-                            base[d] = dq < INF and _witnessed(ny, nx, mq, dq, g, g_d, mass, rows, cols, (d + 2) % 4)
+                            need[d] = not (dq < INF and _witnessed(ny, nx, tq, dq, g, g_d, mass, joins, rows, cols, (d + 2) % 4))
                 for t in range(D):
+                    w[t] = np.inf
+                    if e[t] == np.inf:
+                        continue
                     m = mass[t]
-                    for dd in range(ND):
-                        v = e[t] + delta * dd
-                        if not _own_valid(m, trunk[t] == 1, dd, INF):
-                            v = np.inf
-                        elif m > 0 and not trunk[t] and not _witnessed(y, x, m, dd, g, g_d, mass, rows, cols, -1):
-                            v = np.inf
-                        else:
-                            for d in range(4):
-                                if base[d]:
-                                    continue
-                                ny, nx = y + DIRS[d][0], x + DIRS[d][1]
-                                if not (m >= mass[g[ny, nx]] and dd < g_d[ny, nx]):
-                                    v = np.inf
-                                    break
-                        ej[t * ND + dd] = v / T
-                pick = _draw(ej, D * ND)
+                    l, h = -1, INF                                  # valid d: l < d < h, d <= Dmax
+                    ok = True
+                    for d in range(4):
+                        ny, nx = y + DIRS[d][0], x + DIRS[d][1]
+                        if ny < 0 or ny >= rows or nx < 0 or nx >= cols:
+                            continue
+                        tq = g[ny, nx]
+                        dq = g_d[ny, nx]
+                        if need[d]:
+                            if m >= mass[tq] and joins[d, t, tq]:
+                                h = min(h, dq)
+                            else:
+                                ok = False
+                                break
+                        if m > 0 and mass[tq] >= m and joins[d, t, tq] and dq < INF:
+                            if l < 0 or dq < l:
+                                l = dq                              # smallest witness d
+                    if not ok:
+                        continue
+                    if m == 0:
+                        if h < INF:                                 # some dependant needs p
+                            continue
+                        lo[t], hi[t] = INF, INF + 1
+                        w[t] = e[t] / T
+                    elif trunk[t]:
+                        if h <= 0:
+                            continue
+                        lo[t], hi[t] = 0, 1
+                        w[t] = e[t] / T
+                    else:
+                        if l < 0:
+                            continue
+                        a, b = l + 1, min(h, Dmax + 1)              # d in [a, b)
+                        if a >= b:
+                            continue
+                        lo[t], hi[t] = a, b
+                        w[t] = (e[t] + delta * a) / T - _lgeom(b - a, delta / T)
+                pick = _draw(w, D)
                 if pick < 0:
                     bad += 1
                 else:
-                    g[y, x] = pick // ND
-                    g_d[y, x] = pick % ND
+                    g[y, x] = pick
+                    g_d[y, x] = lo[pick] + _tgeom(hi[pick] - lo[pick], delta / T)
     return bad
 
 
 @njit(cache=True)
-def total_energy(home, grids, hs, views, fac, tabs, cert, delta):
-    """Sum over sites of the home-side rows at the current value, reflected
-    rows excluded (each pair once) by taking only rows with positive offset
-    or a different channel; counts and unaries once per site."""
+def total_energy(home, grids, hs, views, fac, tabs, cert, joins, delta):
+    """(finite energy, inf count): the home-side rows at the current state,
+    each pair once (reflected rows, those with a negative offset in the home
+    channel, skipped), counts once per block, plus the certificate."""
     g = grids[home]
     rows, cols = g.shape
-    D = views[fac[0, 2]].shape[0] if fac.shape[0] > 0 else 0
-    e = np.empty(D)
     total = 0.0
     nviol = 0
+    hc = hs[home]
     for y in range(rows):
         for x in range(cols):
-            hc = hs[home]
+            t = g[y, x]
             for f in range(fac.shape[0]):
                 kind = fac[f, 0]
                 av = views[fac[f, 2]]
                 tab = tabs[fac[f, 7]]
-                t = g[y, x]
                 if kind == 2:
                     total += tab[av[t], 0]
                     continue
@@ -213,10 +266,10 @@ def total_energy(home, grids, hs, views, fac, tabs, cert, delta):
                     v = tab[av[t], vb]
                 else:
                     r = hb // hc
-                    qy = (y * hc) // hb
-                    qx = (x * hc) // hb
                     if y % r != 0 or x % r != 0:
                         continue
+                    qy = (y * hc) // hb
+                    qx = (x * hc) // hb
                     s = 0
                     for yy in range(qy * r, qy * r + r):
                         for xx in range(qx * r, qx * r + r):
@@ -231,14 +284,8 @@ def total_energy(home, grids, hs, views, fac, tabs, cert, delta):
         INF = cert[3] + 1
         for y in range(rows):
             for x in range(cols):
-                t = g[y, x]
-                m = mass[t]
-                dd = g_d[y, x]
-                ok = _own_valid(m, trunk[t] == 1, dd, INF)
-                if ok and m > 0 and not trunk[t]:
-                    ok = _witnessed(y, x, m, dd, g, g_d, mass, rows, cols, -1)
-                if not ok:
+                if not _cell_valid(y, x, g, g_d, mass, trunk, joins, rows, cols, INF):
                     nviol += 1
-                elif m > 0:
-                    total += delta * dd
+                elif mass[g[y, x]] > 0:
+                    total += delta * g_d[y, x]
     return total, nviol
