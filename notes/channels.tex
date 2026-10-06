@@ -846,6 +846,117 @@ default one. Everything correctness-related is fixed before it is chosen; the
 schedule can make a sampler slow or poorly mixed but never invalid.
 
 %-----------------------------------------------------------------------------
+\section{Direction, and the free energy of the level below}
+\label{sec:direction}
+
+Take the simplest case: a block channel $\rho$ (dirt density) and the tiles
+under it, with the honour factor $\mathrm{count}(x|_p) = f(\rho_p)$. In the
+\emph{target} this factor is undirected: it constrains tiles given $\rho$ and
+$\rho$ given tiles. In the \emph{generator} it is used top-down only. The
+question is whether that loses anything.
+
+\paragraph{The two models differ by a free energy.} Write $E_{h/2}(z_{h/2} \mid z_h)$
+for the energy of the level below given the level above (its soft factors,
+with the hard ones as masks). Its partition function given $z_h$,
+\[
+  Z_{h/2}(z_h) = \sum_{z_{h/2}} e^{-E_{h/2}(z_{h/2} \mid z_h)/T},
+  \qquad
+  F_{h/2}(z_h) = -T \log Z_{h/2}(z_h),
+\]
+is the \emph{free energy of the level below} as a function of the level above.
+In one undirected energy over all levels, the marginal of $z_h$ is tilted by
+$e^{-F_{h/2}(z_h)/T}$: a coarse value is weighted by how many fine
+completions it admits and how good they are. In the chain graph it is not.
+So ``both ways'' and ``top-down'' are different distributions on $z_h$, and the
+difference is exactly $F_{h/2}$. This is not about mixing. A both-ways model
+sampled perfectly and a top-down model sampled perfectly give different
+coarse marginals.
+
+\paragraph{Which one is right depends on where the coarse tables come from.}
+\begin{itemize}
+  \item If $z_h$ is \textbf{derived} and its tables are fitted as the
+        \emph{push-forward} of the target, $\hat q(z_h) \approx q(z_h) = \sum_{x:\,\alpha(x) = z_h} p_G(x)$,
+        then $-\log q = F + \text{const}$: the tilt is already in the tables,
+        because a corpus of fine samples shows each coarse value as often as its
+        completions warrant. Top-down is then exact (the $\mathrm{TV}$ bound of
+        \texttt{coarse\_to\_fine.tex} \S3), and adding a bottom-up tilt would
+        count $F$ twice.
+  \item If $z_h$ is \textbf{designed} (Perlin heights, a grammar, a density the
+        author draws), its distribution is a specification, and the tilt would
+        corrupt it: heights with more tile completions would become more
+        likely. Top-down is what the author means. A designed level sits above
+        the learned ones and replaces their coarse marginal by a choice; the
+        learned levels below realise it (the constitution's ``coarse levels are
+        learned'' applies to the levels that model the exemplar, not to a
+        specification placed above them).
+  \item If $z_h$ is \textbf{free} ($u$), it is an auxiliary variable; its tables
+        are the exemplar's statistics, and the pull-back toward $p$ happens in
+        the tile-level relaxation, as now.
+\end{itemize}
+So, A: top-down only, as a rule of the model and not of the sampler. The
+bottom-up direction is not a factor; it is the requirement that each level's
+within-level energy be an approximation to $F$ of the level below, or be
+intended as a specification that overrides it.
+
+\paragraph{Where top-down breaks: the support of $F$.} Two objects that fully
+determine the tiles under them cannot overlap, because $Z_{\text{tiles}}(a) = 0$,
+$F = \infty$. A joint Gibbs on $(a, x)$ sees this with no extra rule: a move of
+$a_p$ onto $a_q$'s footprint fails the honour factor against the \emph{current}
+tiles, locally and immediately. A top-down pass cannot: when $a$ is sampled,
+$x$ does not exist yet. The alternation the question mentions is the price of
+the undirected model, and it breaks the single pass and chunked generation. The
+top-down model must therefore carry $F$'s infinite part at the coarse level
+itself, as the derived rule of Section~\ref{sec:plan}. This gives the general
+statement:
+\begin{quote}
+  A top-down level is sound only if its hard factors contain $\mathrm{supp}\,F_{h/2}$,
+  the set of coarse values with a feasible completion. Honourability is the
+  same condition read downward.
+\end{quote}
+The checker that enumerates small halos for honourability is computing
+$\mathrm{supp}\,F$; the derived overlap rule is $\mathrm{supp}\,F$ written by hand.
+
+\paragraph{B: the learnable interaction terms are the finite part of $F$.}
+$F_{h/2}(z_h)$ is a global function, but it is approximately local: the fine
+level's energy is a sum of local factors, so $Z$ factorises over regions up to
+boundary terms, and
+\[
+  F_{h/2}(z_h) \;\approx\; \sum_p f_1(z_h(p)) \;+\; \sum_{p \sim q} f_2\big(z_h(p), z_h(q)\big) \;+\; \cdots,
+\]
+a cluster expansion in which $f_1$ is the free energy of one cell's
+completions, $f_2(z, z') = F_{\{p,q\}} - F_{\{p\}} - F_{\{q\}}$ the excess from two
+neighbours having to agree across their seam, and higher terms are dropped. The
+\emph{learnable interaction term} of the question is $f_2$ (and $f_1$), the
+soft within-level tables of a coarse level, with three estimators:
+\begin{center}
+\small
+\begin{tabular}{@{}lp{2.6in}p{1.9in}@{}}
+\toprule
+estimator & what it computes & where it fits \\
+\midrule
+derived (closed form, checker) & $\mathrm{supp}\,F$: the $\{0, \infty\}$ part & hard tables \\
+counted from a corpus & $-\log \hat q$, i.e.\ $F$ up to a constant, by frequency & soft tables (counts, pseudo-likelihood) \\
+self-play & $F_W(z_h|_W)$ on small windows $W$ by clamped fine-level runs & soft tables where no corpus exists \\
+\bottomrule
+\end{tabular}
+\end{center}
+Self-play, concretely: for each value pair $(z, z')$ of a two-cell window (and a
+few halo values), clamp the coarse level, run the fine kernel, and estimate
+$\log Z_W$ (thermodynamic integration or annealed importance sampling; or,
+cheaply, the mean energy reached, which is the $T \to 0$ limit of $F$). Infeasible
+runs give $f_2 = \infty$ and so recover the derived rule without writing it.
+Cost: $|V|^2 \times$ halo values fine-level runs per table, which is why coupling
+through views ($|V|$ small) and not through $u$ ($m^2$) is required.
+
+\paragraph{The density example, closed.} With $\rho$ derived and counted from
+the exemplar, $f_1(\rho)$ already contains $-\log \#\{\text{tile configurations
+with that count}\}$ weighted by their energies: the entropy of each density
+is in the table, and top-down is exact. With $\rho$ drawn from noise, the
+author has chosen the density distribution and the tiles realise it; the
+count honour factor is hard, nothing flows up, and that is the intent. In
+neither case is a bottom-up factor written.
+
+%-----------------------------------------------------------------------------
 \section{Worked example: a tree with mass-monotone branches}
 \label{sec:tree}
 
