@@ -663,6 +663,104 @@ cost tables. This is the picture the question asked for: hard variables, softly
 coupled to the block channel, hard-coupled sideways and downward.
 
 %-----------------------------------------------------------------------------
+\section{Kernels: each update block owns its sampler}
+\label{sec:kernels}
+
+Hard channels are swept far more often than soft ones (they search; a hard
+move is mostly rejected, so attempts must be cheap), and the fast samplers are
+specialised: bit-sliced site draws, chain-block FFBS, closed-form interval
+draws, kNN proposals. The generic layer should not try to be any of them. It
+should own the factors and the schedule, and let each update block bring its
+own kernel.
+
+\paragraph{The contract.} An update block $B \subseteq \Chan_h$ comes with a
+Markov kernel $K_B$ on $z_B$ (one cell, a colour class, or a chain of cells)
+that leaves the conditional
+\[
+  \pi(z_B \mid z_{-B}) \;\propto\; \exp\!\Big(-\tfrac1T \sum_{E \ni B} E(\ldots)\Big)
+\]
+invariant, where the sum runs over \emph{every} factor with an argument in $B$,
+the other arguments fixed. That is the whole requirement. Then any schedule
+that applies kernels in sequence,
+$K = K_{B_1}^{n_1} K_{B_2}^{n_2} \cdots$, leaves the level's joint invariant,
+whatever the rates $n_B$, and is ergodic if the union of the blocks covers the
+level and each kernel is irreducible on its conditional. A kernel that runs
+many internal sweeps is the same as a high rate.
+
+\paragraph{What a kernel may and may not do.}
+\begin{itemize}
+  \item It owns the \emph{storage} of its channels (tiles as port bytes and bit
+        planes; rooms as label, phase and an occupancy grid; coordinates as
+        integer pairs). Other channels never read that storage, only the views
+        the channel publishes (Section~\ref{sec:views}).
+  \item It must consume every factor touching $B$, including the cross-channel
+        ones (cost tables from $u$, honour masks from a promoted channel, the
+        plan mask). A factor it cannot consume exactly it may consume
+        approximately and correct by Metropolis--Hastings (\texttt{port\_gibbs.md}
+        \S5.3), which is still invariant.
+  \item It may use any internal device whose correctness is its own business:
+        a rotating partition of a large domain (the partition rule), a
+        state-dependent candidate set (with the MH reverse set), a closed form
+        over an interval, a chain block drawn by FFBS.
+  \item It does not change other channels, and it does not ramp. Ramps and
+        annealing belong to the schedule, as explicit weights on soft factors.
+\end{itemize}
+
+\paragraph{What the generic layer hands it.} The one real design decision: the
+\emph{format of a factor restricted to $B$}. With the other arguments fixed, a
+factor is a function $e : \Dom_B \to \R \cup \{+\infty\}$; kernels consume it in
+different shapes, and a factor must be deliverable in the shape its consumer
+wants:
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+kernel & consumes $e$ as & existing code \\
+\midrule
+enumerated site draw & a dense vector over $\Dom_B$ & \texttt{hier.pick}, macroobj A, \texttt{JointLevel} \\
+bit-sliced site draw & quantised level planes plus a forbid mask & \texttt{bg\_sweep\_pairs}, \texttt{bg\_sweep\_field} \\
+proposal (MH) & a callable per candidate & \texttt{\_mh\_S}, macroobj B \\
+chain block (FFBS) & site vectors $e_i$ and transition tables $t_i$ & \texttt{envelope\_var.ffbs} \\
+closed-form field & interval bounds from neighbours' values & \texttt{blockfield} \\
+\bottomrule
+\end{tabular}
+\end{center}
+A stored table converts to any of these (a level plane is a quantised table
+row; a callable is a lookup). A computed factor (footprint overlap, the
+dependant test) delivers a mask or a callable. So each factor declares the
+shapes it can produce, each kernel the shape it consumes, and the compiler
+checks that every factor on $B$ has a shape $K_B$ accepts. The cross-channel
+terms a bit-sliced kernel sees from $u$ are then ``constant levels on masks'',
+which \texttt{bg\_sweep\_field} already takes for its parent term; the
+quantisation error is either accepted (a truncated target) or removed by the
+MH correction.
+
+\paragraph{Rates as the search budget.} With $u$ frozen, the hard channels'
+kernels sample the conditional of the hard system given the soft one; the cost
+tables are the only thing the search sees of the soft side. Sweeping the hard
+system $n$ times per $u$-update is the budget for that search, and the free-rate
+rule says any $n$ is valid. What $n$ affects is mixing: too small and the hard
+system never equilibrates to the plan; too large wastes work and, with a
+plan that keeps moving, chases a slowly moving target
+(\texttt{macro\_objects.md} \S1). It is a knob of the schedule, reported next to
+the per-kernel cost.
+
+\paragraph{Division of labour, summarised.}
+\begin{center}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+the channel brings & the generic layer owns \\
+\midrule
+storage, views, a kernel with its consumed shape & factors, with offsets and producible shapes \\
+(domain, candidate generator if proposal-based) & update blocks, colouring, rates, ramps \\
+ & restriction of factors to a block, in the kernel's shape \\
+ & compile-time checks and the cost report \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%-----------------------------------------------------------------------------
 \section{Worked example: a tree with mass-monotone branches}
 \label{sec:tree}
 
