@@ -138,6 +138,67 @@ def _draw(e, n):
 
 
 @njit(cache=True)
+def site_weights(y, x, e, g, g_d, mass, trunk, joins, Dmax, delta, T, w, lo, hi, need):
+    """The certificate at one site: from tile energies e[t], the log-weight
+    w[t] (inf = no valid d) summed over the valid d interval [lo[t], hi[t]),
+    with the dependants' needs in `need`.  Shared by the tile kernel and
+    any joint kernel that draws the tile with something else."""
+    rows, cols = g.shape
+    D = e.shape[0]
+    INF = Dmax + 1
+    for d in range(4):
+        ny, nx = y + DIRS[d][0], x + DIRS[d][1]
+        need[d] = False
+        if 0 <= ny < rows and 0 <= nx < cols:
+            tq = g[ny, nx]
+            if mass[tq] > 0 and not trunk[tq]:
+                dq = g_d[ny, nx]
+                need[d] = not (dq < INF and _witnessed(ny, nx, tq, dq, g, g_d, mass, joins, rows, cols, (d + 2) % 4))
+    for t in range(D):
+        w[t] = np.inf
+        if e[t] == np.inf:
+            continue
+        m = mass[t]
+        l, h = -1, INF                                  # valid d: l < d < h, d <= Dmax
+        ok = True
+        for d in range(4):
+            ny, nx = y + DIRS[d][0], x + DIRS[d][1]
+            if ny < 0 or ny >= rows or nx < 0 or nx >= cols:
+                continue
+            tq = g[ny, nx]
+            dq = g_d[ny, nx]
+            if need[d]:
+                if m >= mass[tq] and joins[d, t, tq]:
+                    h = min(h, dq)
+                else:
+                    ok = False
+                    break
+            if m > 0 and mass[tq] >= m and joins[d, t, tq] and dq < INF:
+                if l < 0 or dq < l:
+                    l = dq                              # smallest witness d
+        if not ok:
+            continue
+        if m == 0:
+            if h < INF:                                 # some dependant needs p
+                continue
+            lo[t], hi[t] = INF, INF + 1
+            w[t] = e[t] / T
+        elif trunk[t]:
+            if h <= 0:
+                continue
+            lo[t], hi[t] = 0, 1
+            w[t] = e[t] / T
+        else:
+            if l < 0:
+                continue
+            a, b = l + 1, min(h, Dmax + 1)              # d in [a, b)
+            if a >= b:
+                continue
+            lo[t], hi[t] = a, b
+            w[t] = (e[t] + delta * a) / T - _lgeom(b - a, delta / T)
+
+
+@njit(cache=True)
 def sweep(home, grids, hs, views, fac, tabs, fixed, colours, ncol, cert, joins, delta, T):
     g = grids[home]
     rows, cols = g.shape
@@ -150,7 +211,6 @@ def sweep(home, grids, hs, views, fac, tabs, fixed, colours, ncol, cert, joins, 
     lo = np.empty(D, np.int64)
     hi = np.empty(D, np.int64)
     Dmax = cert[3]
-    INF = Dmax + 1
     need = np.empty(4, np.bool_)
     bad = 0
     for col in range(ncol):
@@ -169,57 +229,7 @@ def sweep(home, grids, hs, views, fac, tabs, fixed, colours, ncol, cert, joins, 
                         g[y, x] = pick
                     continue
                 mass, trunk, g_d = views[cert[0]], views[cert[1]], grids[cert[2]]
-                # dependants: a root neighbour q (not a trunk) with no witness but p
-                for d in range(4):
-                    ny, nx = y + DIRS[d][0], x + DIRS[d][1]
-                    need[d] = False
-                    if 0 <= ny < rows and 0 <= nx < cols:
-                        tq = g[ny, nx]
-                        if mass[tq] > 0 and not trunk[tq]:
-                            dq = g_d[ny, nx]
-                            need[d] = not (dq < INF and _witnessed(ny, nx, tq, dq, g, g_d, mass, joins, rows, cols, (d + 2) % 4))
-                for t in range(D):
-                    w[t] = np.inf
-                    if e[t] == np.inf:
-                        continue
-                    m = mass[t]
-                    l, h = -1, INF                                  # valid d: l < d < h, d <= Dmax
-                    ok = True
-                    for d in range(4):
-                        ny, nx = y + DIRS[d][0], x + DIRS[d][1]
-                        if ny < 0 or ny >= rows or nx < 0 or nx >= cols:
-                            continue
-                        tq = g[ny, nx]
-                        dq = g_d[ny, nx]
-                        if need[d]:
-                            if m >= mass[tq] and joins[d, t, tq]:
-                                h = min(h, dq)
-                            else:
-                                ok = False
-                                break
-                        if m > 0 and mass[tq] >= m and joins[d, t, tq] and dq < INF:
-                            if l < 0 or dq < l:
-                                l = dq                              # smallest witness d
-                    if not ok:
-                        continue
-                    if m == 0:
-                        if h < INF:                                 # some dependant needs p
-                            continue
-                        lo[t], hi[t] = INF, INF + 1
-                        w[t] = e[t] / T
-                    elif trunk[t]:
-                        if h <= 0:
-                            continue
-                        lo[t], hi[t] = 0, 1
-                        w[t] = e[t] / T
-                    else:
-                        if l < 0:
-                            continue
-                        a, b = l + 1, min(h, Dmax + 1)              # d in [a, b)
-                        if a >= b:
-                            continue
-                        lo[t], hi[t] = a, b
-                        w[t] = (e[t] + delta * a) / T - _lgeom(b - a, delta / T)
+                site_weights(y, x, e, g, g_d, mass, trunk, joins, Dmax, delta, T, w, lo, hi, need)
                 pick = _draw(w, D)
                 if pick < 0:
                     bad += 1

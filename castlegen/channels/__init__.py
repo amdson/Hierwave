@@ -6,3 +6,4 @@ most one certificate per level-1 channel.  Kernels read factors through the
 packed descriptors of core.Model.compile; channel sets (ground.py, roots.py)
 never see a kernel, and a kernel never sees a channel set."""
 from .core import Channel, Factor, Certificate, Model, Kinds, view_of_tags  # noqa: F401
+from . import ground, roots, coord  # noqa: F401

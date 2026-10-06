@@ -56,11 +56,11 @@ CHARS = {" ": -1, ".": 0, "T": 3, "1": 1, "2": 2, "3": 3}
 
 
 def make_kinds():
-    """trunk, then root{m}_{ports} for m in 1..3 and 1..3 ports."""
+    """trunk, then root{m}_{ports} for m in 1..3 and 1..4 ports."""
     names, tags, cols = ["trunk"], [frozenset({"solid", "wood", "trunk", "mass3", "pS"})], [(60, 30, 10)]
     base = {1: (205, 150, 90), 2: (165, 105, 50), 3: (120, 70, 25)}
     for m in (1, 2, 3):
-        for k in (1, 2, 3):
+        for k in (1, 2, 3, 4):
             for ps in itertools.combinations(SIDES, k):
                 names.append(f"root{m}_{''.join(ps)}")
                 tags.append(frozenset({"solid", "wood", "root", f"mass{m}", f"deg{k}"} | {f"p{s}" for s in ps}))
@@ -117,12 +117,12 @@ def exemplar_stats(rows=EXEMPLAR, alpha=0.1):
         ys, xs = slice(max(-dy, 0), H + min(-dy, 0)), slice(max(-dx, 0), W + min(-dx, 0))
         q[ys, xs] = g[max(dy, 0):H + min(dy, 0), max(dx, 0):W + min(dx, 0)]
         nb[..., i] = (g > 0) & (q > 0)
-    deg = np.clip(nb.sum(-1), 1, 3)
+    deg = np.clip(nb.sum(-1), 1, 4)
     p_root = (root.sum() + alpha) / ((g == 0).sum() + alpha)
     p_mass = np.bincount(g[root], minlength=4).astype(float) + alpha
     p_mass[0] = 0
     p_mass /= p_mass.sum()
-    p_deg = np.bincount(deg[root], minlength=4).astype(float) + alpha
+    p_deg = np.bincount(deg[root], minlength=5).astype(float) + alpha
     p_deg[0] = 0
     p_deg /= p_deg.sum()
     p_side = np.full((4, 4), alpha)
@@ -142,7 +142,7 @@ def _pmi(C):
     return -np.log(p / (p.sum(1, keepdims=True) * p.sum(0, keepdims=True)))
 
 
-def tables(kinds: Kinds, alpha=0.1, dangle=4.0):
+def tables(kinds: Kinds, alpha=0.1, dangle=4.0, counted=True):
     """(unary over rclass+ports as a (D,) table on the identity view,
     seam_h over (mE, mW), seam_v over (mS, mN)).  A port facing a non-port
     costs `dangle` (soft: an unfinished tip is how a root grows under
@@ -158,6 +158,9 @@ def tables(kinds: Kinds, alpha=0.1, dangle=4.0):
     unary[v["root"] == TRUNK] = 0.0
     seam_h, seam_v = np.zeros((5, 5)), np.zeros((5, 5))
     ph, pv = _pmi(Ch), _pmi(Cv)
+    if not counted:                                             # structure only: a coordinate channel supplies the statistics
+        unary[:] = 0.0
+        ph[:], pv[:] = 0.0, 0.0
     for a in range(5):
         for b in range(5):
             pa, pb = 0 < a < BLANK, 0 < b < BLANK
@@ -180,11 +183,13 @@ def contact_tables():
     return Hh, Hv
 
 
-def factors(kinds: Kinds, tile="tile", trees="trees", beta=1.0, lam=6.0, alpha=0.1, dangle=4.0, grow=1.0):
+def factors(kinds: Kinds, tile="tile", trees="trees", beta=1.0, lam=6.0, alpha=0.1, dangle=4.0, grow=1.0,
+            counted=True):
     """grow: energy taken off every root cell (the knob for root density;
     counted marginals alone leave the pairwise model sparser than the
-    exemplar)."""
-    unary, seam_h, seam_v = tables(kinds, alpha, dangle)
+    exemplar).  counted=False keeps only the structural rules (port seam,
+    crowding, contact, trunk count) for use beside a coordinate channel."""
+    unary, seam_h, seam_v = tables(kinds, alpha, dangle, counted)
     unary = unary - grow * (views(kinds)["root"] == ROOT)
     Hh, Hv = contact_tables()
     want = np.full((2, CH * CH + 1), INF)
@@ -258,7 +263,7 @@ def metrics(tile: Channel, cert: Channel, trees: Channel):
     return dict(rule_violations=int((~ok).sum()), dangling_ports=dangling, sky_contacts=sky_touch,
                 trunks=int(trunks.sum()), trees_wanted=int(trees.grid.sum()), root_cells=int(roots.sum()),
                 mass_hist=np.bincount(mass[roots], minlength=4)[1:].tolist(),
-                deg_hist=np.bincount(deg[roots], minlength=4)[1:].tolist(),
+                deg_hist=np.bincount(deg[roots], minlength=5)[1:].tolist(),
                 max_d=int(d[roots].max()) if roots.any() else 0,
                 mean_d=float(d[roots].mean()) if roots.any() else 0.0)
 
@@ -278,7 +283,7 @@ def render(kinds: Kinds, tile: Channel, px=6, earth=None):
             if v["root"][t] != ROOT:
                 continue
             m = v["mass"][t]
-            wd = max(1, (px * m) // 5)
+            wd = px if m == 3 else max(1, (px * m) // 4)
             a, b = half - wd // 2, half - wd // 2 + wd
             cell = img[y * px:(y + 1) * px, x * px:(x + 1) * px]
             cell[:] = earth_col
