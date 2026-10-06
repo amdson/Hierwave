@@ -761,6 +761,91 @@ storage, views, a kernel with its consumed shape & factors, with offsets and pro
 \end{center}
 
 %-----------------------------------------------------------------------------
+\section{Composition, and what the compiler decides}
+\label{sec:compiler}
+
+\paragraph{Exact-kernel levels.} A Perlin-style terrain generator is a channel
+too: its domain is a height (and slope, biome, \ldots) per cell, its kernel is
+an exact draw from position-hashed noise, and it has no within-level factors.
+In the chain graph it is a top component sampled once, never revisited, and
+the levels below see it only through parent-kind cost tables on its views
+(height $\to$ the support promise's cost; biome $\to$ a gate on the exemplar
+library, the style channel of \texttt{dsl.md} \S7). The same holds for a split
+grammar emitting regions, or a Wilson tree over windows: a kernel that samples
+its conditional exactly in one pass needs no sweeps. What makes a cheap
+generator and an MCMC level composable is the directed structure between
+levels: local normalisation means the castle machinery never pushes back on the
+terrain, so the terrain's kernel is exact regardless of what sits below. The
+price is the one already paid (no bottom-up feedback), and the gain is that
+levels are combined by views and cost tables only, with neither side knowing
+the other's kernel.
+
+\paragraph{What bounds the complexity.} Four things, all already in the
+interface:
+\begin{enumerate}
+  \item the \textbf{DAG}: between levels directed, so the global schedule is a
+        sequence of per-level schedules, each a cyclic order over a few blocks;
+  \item \textbf{views}: a channel is known to others only by its published
+        statements, so adding a generator adds view tables, not kernel knowledge;
+  \item \textbf{declared couplings}: no table exists unless written, and the cost
+        report prices each one;
+  \item \textbf{bounded joint blocks}: channels tied by a hard cell factor must be
+        updated jointly; the product domain is reported and capped.
+\end{enumerate}
+The explosion, when it comes, comes from soft couplings ($\binom{n}{2}$ tables)
+and joint blocks (product domains). Both are visible at compile time.
+
+\paragraph{Mechanical: structure and correctness.} From the declarations alone
+the compiler can decide
+\begin{itemize}
+  \item the \textbf{order of levels}: a topological sort of the chain components by
+        parent-kind factors; a partially directed cycle is an error (promises
+        pointing both ways, \texttt{coarse\_to\_fine.tex} \S2);
+  \item the \textbf{update blocks}: the connected components of channels under hard
+        cell factors, which must be joint (else never-empty fails), with every
+        other channel its own block; a cap on $\prod |\Dom|$ per block, with a
+        warning and a suggested promotion when it is exceeded;
+  \item \textbf{shape matching}: every factor on a block deliverable in its kernel's
+        shape (Section~\ref{sec:kernels});
+  \item the \textbf{colouring} of each block from the largest offset among its
+        factors, plus one for dependant reads;
+  \item the \textbf{hard-system checks}: symmetry of seam tables, never-empty under
+        the colouring, honourability by enumeration on small halos, and
+        optionally seam exactness against the level below;
+  \item the \textbf{cost report}: per block per sweep,
+        $|\Cand_B| \cdot \#\{\text{factors on } B\}$ in the kernel's units, and
+        per level.
+\end{itemize}
+
+\paragraph{Not mechanical: rates, sweeps, ramps.} How many sweeps a block
+needs, how often a soft channel is re-drawn per hard sweep, and how a hard
+factor is ramped in are mixing questions, and mixing times are not computable
+from the specification. Three ways to set them, in order of preference:
+\begin{enumerate}
+  \item \textbf{calibration}: run the level on finite windows with a generous
+        schedule, measure per channel the autocorrelation of its views across
+        sweeps and the decay of hard-factor violations under the ramp, and fit
+        the smallest $n_B$ and ramp length that reach the plateau; emit a fixed
+        schedule. This is an offline step like fitting the tables, and the
+        output is a constant, so the fixed-step and locality rules hold at run
+        time;
+  \item \textbf{heuristics} as the starting point for calibration: exact-kernel
+        levels one pass; small hard blocks many cheap sweeps; large soft blocks
+        few expensive ones; rates in the ratio of their per-sweep costs so each
+        block gets a comparable share of time;
+  \item \textbf{declared} by the author, when the calibration is not worth running.
+\end{enumerate}
+Not allowed: deciding at run time from global statistics (a convergence test
+over the map). A run-time rule must be local and bounded, as the ramps are,
+and is then part of the schedule, not of the model.
+
+\paragraph{The schedule as an object.} Per level: an ordered list of
+$(B, n_B, \text{ramp}_B)$ repeated $s_h$ times, then the next level. It is small,
+printable, and the only thing that changes between a calibrated run and a
+default one. Everything correctness-related is fixed before it is chosen; the
+schedule can make a sampler slow or poorly mixed but never invalid.
+
+%-----------------------------------------------------------------------------
 \section{Worked example: a tree with mass-monotone branches}
 \label{sec:tree}
 
