@@ -589,4 +589,137 @@ speed with that palette. Low that it scales to a very varied world without
 the calibration problem being solved, which is a research question, not a
 build task.
 
+%-----------------------------------------------------------------------------
+\section{Research questions, and the learnable components}
+\label{sec:research}
+
+\subsection{The questions}
+
+Ranked; each with what would settle it.
+\begin{enumerate}
+\item \textbf{Composable energy balance.} Nothing predicts whether one
+  channel set starves another on shared tiles. Settled by a third set
+  added to ground and roots with zero tuning, or by evidence that no gate
+  convention achieves that.
+\item \textbf{Promotion versus determinism.} Deterministic couplings locked
+  the sampler; soft ones locked the designer. The middle, a promise
+  variable with a smoothed conditional above and hard honour below, is
+  designed, not built; its unknown is the promise domain. Settled by
+  building it for the root seams and measuring stuck chunks, pruned cells
+  and seam quality against the hard version.
+\item \textbf{Which blocks a kernel must draw jointly.} Label entropy and
+  nucleation were both moves only ever accepted in pairs; the compiler
+  should infer joint blocks from the factor graph under a product-domain
+  cap. Settled by a rule that predicts both cases and is checked on a
+  third.
+\item \textbf{Diversity under hard validity.} Content matching is ambiguous
+  in uniform regions; structural signatures are exact but recombine
+  rarely. Settled by a measured curve of distinct seams against validity
+  on a sheet of several systems.
+\item \textbf{Fixed budgets across chunk boundaries.} Certificates and
+  coherence span chunks; halo-local sweeps are untested. Settled by the
+  pipeline run chunk by chunk with halos against the global run.
+\end{enumerate}
+
+\subsection{Every knob is a multiplier on a statistic}
+
+The planned learnable components bear directly on the first question.
+Each hand-tuned coefficient of \S\ref{sec:ledger} multiplies a countable
+statistic of the output:
+
+\begin{center}\small
+\begin{tabular}{@{}l l@{}}
+\toprule
+coefficient & statistic \\
+\midrule
+bonus, win\_bonus & trunk windows, masked windows per area \\
+grow & root cells \\
+dangle & unmatched ports \\
+$\nu$ & tile--coordinate mismatches \\
+texture entries, the wildcard & contacts by kind pair \\
+$\kappa$ & squared count error per chunk \\
+$\delta$ & certificate depth \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent The tuning of this pass was moment matching by eye. Making it the
+definition: the user states targets for statistics they can see (objects
+per area, coverage of a band, size distribution) and near-zero targets
+for the health statistics (dangling ports, mismatches, pruned cells);
+each coefficient steps by the gap between its target and the generator's
+own average, with the budgeted pipeline as the model (stochastic
+approximation for an exponential family). Hard rules are not learnable
+and should not be. The fit is offline, per content pack; at 8 s a run and
+a dozen coefficients, an hour.
+
+\subsection{What the specification is, once the numbers are learned}
+
+Three things survive training untouched: the \emph{support}, from the hard
+factors, shared by the ideal model and the generator; the \emph{feature
+set}, which views exist and which tables are sparse where, since a
+coefficient can only scale a statistic the specification defined; and
+the \emph{generator family}, levels, channels, kernels, blocks, schedule.
+The designed soft values become the initialisation. Exemplars define the
+copy mechanism and the alphabet of views, and are one source of target
+statistics.
+
+What the forward generator approximates is the undirected joint over all
+levels, with bottom-up influence, the ideal of \code{channels.tex} \S13:
+a chain reproduces it exactly when each level's energy carries the free
+energy of the level below, and moment matching learns those corrections
+implicitly, as far as the feature set spans them. Two corrections to the
+naive reading:
+\begin{itemize}
+\item The fit never sees the ideal joint; it sees targets. The ideal is
+  what justifies the correction terms existing; the targets set them.
+\item The model being fitted is the \emph{procedure}, thirty sweeps here
+  and thirty there, not the chain's equilibrium. The learned coefficients
+  therefore compensate for the missing backward influence and the finite
+  budget at once. This is what ships, so it is the right thing to
+  control, but the coefficients belong to a schedule, and a coefficient's
+  value no longer means ``the strength of this preference''.
+\end{itemize}
+
+\subsection{What requesting a statistic means}
+
+Two training signals hide in ``train the forward procedure'', and
+conflating them is where ``regardless of correctness'' creeps in.
+
+\paragraph{Signal A: fit the forward model to the designed joint.} Targets
+are the moments of the designed undirected joint under its own features:
+maximum likelihood of the chain on samples from the ideal. Nobody
+requests anything. The cost is producing the targets, which needs the
+expensive sampler on finite windows (self-play), or counted exemplar
+moments as a stand-in. This is correctness with respect to the
+specification.
+
+\paragraph{Signal B: a user requests a statistic.} Not a change to the
+fit but to the model, with a clean form: add the statistic as a feature
+of the undirected joint with a multiplier set so the moment matches. This
+is the maximum-entropy move, the joint closest in relative entropy to the
+designed one that has the requested moment. It admits the designed joint
+was wrong about that moment, but the correction is minimal, the result is
+a well-defined undirected joint, and correctness is thereafter measured
+against the corrected one. The designed energy is the prior; the request
+is a constraint.
+
+\paragraph{The shortcut and its cost.} Moment-matching the budgeted
+generator directly to the user's targets and nothing else merges A and B:
+the coefficients absorb the request, the missing backward influence and
+the finite budget together, and every feature nobody targeted is free to
+drift while the targeted ones are matched. To keep correctness, the
+designed energy's own features must be targeted at their signal-A values
+alongside the user's additions, which brings back the cost of estimating
+them.
+
+\paragraph{So choosing statistics means.} For the model's own features the
+choice was made when the views were declared: those statistics exist
+because factors over them exist. For a user request it means naming a
+feature measurable to the user and realisable by the generator. Both are
+the same decision as which views a channel publishes, which is why that
+decision recurs as the research question: a request overrides the prior
+for one moment, and the model's own moments are what keep everything else
+from drifting while the override is honoured.
+
 \end{document}
