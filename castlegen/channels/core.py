@@ -118,6 +118,7 @@ class Certificate:
     ports: tuple = None           # 4 views (N, E, S, W), 1 = a port on that side; None: every pair joined
     tree: bool = False            # the join graph is a forest: exactly one parent (mass >=, smaller d) per
                                   # root cell, every other join to a child (mass <=, larger d)
+    joins: np.ndarray = None      # explicit (4, D, D) bool join table instead of ports (any level)
 
 
 @dataclass
@@ -175,7 +176,7 @@ class Model:
                 assert f.table.shape == (b.nvals(f.b[1]), maxsum + 1), (f.name, f.table.shape)
         for c in self.certs:
             t, d = self.chan(c.tile), self.chan(c.cert)
-            assert t.h == 1 and d.h == 1 and d.D == c.Dmax + 2, c
+            assert t.h == d.h and d.D == c.Dmax + 2, c
             assert c.mass in t.views and c.trunk in t.views
             assert c.ports is None or all(p in t.views for p in c.ports), c
 
@@ -221,7 +222,9 @@ class Model:
                 delta = c.delta
                 radius = max(radius, 2)
                 joins = np.ones((4, hc.D, hc.D), np.bool_)
-                if c.ports is not None:
+                if c.joins is not None:
+                    joins = np.asarray(c.joins, np.bool_)
+                elif c.ports is not None:
                     P4 = [hc.views[v].astype(bool) for v in c.ports]
                     for d in range(4):
                         joins[d] = P4[d][:, None] & P4[(d + 2) % 4][None, :]

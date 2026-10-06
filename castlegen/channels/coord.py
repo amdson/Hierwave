@@ -35,7 +35,7 @@ rest is FREE.  Root cells get ports toward every 4-adjacent root cell."""
 import numpy as np
 from numba import njit
 
-from .core import Channel, Factor, Kinds
+from .core import Certificate, Channel, Factor, Kinds
 from . import roots as R
 from . import kernel as KN
 
@@ -321,7 +321,7 @@ def _energy_u(c, y, x, U, alpha, my, mx, H, W, lam):
 
 @njit(cache=True)
 def joint_sweep(U, alpha, by_alpha, by_start, lam, K, Kt, fixed, coup,
-                home, grids, hs, views, fac, tabs, cert, joins, delta, T):
+                home, grids, hs, views, fac, tabs, cert, joins, delta, T, uref, mu):
     """One sequential sweep drawing (u, t, d) jointly per site: the tile
     energies e(t) from the tile channel's factors (the coupling excluded),
     the certificate weights per t, the coordinate energies per candidate c,
@@ -332,7 +332,7 @@ def joint_sweep(U, alpha, by_alpha, by_start, lam, K, Kt, fixed, coup,
     my, mx = alpha.shape
     N = my * mx
     D = coup.shape[0]
-    NC = 1 + 4 + K + Kt
+    NC = 2 + 4 + K + Kt
     cand = np.empty(NC, np.int64)
     eu = np.empty(NC)
     e = np.empty(D)
@@ -371,8 +371,13 @@ def joint_sweep(U, alpha, by_alpha, by_start, lam, K, Kt, fixed, coup,
             for k in range(Kt):
                 if a1 > a0:
                     cand[n] = by_alpha[a0 + np.random.randint(a1 - a0)]; n += 1
+            r = uref[y, x]
+            if r >= 0:
+                cand[n] = r; n += 1                                 # the parent's refinement
             for i in range(n):
                 eu[i] = _energy_u(cand[i], y, x, U, alpha, my, mx, H, W, lam)
+                if r >= 0 and cand[i] != r:
+                    eu[i] += mu                                     # parent honour
             best, bi, bt = -np.inf, -1, -1
             for i in range(n):
                 a = alpha[cand[i] // mx, cand[i] % mx]
@@ -417,18 +422,22 @@ class CoordKernel:
             sweep(self.u.grid, self.tile.grid, self.alpha, self.rootv, self.by_alpha, self.by_start,
                   self.lam, self.w, self.nu, self.radius, self.K, self.Kt, self.u.fixed)
 
-    def sweep_joint(self, model, coup, n=1, seed_=0, T=1.0):
+    def sweep_joint(self, model, coup, n=1, seed_=0, T=1.0, uref=None, mu=0.0):
         """(u, t, d) jointly per site.  `model` is compiled for the tile
         channel WITHOUT the coupling factor (this kernel adds it from the
-        table `coup`, (D_tile, A))."""
+        table `coup`, (D_tile, A)).  uref: (H, W) coordinate the parent
+        level asks for (-1: none), honoured softly at mu per mismatch."""
         P = model.compile(self.tile.name)
         KN.seed(seed_)
         seed(seed_)
+        if uref is None:
+            uref = np.full(self.u.grid.shape, -1, np.int64)
         bad = 0
         for _ in range(n):
             bad = joint_sweep(self.u.grid, self.alpha, self.by_alpha, self.by_start, self.lam, self.K, self.Kt,
                               self.u.fixed, np.ascontiguousarray(coup),
-                              P.home, P.grids, P.hs, P.views, P.fac, P.tabs, P.cert, P.joins, P.delta, T)
+                              P.home, P.grids, P.hs, P.views, P.fac, P.tabs, P.cert, P.joins, P.delta, T,
+                              np.ascontiguousarray(uref, np.int64), float(mu))
         return bad
 
     def init_free(self):
@@ -466,3 +475,217 @@ def render_coords(u: Channel, alpha, px=6):
     img[..., 2] = 120
     img[a == FREE] = (225, 225, 225)
     return np.repeat(np.repeat(img, px, 0), px, 1)
+
+
+# ------------------------------------------------- coarse coordinates (level 8)
+"""A level-8 coordinate channel: per chunk one exemplar window (its
+top-left exemplar cell) or FREE, sampled by the generic tile kernel with
+  coherence   a neighbour's window should be this one's shifted by 8
+              (two views, ey and ex; FREE windows owe each other nothing)
+  surface     hard, against surf: every root and ring cell of the window
+              lies below the chunk's first solid row, and a trunk in the
+              window sits exactly on it
+  unary       a bonus on the trunk window (one per copy), a small cost per
+              other masked window
+then refined: fine u, tiles, and certificate depth d from the exemplar's
+own tree, every cell of a footprint at once (channels.tex: a level starts
+as a consistent refinement of the level above)."""
+
+
+def exemplar_depth(kinds, alpha):
+    """(my, mx) int: d of each root cell along the exemplar's port tree
+    (trunk 0), INF (-1) elsewhere."""
+    v = R.views(kinds)
+    my, mx = alpha.shape
+    depth = np.full((my, mx), -1, np.int64)
+    ty, tx = [int(a) for a in np.argwhere(alpha == 2 + kinds.index("trunk"))[0]]
+    depth[ty, tx] = 0
+    queue = [(ty, tx)]
+    while queue:
+        y, x = queue.pop(0)
+        t = alpha[y, x] - 2
+        for i, (dy, dx) in enumerate(((-1, 0), (0, 1), (1, 0), (0, -1))):
+            ny, nx = y + dy, x + dx
+            if not (0 <= ny < my and 0 <= nx < mx) or alpha[ny, nx] < 2 or depth[ny, nx] >= 0:
+                continue
+            tq = alpha[ny, nx] - 2
+            if v["p" + "NESW"[i]][t] and v["p" + "NESW"[(i + 2) % 4]][tq]:
+                depth[ny, nx] = depth[y, x] + 1
+                queue.append((ny, nx))
+    return depth
+
+
+class Coarse:
+    """Windows of the exemplar at chunk size B: domain index 0 = FREE, then
+    every B x B window with a masked cell."""
+
+    def __init__(self, kinds, alpha, B=8):
+        self.B = B
+        my, mx = alpha.shape
+        wins = [(ey, ex) for ey in range(my - B + 1) for ex in range(mx - B + 1)
+                if (alpha[ey:ey + B, ex:ex + B] != FREE).any()]
+        self.wins = np.array([(-1, -1)] + wins, np.int64)              # (D8, 2)
+        self.D = len(self.wins)
+        trunk_code = 2 + kinds.index("trunk")
+        self.has_trunk = np.zeros(self.D, np.int64)
+        self.masked = np.zeros(self.D, np.int64)
+        self.surface_ok = np.zeros((self.D, B + 1), np.float64)       # [window, surf] 0 / inf
+        self.above_ok = np.zeros((self.D, B + 1), np.float64)         # [window, surf of the chunk above]
+        self.surface_ok[0] = 0.0
+        for w in range(1, self.D):
+            ey, ex = self.wins[w]
+            win = alpha[ey:ey + B, ex:ex + B]
+            self.masked[w] = 1
+            ty = np.argwhere(win == trunk_code)
+            rows_nonfree = np.flatnonzero((win >= 2).any(1))             # rows holding root cells
+            self.has_trunk[w] = int(len(ty) > 0)
+            for sv in range(B + 1):
+                r0 = B - sv                                             # first solid row in the chunk
+                ok = True
+                if len(ty):
+                    ok = int(ty[0][0]) == r0 and r0 <= B - 1
+                    ok = ok and all(r >= r0 for r in rows_nonfree if r != ty[0][0])
+                else:
+                    ok = all(r >= r0 for r in rows_nonfree)
+                self.surface_ok[w, sv] = 0.0 if ok else INF
+                if len(ty) and int(ty[0][0]) == 0 and sv > 0:            # a trunk on the top row needs an empty chunk above
+                    self.above_ok[w, sv] = INF
+        self.ey = np.where(self.wins[:, 0] < 0, my, self.wins[:, 0])   # FREE -> my (never equal to a window row)
+        self.ex = np.where(self.wins[:, 1] < 0, mx, self.wins[:, 1])
+        self.my, self.mx = my, mx
+
+    def channel(self, name="u8"):
+        c = Channel(name, self.B, self.D)
+        c.add_view("ey", self.ey, self.my + 1)
+        c.add_view("ex", self.ex, self.mx + 1)
+        c.add_view("self", np.arange(self.D), self.D)
+        c.add_view("masked", self.masked, 2)
+        c.add_view("trunk8", self.has_trunk, 2)
+        return c
+
+    def factors(self, u8="u8", surf="surf", lam8=INF, f=0.1, bonus=4.0, win_bonus=2.0):
+        """lam8: two masked windows that are not each other's shift; f: a
+        masked window beside a FREE one (per view, so 2 f per boundary
+        edge); bonus on the trunk window, win_bonus on every other masked
+        window (the density knob: a copy of n windows gains n win_bonus
+        against f per boundary edge)."""
+        my, mx, B = self.my, self.mx, self.B
+
+        def shift_table(n, shift):
+            """(n + 1, n + 1): 0 where b == a + shift (a, b real), 0 for FREE-FREE,
+            f for FREE against a window, lam8 for two windows out of step."""
+            t = np.full((n + 1, n + 1), lam8)
+            a = np.arange(n)
+            ok = a + shift
+            m = ok < n
+            t[a[m], ok[m]] = 0.0
+            t[n, :] = f
+            t[:, n] = f
+            t[n, n] = 0.0
+            return t
+        unary = np.where(self.has_trunk == 1, -bonus, np.where(self.masked == 1, -win_bonus, 0.0))
+        return [
+            Factor.pair((u8, "ey"), (u8, "ey"), (0, 1), shift_table(my, 0), name="coh_h_ey"),
+            Factor.pair((u8, "ex"), (u8, "ex"), (0, 1), shift_table(mx, B), name="coh_h_ex"),
+            Factor.pair((u8, "ey"), (u8, "ey"), (1, 0), shift_table(my, B), name="coh_v_ey"),
+            Factor.pair((u8, "ex"), (u8, "ex"), (1, 0), shift_table(mx, 0), name="coh_v_ex"),
+            Factor.pair((u8, "self"), (surf, "rows"), (0, 0), self.surface_ok, name="surface"),
+            Factor.pair((u8, "self"), (surf, "rows"), (-1, 0), self.above_ok, pad_b=0, name="surface_above"),
+            Factor.unary((u8, "self"), unary, name="window_unary"),
+        ]
+
+    def joins(self):
+        """(4, D8, D8) bool: window w' on side d of w is w shifted by B that way."""
+        D, B = self.D, self.B
+        J = np.zeros((4, D, D), np.bool_)
+        key = {(int(ey), int(ex)): w for w, (ey, ex) in enumerate(self.wins) if w > 0}
+        for w in range(1, D):
+            ey, ex = [int(v) for v in self.wins[w]]
+            for d, (dy, dx) in enumerate(((-B, 0), (0, B), (B, 0), (0, -B))):
+                w2 = key.get((ey + dy, ex + dx))
+                if w2 is not None:
+                    J[d, w, w2] = True
+        return J
+
+    def cert_channel(self, Dmax=256, name="d8"):
+        return Channel(name, self.B, Dmax + 2).add_view("d", np.arange(Dmax + 2))
+
+    def certificate(self, u8="u8", d8="d8", Dmax=256, delta=0.05):
+        """Every masked window reaches a trunk window through coherent
+        neighbours (the tree rule at level 8, with mass 1 everywhere):
+        no headless fragments."""
+        return Certificate(u8, "masked", "trunk8", d8, Dmax, delta, joins=self.joins())
+
+    def refine(self, u8: Channel, u: Channel, tile: Channel, cert: Channel, kinds, alpha, depth, earth_kind="soil"):
+        """Fine u, tiles and d from the coarse windows: every cell of a masked
+        window takes its exemplar coordinate, its tile (root tiles; ring
+        cells become earth where the ground had sky or a root; FREE cells
+        keep the ground's tile) and its depth.  Returns uref (H, W) for
+        the joint kernel's parent-honour term (-1 outside footprints)."""
+        B = self.B
+        H, W = u.grid.shape
+        rv = tile.views["root"]
+        uref = np.full((H, W), -1, np.int64)
+        free = np.flatnonzero(alpha.ravel() == FREE)
+        rng = np.random.default_rng(0)
+        for i in range(H // B):
+            for j in range(W // B):
+                w = u8.grid[i, j]
+                ys, xs = slice(i * B, (i + 1) * B), slice(j * B, (j + 1) * B)
+                if w == 0:
+                    u.grid[ys, xs] = rng.choice(free, (B, B))
+                    # a root tile left over from an old footprint is removed
+                    blk = tile.grid[ys, xs]
+                    blk[(rv[blk] == R.ROOT) | (rv[blk] == R.TRUNK)] = kinds.index(earth_kind)
+                    tile.grid[ys, xs] = blk
+                    cert.grid[ys, xs] = cert.D - 1
+                    continue
+                ey, ex = self.wins[w]
+                cy, cx = np.mgrid[ey:ey + B, ex:ex + B]
+                coords = cy * self.mx + cx
+                u.grid[ys, xs] = coords
+                uref[ys, xs] = coords
+                a = alpha[ey:ey + B, ex:ex + B]
+                blk = tile.grid[ys, xs].copy()
+                is_root = a >= 2
+                blk[is_root] = a[is_root] - 2
+                ring = a == EARTH
+                fix = ring & (rv[blk] != R.EARTH)
+                blk[fix] = kinds.index(earth_kind)
+                tile.grid[ys, xs] = blk
+                d = depth[ey:ey + B, ex:ex + B]
+                cert.grid[ys, xs] = np.where(d >= 0, d, cert.D - 1)
+        # prune: a placed root cell keeps its tile only if its exemplar-tree path to a trunk
+        # runs through placed cells (coherent neighbours); the rest revert to the ground
+        v = R.views(kinds)
+        mx = self.mx
+        placed = uref >= 0
+        is_root = placed & (alpha.ravel()[np.where(placed, uref, 0)] >= 2)
+        reached = np.zeros((H, W), bool)
+        trunk_code = 2 + kinds.index("trunk")
+        stack = [tuple(p_) for p_ in np.argwhere(is_root & (alpha.ravel()[np.where(placed, uref, 0)] == trunk_code))]
+        for y, x in stack:
+            reached[y, x] = True
+        while stack:
+            y, x = stack.pop()
+            c = uref[y, x]
+            t = alpha.ravel()[c] - 2
+            for i, (dy, dx) in enumerate(((-1, 0), (0, 1), (1, 0), (0, -1))):
+                ny, nx = y + dy, x + dx
+                if not (0 <= ny < H and 0 <= nx < W) or reached[ny, nx] or not is_root[ny, nx]:
+                    continue
+                cq = uref[ny, nx]
+                if cq != c + dy * mx + dx:
+                    continue                                            # not the coherent continuation
+                tq = alpha.ravel()[cq] - 2
+                if v["p" + "NESW"[i]][t] and v["p" + "NESW"[(i + 2) % 4]][tq]:
+                    reached[ny, nx] = True
+                    stack.append((ny, nx))
+        orphan = is_root & ~reached
+        if orphan.any():
+            tile.grid[orphan] = kinds.index(earth_kind)
+            cert.grid[orphan] = cert.D - 1
+            u.grid[orphan] = rng.choice(free, int(orphan.sum()))
+            uref[orphan] = -1
+        self.pruned = int(orphan.sum())
+        return uref

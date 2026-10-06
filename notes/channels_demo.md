@@ -214,6 +214,43 @@ neighbours.  What still clips the copies in the ground is the terrain
 itself: laterals that would rise above the local surface cannot be copied
 (roots never touch sky), so systems under a slope come out one-sided.
 
+## Fixed budget: a coarse coordinate channel (2026-10-06)
+
+The sequential growth was the seeding, not the exemplar: every fine cell
+took its coordinate from a neighbour, so a copy spread from the trunk at
+one cell per sweep.  `coord.Coarse` adds the parent: a level-8 channel
+holding one exemplar window per chunk (its top-left exemplar cell) or
+FREE, sampled by the generic tile kernel with
+  - coherence: a neighbour's window is this one's shifted by 8, hard
+    between two windows (lam8 = inf), a small cost f per view for a
+    window beside FREE (the copy's perimeter);
+  - a hard surface rule against surf: every root cell of the window lies
+    below the chunk's first solid row, a trunk sits on it, and a trunk on
+    the window's top row needs an empty chunk above (a second factor at
+    offset (-1, 0));
+  - a unary bonus on the trunk window and on every masked window (the
+    density knob);
+  - the certificate at level 8 (the same kernel code, joins = coherent
+    neighbours, mass 1 on masked windows, trunk windows the roots): no
+    headless fragments.
+Then a consistent refinement: every cell of a placed window takes its
+exemplar coordinate, its tile, and its certificate depth from the
+exemplar's own tree, with subtrees whose path to the trunk leaves the
+placed windows pruned back to ground.  The joint kernel then runs a few
+sweeps with a soft parent-honour term (mu per cell off its refinement).
+
+128 x 512, big exemplar, 30 coarse sweeps (1 s) + 30 fine joint sweeps
+(0.18 s each): 9 trunks, 169 windows, 2936 root cells, 7% of the solid
+ground (the exemplar is 40 deep, the ground about 77), 0 support, 0
+certificate, 0 loop violations, 0 sites without a candidate, 18
+coordinate mismatches.  Against the sequential version: 510 cells after
+800 sweeps.  images/chan_combined3.png.  Two refinements were needed on
+the way: the surface rule first forbade windows whose earth ring rose
+above the surface (copies came out a third complete; the ring is the
+fine level's business) and the refinement first placed root cells whose
+parent lay in an unplaced window (orphan subtrees that only a tip-by-tip
+dissolution could remove).
+
 ## What this does not test
 
 Promotion of a coordinate view, exemplar coordinates (the roots use counted
