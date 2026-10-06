@@ -1365,6 +1365,33 @@ never-empty, which holds when the state is consistent. A new channel whose
 honour mask can conflict with an existing one is caught at compile time, on
 small halos, before any sweep.
 
+\paragraph{Who knows what.} Three layers, each party seeing one:
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+layer & written by & known to \\
+\midrule
+views of a channel & the channel's author & anyone who couples to it \\
+tables over views (factors) & the author connecting two channels & the generic layer \\
+shapes (a kernel's input format) & the kernel's author & the generic layer \\
+\bottomrule
+\end{tabular}
+\end{center}
+An upper channel that constrains tiles writes a table over (its view, a tile
+view); it knows the tile channel's \emph{views} (port bytes, node bit, solid
+bit) and nothing about the tile kernel's shape, other channels, or how many
+of them act on tiles. The tile kernel knows its shape and nothing about
+levels or channels. The generic layer converts tables to shapes and stacks
+them. So the ``communication channel'' of the question is the pair
+(views published downward, tables written on them), and the format a kernel
+consumes is hidden behind the conversion. The only crossing of the line is a
+\emph{computed} factor (footprint overlap, a dependant test), which cannot be a
+stored table and must produce a shape directly: its author writes a producer
+for the shapes it supports, and the compiler refuses a kernel it does not.
+Those are few, and they are the hard structural rules of a channel type,
+written once with it.
+
 \paragraph{What still forces a kernel change.} Exactly two things. A factor in
 a shape the kernel cannot consume (a radius-2 soft pair term into the
 per-side bit-sliced kernel): then the compiler routes it to the MH correction
