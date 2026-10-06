@@ -337,6 +337,85 @@ windows whose $\alpha^{\mathrm{own}}$ equals $a_p$: the instances of $(k, \phi)$
 the exemplar, which is a precomputed list).
 
 %-----------------------------------------------------------------------------
+\section{Derived rules, and planning in the coordinate update}
+\label{sec:plan}
+
+\paragraph{Non-overlap is derived, not authored.} Under a correct parent
+$\to$ tile relation, two objects claiming one cell with different templates
+have no tile completion: the exact coupling $F(a) = -\log Z_{\text{tiles}}(a)$ is
+$+\infty$ on overlapping footprints, so the overlap rule would be learned (the
+$F = \infty$ case of self-play, \texttt{dsl.md} \S7). It would also be found by
+the honourability checker: it is exactly the set of $a$-configurations whose
+$\prod \refine$ is empty. Either route needs machinery that does not exist, and
+the rule is known in closed form, so it is hard-coded; in the source taxonomy of
+\texttt{dsl.md} \S5 it is a \emph{derived} factor written by hand, not an
+authored one. The same holds for interlocking (agreement on the overlap) and for
+``a promised contact must have a door-capable wall behind it''. The general
+principle: a hard neighbour factor at level $h$ is legitimate whenever it is
+implied by the hard rules at level $h/2$ through $\alpha$; hand-writing it is a
+shortcut for the compiler, and the checker, when it exists, verifies the hand
+version.
+
+\paragraph{Connectivity belongs in the plan.} In the macro runs the expensive
+part was merging components by single-block moves on $a$: with no unmatched
+door no single move merges two components, and the forest heuristic worked by
+dissolving and regrowing. The coordinate update is the natural place to decide
+where rooms connect, because a window $W(u)$ is a piece of the exemplar and is
+connected inside exactly as the exemplar is; only the seams need planning. Give
+the coordinate a second abstraction, its \emph{interfaces},
+\[
+  \iota_d(u) \in \mathcal I, \qquad d \in \{N, E, S, W\},
+\]
+the door-capable openings of $W(u)$'s objects on side $d$ (from $o_E$ and the
+template's port sides; a $B$-bit pattern, or coarser: the half-sides that open).
+Then:
+\begin{itemize}
+  \item \textbf{Seam factor on $u$.} $E^{\mathrm{nb}}_{u,u}(u_p, u_q) =
+        \kappa\, \delta\big(\iota_d(u_p), \iota_{\bar d}(u_q)\big)$ for adjacent $p, q$: a
+        proposal for $u_p$ is scored by whether its openings line up with the
+        neighbours'. Read from the exemplar at both ends, so an $O(1)$ table
+        per candidate, like $\nu$. Soft with $\kappa$, or hard on sides a promise
+        requires joined.
+  \item \textbf{The plan is honoured by $a$.} A three-way factor
+        $E\big(a_p, a_q, \iota_d(u_p)\big)$: wherever the plan opens side $d$, the
+        objects $a_p, a_q$ must be in contact across it (a hard mask on the
+        $a$-update, built from the neighbour's $a_q$ and the own $u_p$, so still
+        local). This replaces the forest heuristic: $a$ never has to \emph{discover}
+        a merge, it has to realise an opening the plan already placed.
+  \item \textbf{The global half stays a promise.} Interfaces give local joins
+        only. Reachability needs the window-level promise as now (root side,
+        keys): the contract ``every object reaches a contact across the root
+        side'' is a hard $E^{\mathrm{par}}$ from $v_{\text{win}}$ onto the block-level
+        $(u, a)$, honoured through $\iota$. The exemplar's own windows satisfy it
+        trivially; proposals that break it are masked.
+\end{itemize}
+
+\paragraph{What the block level is, then.} Three channels on $\Lambda_B$:
+\begin{center}
+\small
+\begin{tabular}{@{}llll@{}}
+\toprule
+channel & domain & reads & role \\
+\midrule
+$u$ & $\Z_m^2$ & $E_c$, $E_{\mathrm{par}}$, seam $\kappa$, $\nu$, $\mathrm{cost}(u, v)$ & the plan: appearance, objects, openings \\
+$a$ & $\{\varnothing\} \cup K \times \Phi$ & overlap, contact, $\nu$, plan mask & the realisation: whole objects, hard \\
+$v$ & small & compat, refine, $\mathrm{cost}(u, v)$ & the contract: reachability to the root \\
+\bottomrule
+\end{tabular}
+\end{center}
+with the update rates ordered $u \ll v \le a$: the plan is re-matched rarely
+and expensively, the realisation is swept often and cheaply. The one thing
+single $a$-moves could not do, merging, is no longer asked of them.
+
+\paragraph{Where $\nu$ sits now.} $a$ may deviate from $\alpha^{\mathrm{own}}(u)$ at
+cost $\nu$ (a different room of the same family, a shifted phase), but the plan's
+openings are hard on $a$. So $\nu$ is a style term and $\iota$ a structural one.
+Whether $\iota$ should also be $\nu$-soft (letting $a$ close a planned opening when
+nothing fits) is the honourability question for this level: is there always a
+realisation of a plan drawn from exemplar windows with matched interfaces? For
+windows copied verbatim yes; for $a \ne \alpha(u)$ it must be checked.
+
+%-----------------------------------------------------------------------------
 \section{Open questions}
 \label{sec:open}
 
