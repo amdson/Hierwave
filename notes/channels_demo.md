@@ -278,6 +278,43 @@ Diversity is modest: 28 of the seams recombine, and visibly only where
 the mirrored copy offers a matching edge.  A sheet of several distinct
 systems is what the mechanism needs; the mechanism itself is in place.
 
+## The sugar test: a learned free-energy correction (2026-10-06)
+
+`castlegen/channels/sugar.py`, `notes/experiments/learn_sugar.py`.  Fine
+level: water, sugar, stone; sugar needs water on all four sides (hard),
+unary mu on sugar, nothing else.  Coarse: one 4 x 4 stone rectangle per
+8 x 8 block at 25 offsets or absent (never overlapping, touching only
+across block edges).  Given the objects the fine level is a hard-square
+lattice gas with stone and its ring excluded; abutting rectangles share
+ring cells, so the ideal joint clusters objects by counting alone.
+
+Ideal: two-way sampler, tile Gibbs alternating with collapsed object
+moves (the block's tiles integrated out by a column transfer matrix,
+256 states, then redrawn by forward-filter backward-sample).  Forward:
+objects by the generic kernel with a learned presence unary and learned
+pair tables over adjacent offsets, then tiles.  Fit: persistent moment
+matching, pair tables on the conditional both-present distribution,
+presence and mu on their own statistics; 300 steps, 15 s.  Ideal 6 x 6
+blocks (400 sweeps, 14 s), forward 12 x 12.
+
+| horizontal pairs of present neighbours | full side | partial | corner | apart | present | sugar |
+|---|---|---|---|---|---|---|
+| ideal | 0.092 | 0.114 | 0.013 | 0.780 | 0.590 | 0.088 |
+| forward, untrained | 0.010 | 0.027 | 0.003 | 0.960 | 1.000 | 0.039 |
+| forward, trained | 0.091 | 0.128 | 0.009 | 0.772 | 0.539 | 0.090 |
+
+Learned table at the shared edge: -1.9 at full side contact, -1.1 to
+-1.4 at partial, -0.2 one cell apart.  Checks: two 4 x 4 rectangles
+abutting on a side regain 10 ring cells for the lattice gas at about
+0.19 nats per site at z = 0.74, so about 1.9 nats; and the presence
+unary moved from +6 to -3.6, about 10 nats, against 36 excluded sites
+at 0.19 plus log 25 for the offset entropy, about 10.  Both learned
+numbers are the free-energy quantities they should be.  First attempt
+failed: the ideal at mu 0.7 placed 5% objects (statistics on two or
+three rectangles) and the pair tables were fitted on all entries, so
+the absent-absent gap swamped the step; fixed by a denser ideal and the
+conditional fit.  images/learn_sugar.png: ideal, untrained, trained.
+
 ## What this does not test
 
 Promotion of a coordinate view, exemplar coordinates (the roots use counted
