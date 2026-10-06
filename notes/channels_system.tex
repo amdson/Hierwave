@@ -1,0 +1,514 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{dsfont}
+\usepackage{array}
+
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\1}{\mathds{1}}
+\newcommand{\Dom}{\mathcal{D}}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\title{The channel system as built: terms, principles, implementation, ledger}
+\author{Hierwave notes (consolidation, October 2026)}
+\date{}
+
+\begin{document}
+\sloppy
+\maketitle
+
+\noindent Purpose: a self-contained statement of the paradigm that
+\code{castlegen/channels} implements, every term defined before it is used;
+then the implementation described in those terms; then an honest ledger of
+what worked, what did not, and what had to be tuned by hand. Companion to
+\code{channels.tex} (the design discussion, which this document supersedes
+where they differ) and \code{channels\_demo.md} (the run log, with numbers).
+Nothing here is a proposal: every mechanism named is in the code and was run.
+
+%-----------------------------------------------------------------------------
+\section{Terms}
+\label{sec:terms}
+
+\paragraph{Lattice and levels.} The world is a grid of \emph{tiles} of side
+$1$. A \emph{level} $h \in \{8, 1\}$ in the current code (any power of two in
+principle) is the grid of cells of side $h$ tiles; cell $p$ at level $h$
+covers the $h \times h$ tiles below it. Level $8$ cells are called
+\emph{chunks}.
+
+\paragraph{Channel.} A channel $c$ is a grid of \emph{variables} at one
+level $h_c$, each taking a value in a finite \emph{domain} $\Dom_c =
+\{0, \dots, D_c - 1\}$, together with its \emph{views}. The channel's state is
+the array $z_c \in \Dom_c^{\text{cells}}$. A channel either has a
+\emph{kernel} (it is sampled) or is \emph{designed} (its state is written
+by a procedure that reads only coarser or designed channels).
+
+\paragraph{View.} A view $\alpha$ of channel $c$ is a fixed table
+$\alpha: \Dom_c \to \{0, \dots, V_\alpha - 1\}$, a lookup from a value to
+something smaller. Views are declared with their width $V_\alpha$ and are
+never sampled; they are the vocabulary factors are written in. Examples:
+the solid bit of a tile, its mass, its port on the north side, the
+exemplar statement at a coordinate.
+
+\paragraph{Variable versus factor.} Variables carry state and are drawn;
+factors carry energy and are summed. Nothing else exists at run time.
+Promises, certificates, gates and refinements are choices of which
+variables exist and which factors sit on them.
+
+\paragraph{Factor.} A factor is a table of energies over views of one or
+two variables at declared positions. Three kinds are implemented:
+\begin{itemize}
+\item \emph{pair}: $E[\alpha(z_a[p]),\ \beta(z_b[q])]$ with
+  $q = \lfloor p\, h_a / h_b \rfloor + \delta$ in $b$'s cells. This covers
+  same-level neighbours ($b = a$, $\delta = (0, 1)$) and parent reads
+  ($b$ coarser) alike. A \emph{pad} gives $\beta$'s value when $q$ is off
+  the grid, or says the term vanishes there.
+\item \emph{count}: $E[\beta(z_b[q]),\ \sum_{p' \in \text{block}(q)}
+  \alpha(z_a[p'])]$ with $b$ coarser than $a$: a table over a coarse value
+  and the sum of a fine view inside its block.
+\item \emph{unary}: $E[\alpha(z_a[p])]$.
+\end{itemize}
+A factor is \emph{hard} where its entries are $\infty$ and \emph{soft}
+elsewhere; hard is not a separate type. A factor is \emph{homed} on its
+finer (or equal) side; a coarser channel never reads a finer one
+(top-down only).
+
+\paragraph{Energy and target.} The energy of a state is the sum of all
+factors over all positions, plus the certificate terms below; the target
+is $\pi \propto e^{-E/T}$ at $T = 1$. Every kernel leaves $\pi$ invariant on
+its block given the rest.
+
+\paragraph{Kernel.} A kernel resamples one \emph{block} of variables from
+its exact conditional given everything else. The generic kernel's block is
+one variable at one site; it enumerates every value in the domain, sums
+the factor rows touching the site, and draws by Gumbel-max over the finite
+entries. A site with no finite candidate keeps its value and is counted.
+A kernel owns its block's storage and consumes every factor touching it;
+it knows nothing about which channel set wrote the factors.
+
+\paragraph{Colouring.} Sites that share no factor may be updated together.
+The compiler colours a channel's grid from the largest factor offset:
+two colours at radius 1, five at radius 2 (the classes $(x + 2y) \bmod 5$),
+one otherwise. The code runs colours in sequence; the colouring is the
+statement of what could run in parallel.
+
+\paragraph{Certificate.} The one \emph{computed} factor: a predicate on a
+level's cells that cannot be written as a stored table because it reads a
+cell, its neighbours, and a companion channel $d$ of integers. Each cell of
+the tile channel carries a \emph{mass} view ($0$: not part of the
+structure), a \emph{trunk} view (the structure's roots), and \emph{join}
+bits (cell $p$ with value $t$ is joined to neighbour $q$ with value $t'$
+across side $s$ iff $J_s[t, t']$). The companion $d_p \in \{0, \dots,
+D_{\max}\} \cup \{\infty\}$ is a certificate of attachment. A cell is
+\emph{valid} iff
+\begin{itemize}
+\item mass $0$ and $d = \infty$; or
+\item a trunk and $d = 0$; or
+\item $d < \infty$ and (\emph{plain mode}) some joined neighbour $q$ has
+  $\text{mass}_q \ge \text{mass}_p$ and $d_q < d_p$; (\emph{tree mode})
+  exactly one joined neighbour has $d_q < d_p$, with $\text{mass}_q \ge
+  \text{mass}_p$ (the parent), and every other joined neighbour has
+  $d_q > d_p$ and $\text{mass}_q \le \text{mass}_p$ (a child).
+\end{itemize}
+Validity is hard. A soft cost $\delta\, d_p$ per structure cell keeps $d$
+small. Tree mode makes the join graph a forest with mass non-increasing
+away from the trunks; plain mode allows extra joins and hence cycles.
+
+\paragraph{Joint draw with a certificate.} The kernel draws $(t, d)$
+together at a site. For each $t$ the valid $d$ form an interval:
+above the smallest $d$ among witnesses, below the smallest $d$ among
+\emph{dependants} (neighbours whose only possible parent is $p$). The sum
+of $e^{-\delta d}$ over an interval is closed form, so $t$ is drawn by
+Gumbel-max over the summed weights and then $d$ inside its interval. The
+intervals mean a chain of $n$ cells contributes
+$\prod_{i \le n} (e^{\delta i} - 1)^{-1}$ to the marginal of the tiles:
+neutral while $\delta \cdot \text{depth} < 1$, so $\delta$ is small and
+$D_{\max}$ must hold depth$/\delta$ ($0.05$ and $4096$ in use).
+
+\paragraph{Derived channel, promotion, gate.} A \emph{derived channel} is
+a sampled channel coupled to another by a factor so strong that it is in
+effect a function of it. A \emph{deterministic view} is the limit: no
+second variable, just a lookup. \emph{Promotion} replaces a deterministic
+view by a second variable plus a soft factor tying it to the first, so
+that hard factors can sit on the small new variable. A \emph{gate} is a
+factor's statement about kinds it does not own: what the ground's texture
+table says about a root tile. The principle adopted (\S\ref{sec:ledger}):
+keep views as lookups; promote whatever carries hard factors across a
+large domain; make the soft side a normalised conditional, not an
+indicator penalty.
+
+\paragraph{Exemplar coordinate.} A channel $u$ whose value is an index into
+a painted \emph{exemplar}, a picture of the structure with a
+\emph{mask}. Its view $\alpha(u)$ is the exemplar's statement at that
+position: \code{FREE} (outside the mask: the cell belongs to whoever else
+speaks), \code{EARTH} (the ring around the structure: any earth tile), or a
+specific tile. \emph{Coherence} is the preference for a cell's coordinate
+to be the shift of its neighbour's. Two \code{FREE} coordinates owe each
+other nothing, so the energy minimum is a verbatim copy of the masked
+region surrounded by free continuations.
+
+\paragraph{Refinement.} A level's state is initialised as a consistent
+refinement of the level above: every fine variable set to a value the
+coarse state implies, before any fine sweep. The alternative, starting
+blank, lets early hard commitments freeze against the coarse state
+(\S\ref{sec:ledger}, trenches).
+
+\paragraph{Schedule.} Levels run top-down, each designed channel written
+once and each sampled channel swept a fixed number of times. No ramps, no
+annealing, no global checks.
+
+%-----------------------------------------------------------------------------
+\section{Principles}
+\label{sec:principles}
+
+\begin{enumerate}
+\item \textbf{Three layers, three authors.} A channel's author publishes
+  views. Whoever couples two channels writes tables over views. A kernel's
+  author defines the kernel's input shape. The generic layer converts
+  tables to shapes and stacks them; a channel author never sees a kernel,
+  a kernel never sees a channel set. Only a computed factor (the
+  certificate) crosses the line, and it is written once with the kernel.
+\item \textbf{Hard factors live on small domains.} Support on the solid
+  bit, the seam on ports, the certificate on mass and joins, the surface
+  rule on windows. Where a hard rule would land on a large domain through
+  a deterministic view, promote.
+\item \textbf{Top-down only.} A coarser channel never reads a finer one.
+  Honourability (every coarse state admits a fine realisation) is the
+  coarse author's obligation; the surface channel is honourable under
+  support by construction (bottom rows of a chunk solid).
+\item \textbf{Start each level as a refinement of the one above.}
+\item \textbf{Joint blocks where channels are tightly coupled.} If a
+  move in one channel is only ever accepted together with a move in
+  another, the kernel must draw both; separate kernels either lock or
+  need calibration that does not exist.
+\item \textbf{Measure violations, not vibes.} Every run reports hard-rule
+  violations (support, certificate, loops), sites with no candidate,
+  coordinate mismatches, and pruned cells; a mechanism is accepted when
+  these are zero at the end of a fixed budget.
+\end{enumerate}
+
+%-----------------------------------------------------------------------------
+\section{The implementation}
+\label{sec:impl}
+
+\subsection{Modules}
+
+\begin{center}\small
+\begin{tabular}{@{}l r p{3.6in}@{}}
+\toprule
+file & lines & contents \\
+\midrule
+\code{channels/core.py} & 287 & \code{Kinds}, \code{Channel}, \code{Factor},
+  \code{Certificate}, \code{Model}: declarations, checks, packing into the
+  kernel's descriptors, colouring, \code{sweep}, \code{energy} \\
+\code{channels/kernel.py} & 386 & the generic numba kernel: factor rows,
+  certificate site weights (plain and tree), joint $(t, d)$ draw, total
+  energy with violation counts \\
+\code{channels/ground.py} & 164 & ground set: kinds, views, value-noise
+  surface, support, count honour, texture tables with the wildcard gate,
+  refinement of tiles from the surface \\
+\code{channels/roots.py} & 315 & root set: port-tile kinds, views,
+  counted exemplar tables (first pass), structural rules, certificate
+  constructor, metrics, renderer \\
+\code{channels/coord.py} & 740 & exemplar coordinates: exemplars, parsing
+  with spanning-tree ports, the alpha coupling, the joint $(u, t, d)$
+  kernel, the coarse window channel with edge signatures, refinement
+  with pruning \\
+\code{experiments/chan\_*.py} & $\sim$430 & six scripts, one per stage \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Channels in the final system}
+
+The final configuration (\code{chan\_combined3.py}) has six channels on a
+$128 \times 512$ world.
+
+\begin{center}\footnotesize
+\begin{tabular}{@{}l c p{1.5in} p{1.3in} p{1.9in}@{}}
+\toprule
+channel & level & domain & kernel & views \\
+\midrule
+\code{surf} & 8 & rows under the surface, $0..8$ & designed (value noise) & rows \\
+\code{u8} & 8 & exemplar window or FREE ($\sim$4000) & generic & ey, ex, masked, trunk8, sig$_{N,E,S,W}$ \\
+\code{d8} & 8 & $0..256$, $\infty$ & with \code{u8} (certificate) & d \\
+\code{tile} & 1 & 49 kinds & joint with \code{u} & solid, ground, root, mass, trunk, p$_s$, m$_s$ ($s \in$ NESW), self \\
+\code{u} & 1 & exemplar coordinate ($\sim$7000) & joint (\code{coord.joint\_sweep}) & alpha \\
+\code{cert} & 1 & $0..4096$, $\infty$ & with \code{tile} (certificate) & d \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent Tile kinds: sky, soil, stone; trunk; \code{root\{m\}\_\{ports\}} for
+mass $m \in \{1,2,3\}$ and every non-empty subset of the four sides,
+$45$ root kinds. Mass and ports are tags; every view is built from tags,
+so a channel set's views apply unchanged to a combined domain.
+
+\subsection{Factors in the final system}
+
+\paragraph{Ground set} (\code{ground.factors}).
+\begin{itemize}
+\item \emph{support}, hard pair on \code{solid}, offset $(1, 0)$: a solid
+  tile needs a solid tile below; below the map counts as solid.
+\item \emph{texture}, soft pairs on \code{ground} (sky, earth, rock, OTHER)
+  horizontal and vertical, from a handful of contact and adjacency
+  energies; OTHER is the \emph{wildcard}: against a neighbour of kind $x$
+  it takes the $(x, x)$ entry, against sky the solid entry, and its unary
+  is the mean of the solids'. This is the gate: a root tile is
+  texture-neutral wherever it stands.
+\item \emph{count honour}, soft count of \code{solid} against
+  $8 \cdot \code{surf}$, quadratic.
+\end{itemize}
+
+\paragraph{Root set, structural} (\code{roots.factors(counted=False)}).
+\begin{itemize}
+\item \emph{port seam}, pairs on \code{mE}/\code{mW} and \code{mS}/\code{mN}
+  (0 not a root, the mass if that side has a port, BLANK for a root without
+  one): a port facing a non-port costs \code{dangle} $= 1$. Soft on
+  purpose: an unmatched port is how an unfinished copy looks mid-sweep.
+\item \emph{contact}, hard pairs on \code{root}: a root never touches sky;
+  a trunk has sky above and not below.
+\item \emph{certificate}, tree mode, joins from the port views.
+\end{itemize}
+The counted tables of the first pass (unary over mass and degree
+marginals, port-direction statistics, PMI of joined masses, crowding) are
+off: the coordinate channel supplies the statistics.
+
+\paragraph{Coordinate coupling} (\code{coord.coupling}). A pair on
+\code{tile.self} $\times$ \code{u.alpha} at offset $(0, 0)$: $\nu = 6$ per
+mismatch; FREE forbids root and trunk tiles softly, EARTH accepts any
+earth tile. It is not added to the model's factor list; the joint kernel
+applies it from its table, because the kernel draws $u$ and $t$ together.
+
+\paragraph{Coarse window set} (\code{coord.Coarse.factors}).
+\begin{itemize}
+\item \emph{coherence}, soft pairs on \code{ey} and \code{ex} with shift
+  tables: $0$ if the neighbour is this window shifted by 8, $\lambda_8 = 1$
+  otherwise between two windows, $f = 0.1$ per view beside FREE,
+  $0$ for FREE--FREE.
+\item \emph{edge compatibility}, hard pairs on signature views: two windows
+  may abut iff the ports crossing the shared edge agree in position and
+  mass with parent-ward flipped; a child crossing against FREE costs
+  \code{cut} $= 2$; a parent crossing against FREE is $\infty$.
+\item \emph{surface}, hard pairs against \code{surf} at $(0,0)$ and
+  $(-1,0)$: every root cell of the window lies below the chunk's first
+  solid row, a trunk sits on it, and a trunk on the window's top row needs
+  an empty chunk above.
+\item \emph{unary}: $-4$ on a trunk window, $-2$ on every other masked
+  window.
+\item \emph{certificate}, plain mode, joins = compatible and parent-ward,
+  mass $1$ on every masked window, trunk windows the roots: no headless
+  fragment.
+\end{itemize}
+
+\subsection{Kernels}
+
+\paragraph{Generic} (\code{kernel.sweep}). Used for the tile channel in the
+first pass and for \code{u8} throughout. With a certificate it draws
+$(t, d)$; the certificate's site logic is \code{site\_weights}, shared.
+
+\paragraph{Joint coordinate--tile} (\code{coord.joint\_sweep}). Per site:
+the tile energies from the model's factors, the certificate weights per
+tile, the coordinate energies per candidate (coherence, plus a soft
+parent-honour $\mu = 2$ against the refinement), the coupling table joining
+them; one Gumbel-max over (candidate, tile) pairs, then $d$. Candidates: the
+current value, the four coherent continuations, one random coordinate,
+one coordinate whose alpha equals the current tile, and the parent's
+refinement.
+
+\subsection{Schedule}
+
+\begin{enumerate}
+\item \code{surf}: value noise over chunk columns, once.
+\item \code{u8}, \code{d8}: 30 sweeps of the generic kernel ($\sim$1 s).
+\item Refinement: tiles from \code{surf} (bottom rows solid); then for every
+  placed window, the fine coordinates, tiles and certificate depth, with
+  depth recomputed by breadth-first search over the stitched port tree
+  from the trunk tiles, and root tiles not reached pruned to ground.
+\item \code{tile}, \code{u}, \code{cert}: 30 joint sweeps ($0.18$ s each).
+\end{enumerate}
+Total about 8 s single-core for $128 \times 512$. Outcome: 9 trunks, $\sim$2200
+root cells, 28 recombined seams, $0$ support / certificate / loop
+violations, $0$ sites without a candidate, $0$ pruned, $\sim$20 coordinate
+mismatches.
+
+\subsection{Exemplars}
+
+ASCII, parsed by \code{coord.parse\_exemplar}: \code{T} trunk, digits mass,
+dot earth, space sky. Ports are derived as a breadth-first spanning tree
+from the trunks over mass-non-increasing adjacencies, so a painted band
+becomes a comb and the exemplar satisfies the tree certificate. The mask
+is the roots plus a one-cell earth ring below the trunk row. The big
+system ($40 \times 84$, 504 root cells) is rasterised from strokes by
+\code{experiments/paint\_big.py}; the sheet is it and its mirror image.
+
+%-----------------------------------------------------------------------------
+\section{Ledger}
+\label{sec:ledger}
+
+\subsection{What worked as designed}
+
+\begin{itemize}
+\item \textbf{Stacking.} Ground and roots were written against the generic
+  layer separately and combined by concatenating factor lists on one tile
+  domain. No kernel edit and no code beyond the script, in every
+  combination.
+\item \textbf{Views from tags.} The ground's support and count saw root
+  tiles as solid, the roots' rules saw soil and stone as earth, with no
+  cross-reference between the modules.
+\item \textbf{The certificate.} Attachment, monotonicity and the one-parent
+  rule held at zero violations in every run once implemented, at both
+  levels, with the same code.
+\item \textbf{Refinement.} Starting a level as a refinement of the one above
+  removed the trunk shafts (8 cells deep to $\le 2$) and, with the coarse
+  coordinate channel, turned 800 sweeps of sequential growth into 30 + 30
+  sweeps at fixed budget, with four times the root cells.
+\item \textbf{The generic kernel at level 8.} The window channel needed no
+  new kernel: coherence, the surface rule, the bonuses and the certificate
+  are tables and the existing computed factor, on a domain of 4000 values
+  at 1024 sites.
+\item \textbf{Metrics.} Every failure below was found by a number going
+  the wrong way, not by looking at a picture.
+\end{itemize}
+
+\subsection{What was painful, with the cause}
+
+Ordered by time spent.
+
+\begin{enumerate}
+\item \textbf{Energy balance between a copying channel and a texture
+  channel: three gates.} Roots as earth in the ground view: a root cell
+  inside fine-grained stone paid the lost rock cohesion and copies stalled
+  at a third of their size. Roots transparent (zero row): a root cell lost
+  the solid cohesion every solid gets, about $3$ per cell, and nothing
+  grew; the trunk also lost against soil's cohesion when the dangling cost
+  was $4$. The wildcard fixed it. Lesson: a gate is not ``say nothing'';
+  it is ``say what you would say about any solid here''. The marginalised
+  form is the right default.
+\item \textbf{Label entropy versus soft coupling.} With 45 root kinds
+  against one soil, an indicator coupling of $2$ between tile and
+  coordinate was beaten by entropy ($44 e^{-2} > 1$), and raising it to $6$
+  made the two-step path (coordinate then tile) too rare to grow. Fix: the
+  joint kernel. Lesson: a derived channel with a large label domain must
+  be drawn with its parent; and a soft side must be a normalised
+  conditional, not a penalty.
+\item \textbf{Nucleation through hard seams.} A port facing a non-port as
+  $\infty$ means no single-site move can create a port pair; trunks were
+  never placed. Fix: the dangling cost soft ($4$, later $1$). Lesson: a
+  hard rule between two cells that are both sampled is a two-site move in
+  disguise; either soften it or draw the pair.
+\item \textbf{Thin wiry roots from pair statistics.} Pair tables cannot
+  carry shape; with undirected cells attraction fills blobs (more good
+  pairs in a blob than a chain). Port tiles with join bits fixed the blobs;
+  only exemplar coordinates fixed the shape.
+\item \textbf{The exemplar's own statistics as barriers.} Counting mass and
+  degree jointly priced the thick tip every growing root passes through
+  at $\sim 8$, because the painted exemplar had no thick tips. Counting
+  marginals fixed it. Lesson: statistics counted from a finished picture
+  describe finished states, and single-site Gibbs must pass through
+  unfinished ones.
+\item \textbf{Random proposals in uniform regions.} Eight random coordinate
+  proposals per site turned thick bands into patchwork blobs, since every
+  interior coordinate matches. One random proposal keeps the shape with
+  some variation. The same ambiguity is why coarse recombination needs
+  edge signatures rather than content similarity.
+\item \textbf{The coarse join and the fine tree disagreeing.} Signature
+  compatibility without direction let 43\% of placed root cells be pruned
+  (a thin crossing led into a thick band, or into a piece whose parent was
+  cut); with direction but symmetric witnesses, 32\%. Direction plus
+  parent-ward witnesses plus ``a parent crossing is never cut'' brought it
+  to zero, at the price of 100 coarse sites with no legal move: the hard
+  inter-block rule locks chunks, as predicted for deterministic couplings.
+\item \textbf{The certificate's $d$ range.} With $\delta = 0.1$ and
+  $D_{\max} = 64$ the geometric draw spread $d$ by $\sim 10$ per step and
+  chains hit the cap at depth 6. The product formula above gave the rule
+  ($\delta \cdot \text{depth} < 1$, $D_{\max} \gg \text{depth}/\delta$).
+\item \textbf{Trenches.} Starting the tile level blank let a trunk be
+  placed at the bottom row of its chunk while the ground was still rising,
+  and support plus sky-above froze a shaft. Refinement fixed it.
+\item \textbf{A shrinkage with no single cause.} Before the coarse channel,
+  copies in the ground saturated at 40\% of their size alone; texture,
+  clipping, flat terrain, support alone and count alone were each ruled
+  out, and the cause was never isolated. The coarse channel made the
+  question moot. It remains the clearest example of an interaction that
+  per-factor reasoning does not reveal.
+\end{enumerate}
+
+\subsection{Knobs that were tuned by hand}
+
+\begin{center}\small
+\begin{tabular}{@{}l l p{3.3in}@{}}
+\toprule
+knob & value & what it set \\
+\midrule
+\code{dangle} & $4 \to 1$ & nucleation rate of port pairs; small once coordinates carry structure \\
+\code{grow} & $1.0$ / $1.5$ & root density under counted tables; $+0.5$ beside the ground texture (first pass only) \\
+$\nu$ & $2 \to 6$ & tile--coordinate coupling; must beat $\log 44$ \\
+$\lambda$ & $1$ & fine coherence; $2$ stopped growth, $0.5$ gave blobs \\
+KR, KT & $1, 1$ & random and tile-matched proposals; $8$ gave blobs, $0$ gave verbatim copies \\
+$\delta$, $D_{\max}$ & $0.05$, $4096$ & certificate $d$: neutral depth cost, range for depth$/\delta$ \\
+$\lambda_8$, $f$, \code{cut} & $1$, $0.1$, $2$ & coarse coherence, perimeter, cut root \\
+bonus, win\_bonus & $4$, $2$ & trunk and window bonuses: density of copies; win\_bonus $1$ with $f = 0.25$ gave no growth \\
+$\mu$ & $2$ & parent honour at the fine level \\
+$\kappa$ & $0.5$ & count honour \\
+\bottomrule
+\end{tabular}
+\end{center}
+None of these was derived; each was set by running and reading the
+violation and size counts. The ones with a derivation after the fact are
+$\nu$ (label entropy) and $\delta$, $D_{\max}$ (the product formula).
+
+\subsection{Pros and cons, stated plainly}
+
+\paragraph{Pros.}
+\begin{itemize}
+\item Adding a channel set is a small, local piece of code, and
+  combination is concatenation.
+\item Hard rules are exact and cheap, and they are what carried every
+  result: no run ended with a violation.
+\item One computed factor, the certificate, covered attachment at the tile
+  level and no-headless-fragments at the chunk level with the same code.
+\item The fixed budget is real once a parent level exists: 60 sweeps, 8 s,
+  for a $128 \times 512$ world with nine root systems.
+\item The failure modes are measurable and were measured.
+\end{itemize}
+
+\paragraph{Cons.}
+\begin{itemize}
+\item Calibration between channel sets is manual, was most of the work, and
+  grows with the number of pairs. The framework does not predict energy
+  balance; it only measures it.
+\item The kernel changed five times for new hard structure (join bits,
+  interval draw, tree mode, joint block, explicit joins at level 8). The
+  ``kernel is stable, channels plug in'' claim holds for tables, not for
+  computed factors.
+\item Deterministic couplings lock the sampler (coarse parent cuts, 100
+  stuck chunks); soft couplings lock the designer (every soft knob above).
+  The promotion with a normalised conditional that would resolve this is
+  designed, not built.
+\item Diversity is limited by the sheet: with one system and its mirror
+  only 28 seams recombine. The mechanism waits on painted content.
+\item The ground texture is salt-and-pepper at these energies; it was never
+  tuned because it was not the question.
+\item Speed is single-core numba, and the joint kernel enumerates every
+  tile per candidate: $0.18$ s per fine sweep is fine for a demo, not for
+  a world.
+\end{itemize}
+
+\subsection{What the next pass should change first}
+
+\begin{enumerate}
+\item Promote the edge signature to a channel with a smoothed
+  $-\log p(v \mid u)$ coupling, hard seams between promises, hard honour
+  below; measure whether near-matching edges stitch and whether the 100
+  stuck chunks free up.
+\item A sheet of several painted systems, to give recombination something
+  to recombine.
+\item Fuzzy matching at level 8 only (the PCA patch energy of
+  \code{generic.py} on the alpha image, $\sim$2--3 s added).
+\item Built-in ablation and per-factor energy breakdown, so that the
+  shrinkage-with-no-single-cause class of failure is found by the tool.
+\end{enumerate}
+
+\end{document}
