@@ -608,6 +608,106 @@ turned a guarantee into a tendency for that run. Ramps are a sampler device
 for mixing and do not change which factors are hard in the model.
 
 %-----------------------------------------------------------------------------
+\section{Worked example: a tree with mass-monotone branches}
+\label{sec:tree}
+
+Guarantee wanted: every branch block is joined to a branch block of equal or
+higher mass. What has to be written, in the interface of
+Sections~\ref{sec:views}--\ref{sec:hard}.
+
+\paragraph{The channel that carries branches.} Whatever block-level channel $z$
+holds the tree: segments as objects $a$ (mass from the template), a coordinate
+$u$ (mass tabulated over exemplar positions), or tiles aggregated per block
+(mass as $\alpha$ of the block's wood cells). The recipe does not depend on
+the choice; only where the view tables come from.
+
+\paragraph{Views (two, plus one bit).}
+\begin{itemize}
+  \item $\mathrm{mass}(z) \in \{0, 1, \dots, M\}$, with $0$ meaning no branch;
+  \item $\mathrm{join}_d(z) \in \{0,1\}^{B}$, the cells on side $d$ at which wood
+        reaches the seam (an interface, as $\iota_d$ for rooms). Two adjacent
+        blocks are \emph{joined} when
+        $\mathrm{join}_d(z_p) \wedge \mathrm{join}_{\bar d}(z_q) \ne 0$;
+  \item $\mathrm{root}(z) \in \{0,1\}$: a trunk block, which needs no witness.
+\end{itemize}
+
+\paragraph{The rule as stated is local but not sound.} ``Some joined neighbour has
+mass $\ge$ mine'' is a hard factor of radius 1 and can be used as is. But two
+blocks of equal mass joined to each other and to nothing else satisfy it, so
+equal-mass islands float, and with strict $>$ the walk ends at a local maximum
+that need not be a trunk. The guarantee that is probably meant, \emph{every branch
+block is joined by a chain of non-decreasing mass to a trunk}, is the
+certificate pattern: add a rank.
+
+\paragraph{The certificate channel.} $d_p \in \{0, \dots, D\} \cup \{\infty\}$ at the
+block level, small, updated jointly with $z_p$. Validity:
+\[
+  V_p \;=\; [\mathrm{mass}(z_p) = 0] \;\lor\; \mathrm{root}(z_p) \;\lor\;
+  \exists\, q \in N_1(p):\ \mathrm{joined}(p,q)\ \land\ \mathrm{mass}(z_q) \ge \mathrm{mass}(z_p)\ \land\ d_q < d_p ,
+\]
+with $\mathrm{root}(z_p) \Rightarrow d_p = 0$ and $\mathrm{mass} = 0 \Rightarrow d_p = \infty$. One hard
+factor, $L \cdot \1[\lnot V_p]$, reading $(z_p, d_p)$ and $(z_q, d_q)_{q \in N_1(p)}$:
+arity 10, radius 1. This is \texttt{blockfield}'s $(g, d)$ field with the gap
+count $g$ dropped and the mass comparison added.
+
+\paragraph{Soundness (three lines).} Follow witnesses from any branch block:
+$d$ strictly decreases, so the walk ends, and it can end only at a root; every
+step is a join, and mass never decreases along it. So every branch block is
+joined by a non-decreasing chain to a trunk. The check is local: count invalid
+blocks.
+
+\paragraph{The update.} Block $p$ redraws $(z_p, d_p)$ given its neighbours:
+\begin{enumerate}
+  \item for each candidate $z$: compute $\mathrm{mass}, \mathrm{join}_d, \mathrm{root}$ (table
+        reads), and for each neighbour $q$ whether $q$ is a possible witness
+        ($\mathrm{joined}$, $\mathrm{mass}_q \ge \mathrm{mass}$) and whether $q$ is a
+        \emph{dependant} (its only current witness is $p$; computed once per update
+        from the neighbours' own neighbourhoods);
+  \item the valid $d$ for a fixed $z$ form an interval: $d > \min_{\text{witnesses}} d_q$
+        from own validity, $d < \min_{\text{dependants}} d_q$ from theirs, $d = 0$ if
+        root, $d = \infty$ if mass $0$ and no dependant; a dependant that would lose
+        its join or its mass bound under $z$ forbids $z$ outright;
+  \item weight: the soft factors on $z$ (exemplar terms, $\nu$, $\kappa$) plus an
+        optional $\delta\, d$ pulling toward short routes, summed over the interval
+        in closed form; draw $z$, then $d$ within its interval.
+\end{enumerate}
+Never empty: the current $(z_p, d_p)$ satisfies every mask, as long as the
+dependant test is reproduced exactly. Colouring: $V_q$ for a neighbour reads
+$q$'s neighbours, so same-colour blocks must be $\ge 3$ apart: the 5-colouring.
+
+\paragraph{Infinite worlds.} A chain to a trunk crosses chunk boundaries, which
+the block level may not follow. So a coarser level must commit, as
+\texttt{macro\_full} does for rooms: each window either contains a trunk or
+names a \emph{root side} toward its parent window; a block on that side may take
+a virtual witness across it (mass $M$, $d = -1$). That is one refine factor
+(the window tree) and one honour factor (the virtual witness), both already
+written for rooms. Without it the rule still holds within a chunk, but a tree
+cannot be guaranteed to reach a trunk that lies elsewhere.
+
+\paragraph{Mixing.} Hard from the start, a branch can only grow outward from a
+trunk one block per sweep and only shrink from the tips, a ratchet; the field
+sampler's experience is that a soft ramp ($\lambda\, \1[\lnot V_p]$ rising to $L$)
+lets the soft factors lay out branches first and the certificate then prunes
+and reconnects. The ramp does not change the model's hard set.
+
+\paragraph{What to write, as code.}
+\begin{center}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+piece & size \\
+\midrule
+three view tables over $\Dom_z$ (mass, join per side, root) & precompute \\
+the certificate channel $d$ and its interval draw & reuse of \texttt{blockfield}, minus $g$ \\
+the validity kernel $V$ and the dependant test & one function, $\sim$50 lines \\
+the window-level root side (if infinite) & reuse of \texttt{macro\_full}'s tree \\
+compiler entries: arity, radius, colouring 5, never-empty & declarations \\
+\bottomrule
+\end{tabular}
+\end{center}
+No table is learned; nothing is specific to the tree's exemplar.
+
+%-----------------------------------------------------------------------------
 \section{Open questions}
 \label{sec:open}
 
