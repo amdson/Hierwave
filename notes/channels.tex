@@ -1190,6 +1190,96 @@ compiler entries: arity, radius, colouring 5, never-empty & declarations \\
 No table is learned; nothing is specific to the tree's exemplar.
 
 %-----------------------------------------------------------------------------
+\section{Adding a channel: the recipe and its cost}
+\label{sec:recipe}
+
+Suppose many channels exist and one more is to be added, with its own
+constraints. What has to be written, and what the machinery does.
+
+\paragraph{The steps.}
+\begin{enumerate}
+  \item \textbf{Level and domain.} Pick $h_c$ and $\Dom_c$, and whether the channel is
+        derived (a function of the tiles under a cell), designed (a generator)
+        or free.
+  \item \textbf{Views.} Write each $\alpha_{c,k}$ once, as a function of a cell's
+        tiles (derived) or of the value (designed, free). The machinery applies
+        it to the exemplar to make the view tables, and for a coordinate at the
+        same level the cost table $-\log p(\alpha_{c,k} \mid u)$ by counting.
+  \item \textbf{Hard rules.} Write the seam predicate on the interface view (if the
+        constraint is sideways), the honour predicate (how the level below
+        realises the value: a mask on the lower channel's views), and the merge
+        (if the channel has a coarser copy). Each is a small table or a
+        predicate of a few lines.
+  \item \textbf{Kernel.} Small domain: the enumerated site draw, nothing to write.
+        Large domain: promote the views (Section~\ref{sec:promote}) and write a
+        candidate generator for the large part. A nonlocal constraint: add a
+        certificate channel and reuse the field kernel with a new validity
+        predicate.
+  \item \textbf{Couplings.} Declare any soft coupling to another channel beyond the
+        defaults. The default is none; the automatic ones are the channel's own
+        unary, pair and parent tables and its cost table to the coordinate, all
+        counted.
+  \item \textbf{Compile.} The checks, colouring, block membership, default schedule
+        and cost report run without input. Calibrate rates if the default is
+        visibly wrong.
+\end{enumerate}
+
+\paragraph{Written versus automatic.}
+\begin{center}
+\small
+\begin{tabular}{@{}lp{2.2in}p{2.2in}@{}}
+\toprule
+item & written per channel & automatic \\
+\midrule
+view functions & 1--4 small functions & tables over $\Dom$ or exemplar positions \\
+unary, pair, parent tables & -- & counted from the exemplar through the views \\
+cost table to $u$ & -- & counted (the promoted-view coupling) \\
+seam, honour, merge & 1--3 predicates or tables & conversion to each kernel's shape \\
+couplings to other channels & 0 by default; one table each if declared & counted or self-played if asked \\
+kernel & 0 (enumerated); 1 generator (large); 1 predicate (certificate) & restriction of factors, draw, MH bookkeeping \\
+colouring, blocks, schedule & -- & from offsets, hard cell factors, defaults \\
+checks & -- & symmetry, never-empty, honourability, cost \\
+tests & the predicates against enumeration on small cases & invariants of the generic layer \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Three sizes.}
+\begin{itemize}
+  \item \textbf{A soft derived channel} (a material class per block that should
+        follow the exemplar): one view function; no hard rule; everything else
+        counted. Tens of lines. It changes nothing elsewhere.
+  \item \textbf{A hard local channel} (a density that tiles must match exactly, with
+        a seam rule): one view, one honour mask on tiles, one seam table. The
+        tile kernel receives one more factor in its shape and is otherwise
+        untouched. Under a hundred lines.
+  \item \textbf{A hard nonlocal channel} (the tree of Section~\ref{sec:tree}): the
+        views, a certificate channel, one validity predicate with its dependant
+        test, and a window-level commitment reused from the rooms. A few
+        hundred lines, most of it the predicate and its test.
+\end{itemize}
+For comparison, each channel today is a module with its own sweep, energy,
+state and experiment script: \texttt{macroobj} 1050 lines, \texttt{macrocontact}
+560, \texttt{blockfield} 560, \texttt{generic} 1050.
+
+\paragraph{What is paid once.} The recipe is cheap only because the generic
+layer exists: view tables and counting, factor restriction in each kernel's
+shape, the enumerated and proposal kernels, the field kernel with pluggable
+validity, masking of the coordinate's statement under a promoted channel, the
+checker, the schedule compiler and the cost report. That is the refactor, and
+it is where the lines go. Of it, the pieces not in the code in any form are
+factor restriction with shapes, the checker, the schedule compiler and the
+masking; the rest is consolidation.
+
+\paragraph{What nobody escapes.} Two costs stay per channel whatever the
+machinery. A hard rule must be \emph{right}: sound, with an exact seam, and
+the checker only finds the second kind of error. And an existing channel that
+should \emph{respond} to the new one needs a declared coupling, which is a
+decision, not code; the default of zero is what keeps $n$ channels from
+costing $n^2$ tables, and it is also why a new channel is invisible to the old
+ones until someone says otherwise.
+
+%-----------------------------------------------------------------------------
 \section{Open questions}
 \label{sec:open}
 
