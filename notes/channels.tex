@@ -1,0 +1,290 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{dsfont}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\1}{\mathds{1}}
+\newcommand{\Dom}{\mathcal{D}}
+\newcommand{\Chan}{\mathcal{C}}
+\newcommand{\Cand}{\mathcal{Q}}
+\newcommand{\refine}{\mathcal{R}}
+
+\title{Channels: one interface for latents and tiles}
+\author{Hierwave notes (working document)}
+\date{}
+
+\begin{document}
+\sloppy
+\maketitle
+
+\noindent Purpose: fix a notation in which every variable the sampler touches
+(exemplar coordinates, promises, object codes, macro rooms, certificate fields,
+tiles) is an instance of one thing, a \emph{channel}, so that adding a channel
+adds tables and declared couplings and nothing else. Companion to
+\texttt{coarse\_to\_fine.tex} (target, generator, promise machinery), which this
+document does not repeat; \texttt{dsl.md} \S4--5 and \texttt{macro\_objects.md}
+are the prose sources.
+
+Sections~\ref{sec:notation}--\ref{sec:existing} state what exists in the
+notation. Section~\ref{sec:open} lists what is not yet settled; it is the agenda.
+
+%-----------------------------------------------------------------------------
+\section{Notation}
+\label{sec:notation}
+
+\paragraph{Lattices.} Levels are cell sides $h \in \{h_{\text{top}}, \dots, 2, 1\}$
+in tile units. $\Lambda_h = (h\Z)^2$ is the level-$h$ lattice; a \emph{cell}
+$p \in \Lambda_h$ covers the $h \times h$ tiles $[p, p + h)^2$. $\mathrm{par}(p)
+\in \Lambda_{2h}$ is the parent of $p$, $\mathrm{ch}(p) \subset \Lambda_{h/2}$ its
+four children, $N_r(p) \subset \Lambda_h$ the same-level cells within Chebyshev
+distance $r$ (in cells). A chunked world is a finite window of each $\Lambda_h$
+with a halo; nothing below depends on the window.
+
+\paragraph{Channels.} A channel $c \in \Chan$ lives at one level $h_c$ and has a
+finite domain $\Dom_c$. Its state is a field $z_c : \Lambda_{h_c} \to \Dom_c$.
+The channels at level $h$ are $\Chan_h$, and $z_h = (z_c)_{c \in \Chan_h}$ is the
+level's state; $z_h(p) \in \prod_{c \in \Chan_h} \Dom_c$ is one cell's state. Tiles
+are the channel $t$ with $h_t = 1$ and $\Dom_t = \mathcal T$. A channel is
+\emph{small} if $|\Dom_c|$ is enumerable per update (promises, codes, certificate
+fields; tens to a few thousand) and \emph{large} otherwise (exemplar coordinates,
+$m^2$; macro rooms, $K \cdot \mathrm{BS}^2$).
+
+\paragraph{Abstractions.} A \emph{derived} channel has an abstraction
+\[
+  \alpha_c : \mathcal T^{\,h_c \times h_c} \to \Dom_c,
+  \qquad z_c(p) = \alpha_c\big(x|_{p}\big)\ \text{in the target},
+\]
+a deterministic summary of the tiles under the cell. It is \emph{compositional}
+if there is $m_c$ with $\alpha_c(x|_p) = m_c\big((\alpha_c(x|_q))_{q \in \mathrm{ch}(p)},
+\text{seams}\big)$, which gives an exact parent--child relation for free. A
+\emph{free} channel has no $\alpha$ (exemplar coordinates: a statement about the
+tiles, compared softly, not a function of them).
+
+\paragraph{Factors.} Every term of the energy is one of three kinds, each either
+soft (a table $E \in \R \cup \{+\infty\}$) or hard (an indicator; written as
+$E \in \{0, +\infty\}$):
+\begin{center}
+\small
+\begin{tabular}{@{}llll@{}}
+\toprule
+kind & arguments & scope & examples \\
+\midrule
+neighbour $E^{\mathrm{nb}}_{c,c'}$ & $z_c(p),\, z_{c'}(q)$, $q \in N_{r}(p)$ & $2r+1$ cells & $E_c$, pair tables, compat, overlap \\
+cell $E^{\mathrm{cell}}_{c,c'}$ & $z_c(p),\, z_{c'}(p)$ & one cell & $\mathrm{cost}(u,v)$, $-\log z$, $t = \mathrm{tmpl}[o]$, $V_p$ \\
+parent $E^{\mathrm{par}}_{c,c'}$ & $z_c(p),\, z_{c'}(\mathrm{par}\,p)$ & two levels & $E_{\mathrm{par}}$, refinement, $\nu$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+Hard neighbour factors of radius $r > 1$ exist (a room's footprint reaches
+$\mathrm{RAD} = 3$ blocks); so far every soft neighbour factor has $r \le 2$.
+
+%-----------------------------------------------------------------------------
+\section{Target and generator in channel terms}
+
+As in \texttt{coarse\_to\_fine.tex}: the \emph{target} is undirected on tiles,
+$p_G(x) \propto e^{-E_p(x)/T}\,\1[G(x)]$, and derived channels are its
+push-forward through $\alpha$. The \emph{generator} is a chain graph whose chain
+components are the levels, directed coarse to fine:
+\begin{gather}
+  g(z) = g_{\text{top}}(z_{h_{\text{top}}})\prod_{h < h_{\text{top}}} g_h(z_h \mid z_{2h}), \notag \\
+  g_h(z_h \mid z_{2h}) = \frac{1}{Z_h(z_{2h})}
+  \exp\!\Big(-\tfrac{1}{T}\big[E^{\mathrm{par}}_h(z_h, z_{2h}) + E^{\mathrm{nb}}_h(z_h) + E^{\mathrm{cell}}_h(z_h)\big]\Big),
+  \label{eq:level}
+\end{gather}
+with the tile level $h = 1$ included as the last component. Within a level all
+factors are undirected over the cells and channels of that level; between levels
+every factor is directed downward. Local normalisation is what buys locality,
+fittable tables and ancestral sampling, at the price that nothing below ever
+pushes back on a level above (the \texttt{coarse\_to\_fine} $\mathrm{TV}$ bound).
+Everything in this document is about the \emph{within-level} and
+\emph{parent} factors of one level and how they are sampled.
+
+%-----------------------------------------------------------------------------
+\section{The channel interface}
+\label{sec:interface}
+
+What a channel must expose for the sampler to treat it generically. Items marked
+$\dagger$ are present in the code for at least one channel; the rest are
+proposals.
+
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+member & meaning & code today \\
+\midrule
+$h_c$, $\Dom_c$ $\dagger$ & level and domain & every channel \\
+$\alpha_c$, $m_c$ $\dagger$ & abstraction and merge (derived channels) & \texttt{leaf}, \texttt{merge} (generic.py) \\
+$\refine_c(z_c(\mathrm{par}\,p) \mid \text{halo})$ $\dagger$ & child values a parent allows (hard) & \texttt{refine}, \texttt{compat} \\
+$E^{\mathrm{nb}}, E^{\mathrm{cell}}, E^{\mathrm{par}}$ $\dagger$ & factor tables, by kind; hard ones as masks & scattered \\
+$\Cand_c(p \mid z_{-p})$ $\dagger$ & candidates for a large domain, from neighbours & \texttt{\_mh\_S}, macroobj A \\
+$\iota_d(z_c)$ & the interface a value presents across side $d$ & ports, seam projections \\
+$\mathrm{cost}_c$ & work per update (for a compile-time report) & -- \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{The cell update.} Fix a cell $p$ at level $h$ and a block of channels
+$B \subseteq \Chan_h$ updated jointly. The conditional of $z_B(p)$ given everything
+else is
+\begin{align}
+  \pi_p(z_B) \;\propto\; \exp\!\Big(-\tfrac1T \Big[
+    &\sum_{c \in B} \Big( E^{\mathrm{par}}_c\big(z_c, z(\mathrm{par}\,p)\big)
+    + \sum_{c'}\sum_{q \in N_r(p)} E^{\mathrm{nb}}_{c,c'}\big(z_c, z_{c'}(q)\big)
+    + \sum_{c' \notin B} E^{\mathrm{cell}}_{c,c'}\big(z_c, z_{c'}(p)\big)\Big) \notag \\
+    &+ \sum_{c, c' \in B} E^{\mathrm{cell}}_{c,c'}(z_c, z_{c'})
+  \Big]\Big),
+  \label{eq:cell}
+\end{align}
+where the neighbour sum includes the cells that $p$'s value is read by, not only
+the ones $p$ reads (symmetry of $E^{\mathrm{nb}}$). Two update kinds, chosen by
+the block's domain size:
+\begin{itemize}
+  \item \textbf{exact} when $\prod_{c \in B}|\Dom_c|$ is enumerable: every candidate
+        scored, hard factors as masks, a Gumbel-max or integer draw (bit-sliced
+        when the factors factor over port groups, \texttt{port\_gibbs.md});
+  \item \textbf{proposal} otherwise: a candidate multiset $\Cand(p)$ built from the
+        neighbours' values (coherent shifts, parent prolongation, $k$ links,
+        $\epsilon$ uniform), scored exactly within it, with the
+        Metropolis--Hastings correction wherever $\Cand$ depends on $z_B(p)$ itself.
+\end{itemize}
+A large channel paired with a small one (coordinate $u$ with promise $v$) is
+updated by marginalising the small one inside each candidate's score,
+$\bar\pi(u) = e^{-\Delta E(u)} \sum_v e^{-\mathrm{cost}(u,v)}\,\1[v \text{ compatible}]$,
+then drawing $v \mid u$ (\texttt{joint\_sampler.md}).
+
+\paragraph{Correctness conditions.} The following are what each update needs; they
+are the generic replacements for per-channel arguments.
+\begin{enumerate}
+  \item \emph{Colouring.} Cells updated in parallel share no factor: with neighbour
+        radius $r$ and a certificate that reads witnesses at distance 2, same-colour
+        cells are $\ge 2r+1$ apart ($r = 2$: spacing 5; the plus-shaped
+        neighbourhood needs the 5-colouring $(x + 2y) \bmod 5$).
+  \item \emph{Never empty.} Under a hard neighbour factor the current value must
+        remain a candidate: true for pair factors under a 2-colouring, and for
+        certificates when the dependant checks are reproduced exactly.
+  \item \emph{Valid proposals.} A candidate set that depends only on the neighbours
+        and is sampled exactly, plus an $\epsilon$ uniform fallback, is a valid
+        move; a set that depends on the current value needs a symmetric graph or
+        the MH ratio with the reverse set.
+  \item \emph{Partition rule.} Restricting an exact update to a subset must offer the
+        same subset whichever member is current (a partition of the domain), else
+        moves out of it cannot be reversed.
+  \item \emph{Rates are free.} Channels in different blocks may be updated at any
+        relative rate; each step leaves the joint invariant. This is what lets a
+        matching variable be re-drawn once per ten sweeps while a hard channel is
+        swept every time.
+\end{enumerate}
+
+\paragraph{Honourability.} With top-down sampling and no revisiting, for every
+derived channel and every parent value its constraints allow, in every halo its
+constraints allow,
+\[
+  \refine_c\big(z_c(\mathrm{par}\,p) \mid \text{halo}\big) \neq \varnothing,
+\]
+and the level-$K$ grid must have a tile completion. For one channel this is the
+realisability property of a promise language. For several hard channels on one
+cell it is a joint condition on $\prod_c \refine_c$, which no single language
+checks; it is where joint promises (support with connectivity) can fail.
+
+%-----------------------------------------------------------------------------
+\section{The existing channels in this notation}
+\label{sec:existing}
+
+\begin{center}
+\small
+\begin{tabular}{@{}lllll@{}}
+\toprule
+channel & $h$ & $\Dom$ & $\alpha$ & update \\
+\midrule
+coordinate $u_h$ & every & $\Z_m^2$ & free & proposal \\
+promise $v_h$ & $\ge K$ & small & $\alpha$, $m$ & exact, chain blocks \\
+object code $o$ & 1 & codes & cell of template & exact, with $t$ \\
+certificate $(g,d)$ & 1 & $(G{+}2)(D{+}1)$ & -- & closed form, with $t$ \\
+macro room $(k,\phi)$ & block & $1 + K\,\mathrm{BS}^2$ & none & exact heat bath \\
+tile $t$ & 1 & $\mathcal T$ & identity & exact, bit-sliced \\
+\bottomrule
+\end{tabular}
+
+\medskip
+\begin{tabular}{@{}lll@{}}
+\toprule
+channel & hard factors & soft factors \\
+\midrule
+coordinate $u_h$ & object seam check (nb) & $E_c$ (nb), $E_{\mathrm{par}}$ (par), cost (cell) \\
+promise $v_h$ & compat (nb), refine (par) & $u$, pair, parent tables; cost (cell) \\
+object code $o$ & nbr rule (nb), $t = \mathrm{tmpl}[o]$ (cell) & -- \\
+certificate $(g,d)$ & validity $V_p$ (nb, $r = 2$) & $\mu g + \delta d$ (cell) \\
+macro room $(k,\phi)$ & overlap, attachment or contact (nb, $r = 3$) & $\mu_{\mathrm{fam}}$, $-\lambda\,\#$contacts (nb), $\nu$ (par) \\
+tile $t$ & rules, codes, ports (nb, cell) & $E_{\mathrm{loc}}$ (nb), parent term (par), $\tau$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Where the macro channel does not fit.} It is sampled alone on its own
+lattice (blocks of $\mathrm{BS} = 8$) with a pasted coarse labelling as a fixed
+parent, with no tile level under it (rooms are rendered from templates), with
+connectivity as a heuristic (a spanning forest recomputed per sweep, which reads
+the whole window) rather than a certificate or a promise, and with doors chosen
+at render by a global union-find. Its energy
+\[
+  E(\text{rooms}) = \sum_{\text{rooms}} \mu_{\mathrm{fam}(k)} - \lambda\, \#\text{contacts}
+  + \nu\, \#\{\text{blocks off the parent}\} + (\text{connectivity terms})
+\]
+is a neighbour factor of radius 3 in blocks plus a parent factor, so it fits
+Eq.~\eqref{eq:cell}; what is missing is the parent relation $\refine$ and the
+abstraction that a coarser level would carry, and the object codes that would
+tie it to a tile level.
+
+\paragraph{The matching variable.} \texttt{macro\_objects.md} \S1 proposes
+$p(x, z) \propto e^{-E_{\mathrm{hard}}(x) - E_{\mathrm{soft}}(x, z)}$ with $z$ an
+exemplar coordinate per block or window. In this notation $z$ is a coordinate
+channel at the block level with $E^{\mathrm{cell}}(x, z)$ the $O(1)$ agreement
+table and $E^{\mathrm{nb}}(z, z')$ the coherence of neighbouring matches; the
+observation is rule 5 above (rates are free), and the current pipeline is the
+case where $z$ is drawn once.
+
+%-----------------------------------------------------------------------------
+\section{Open questions}
+\label{sec:open}
+
+The agenda, roughly in the order they block each other.
+\begin{enumerate}
+  \item \textbf{What a macro object is as a channel.} Is a rigid object a value of
+        a block-level channel (one cell owns it, as macroobj) or a tile-level code
+        channel (every cell carries its template cell, as objects.py)? The two
+        differ in which moves exist: a block value moves a whole object; codes
+        cannot. Interlocking blocks (footprints that nest or share walls) break
+        both: ownership is no longer per block, and the code rule's successor is
+        a set. What is the domain and abstraction that lets a coarse cell commit
+        to ``an object of family $f$ overlapping me'' without owning it?
+  \item \textbf{Hard factors of radius $r > 1$ and their parents.} A room's
+        footprint is a hard neighbour factor over $N_3$. What must the parent
+        level carry so that $\refine$ is nonempty: a footprint envelope, a count,
+        a port pattern? This is the compositional $\alpha$ for objects.
+  \item \textbf{Connectivity for objects.} Replace the forest heuristic by the
+        port promise plus a certificate in which an object is a super-node with a
+        precomputed port pattern. Which existing certificate (the $(g,d)$ field, the
+        keyed promise) extends to irregular nodes?
+  \item \textbf{Joint honourability.} A mechanical check that $\prod_c \refine_c$ is
+        nonempty for all allowed parent values and halos, run at compile time on
+        small cases. What is its cost as the number of hard channels grows, and is
+        a product of per-channel checks ever sufficient?
+  \item \textbf{Which couplings to declare.} With $n$ channels there are
+        $\binom{n}{2}$ possible cell and neighbour couplings. Ground truth is
+        $F = -\log Z$ of the lower levels; which pairs get a table (learned, counted
+        or fitted by self-play) and which couple only through tiles and hard rules?
+  \item \textbf{Update blocks and rates.} Which channels are updated jointly (hard
+        cell couplings force it), what bounds the joint domain, and how rates are
+        set per channel (hard-sweep count per soft update).
+  \item \textbf{The cost formula.} Per-step work as
+        $\sum_B |\Cand_B| \cdot (\text{features} + \text{table reads} + \text{declared couplings})$,
+        reported at compile time, so adding a channel has a visible price.
+\end{enumerate}
+
+\end{document}
