@@ -94,6 +94,8 @@ def parse_exemplar(kinds: Kinds, rows=EXEMPLAR, ring=1):
         d[1:] |= mask[:-1]; d[:-1] |= mask[1:]; d[:, 1:] |= mask[:, :-1]; d[:, :-1] |= mask[:, 1:]
         mask = d
     mask &= g >= 0                                             # never claim sky
+    ty0 = int(np.argwhere(trunk)[0][0])
+    mask[:ty0 + 1] &= rootish[:ty0 + 1]                        # the ring starts below the trunk row: the surface is the ground's
     alpha[mask & ~rootish] = EARTH
     ty, tx = np.argwhere(trunk)[0]
     return alpha, g, mask, (int(ty), int(tx))

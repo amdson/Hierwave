@@ -138,6 +138,47 @@ these pair energies, and root systems are modest (about 20 cells per
 trunk in the combined run) and grow slowly, one tip cell per sweep at
 best, since every extension passes a dangling port.
 
+## Results, second pass: masked exemplar coordinates (2026-10-06)
+
+The thin wiry roots of the first pass were the pair statistics' fault:
+pair terms carry no shape, and the exemplar was itself a one-cell-wide
+skeleton.  `castlegen/channels/coord.py` adds the coordinate channel of
+channels.tex sections 5 and 9: each cell holds an index into a thick,
+masked ASCII exemplar; the view `alpha` is FREE (masked out: the ground's
+cell, no root allowed), EARTH (the ring below the surface around the
+roots: any earth tile) or a specific root / trunk tile; one pair factor at
+offset (0, 0) couples tile to alpha(u) at cost nu per mismatch.  The
+certificate, port seam and contact rules are unchanged and keep acting on
+the tiles; the counted tables are switched off (`roots.factors(counted=False)`).
+
+Kernel: (u, t, d) are drawn jointly per site (`coord.joint_sweep`), using
+the tile kernel's factor energies and certificate weights (factored out
+as `kernel.site_weights`).  Separate u and t sweeps could not nucleate:
+the coordinate and the tile must change together, and with 45 root kinds
+against one soil, label entropy beat any mismatch cost small enough to
+let them change in turn.  Coordinate energy: lam per incoherent
+neighbour, except that two FREE cells owe each other nothing, so a
+verbatim copy of the exemplar's masked region surrounded by FREE
+continuations is the energy minimum.  Candidates per site: the current
+value, the four coherent continuations, KR random coordinates, KT
+coordinates whose alpha equals the current tile (how a placed trunk
+finds its coordinate).  KR = 8 gave blobs: inside a thick band every
+interior coordinate matches, so jumps turn the copy into a patchwork.
+KR = 0 copies verbatim; KR = 1 keeps the shape with variation (a doubled
+taproot, a jagged crown).  Knobs: nu 6, lam 1, dangle 1 (ports now only
+mark an unfinished copy), KR 1, KT 1.
+
+Roots alone (64 x 192, 300 joint sweeps, 15 ms/sweep, 4 trunks): 0 rule
+violations, 414 root cells, mass 28 / 102 / 284 thin to thick, 683
+coordinate cells in the mask, 5 mismatches.  images/chan_roots2.png.
+
+Combined with the ground (96 x 256, 400 joint sweeps, 39 ms/sweep): no
+knob moved from the roots-only run.  0 unsupported, 0 certificate
+violations, 3 of 3 trunks, 227 root cells, 7 mismatches.  One exemplar
+fix on the way: the earth ring must start below the trunk's row, or the
+exemplar asks for earth beside the trunk where the real surface has sky,
+and the trunk flickers.  images/chan_combined2.png.
+
 ## What this does not test
 
 Promotion of a coordinate view, exemplar coordinates (the roots use counted
