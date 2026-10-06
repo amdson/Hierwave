@@ -124,6 +124,15 @@ in the ground view) was tried and is wrong: the trunk then loses the solid
 cohesion every surface cell has and is never placed.  The right gate is
 narrower than "transparent": roots are earth-like solids to the ground.
 
+Trenches: with the tile level started blank, the ground rose for ~50
+sweeps and a trunk was placed as soon as the rising ground entered its
+marked chunk, at that chunk's bottom row; the hard sky-above-trunk rule and
+the support rule then locked a one-wide shaft above it while the ground
+rose up to 7 more rows.  Fixed by starting level 1 as a consistent
+refinement of surf (`ground.init_tiles`, as promise.py's child
+initialisation): trunk depth below the neighbouring surface went from 8
+to 0..2 cells, the residual being the surface's own fluctuation.
+
 Not yet good: the soil / stone texture is salt-and-pepper at T = 1 with
 these pair energies, and root systems are modest (about 20 cells per
 trunk in the combined run) and grow slowly, one tip cell per sweep at

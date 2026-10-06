@@ -69,6 +69,28 @@ def sample_surface(surf: Channel, H, W, seed, mean_depth=0.5, **kw):
     return ys
 
 
+def init_tiles(tile: Channel, surf: Channel, kinds: Kinds, solid="soil", sky="sky"):
+    """A consistent refinement of surf: in every chunk the bottom `rows`
+    tiles solid, the rest sky.  Supported and count-exact from the start,
+    so nothing placed on the surface early (a trunk) is left in a shaft
+    when the ground rises later."""
+    rows, cols = surf.grid.shape
+    tile.grid[:] = kinds.index(sky)
+    for i in range(rows):
+        for j in range(cols):
+            n = int(surf.grid[i, j])
+            if n:
+                tile.grid[(i + 1) * CH - n:(i + 1) * CH, j * CH:(j + 1) * CH] = kinds.index(solid)
+    return tile
+
+
+def surface_rows(tile: Channel):
+    """(W,) first solid row per column (H if none)."""
+    solid = tile.views["solid"][tile.grid].astype(bool)
+    H = solid.shape[0]
+    return np.where(solid.any(0), np.argmax(solid, 0), H)
+
+
 # ---------------------------------------------------------------- factors
 def pair_tables(contact=(("sky", "sky", -1.0), ("solid", "solid", -0.8), ("rock", "rock", -0.9),
                          ("earth", "earth", -0.6), ("sky", "solid", 0.6)),

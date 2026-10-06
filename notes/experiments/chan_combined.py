@@ -31,9 +31,10 @@ print(f"{len(kinds)} kinds, {len(factors)} factors declared")
 
 # designed channels, top-down
 ys = ground.sample_surface(surf, H, W, seed=SEED, mean_depth=0.4)
-roots.sample_trees(trees, lambda j: int(round(ys[j])), SEED, spacing=SPACING, p=PTREE)
-tile.grid[:] = kinds.index("sky")
+ground.init_tiles(tile, surf, kinds)                                # level 1 starts as a refinement of surf
 cert.grid[:] = cert.D - 1
+top = ground.surface_rows(tile)
+roots.sample_trees(trees, lambda j: int(top[j * ground.CH + ground.CH // 2]), SEED, spacing=SPACING, p=PTREE)
 print("trees wanted:", int(trees.grid.sum()))
 
 t0 = time.time()
