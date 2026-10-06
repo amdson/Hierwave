@@ -1271,6 +1271,13 @@ it is where the lines go. Of it, the pieces not in the code in any form are
 factor restriction with shapes, the checker, the schedule compiler and the
 masking; the rest is consolidation.
 
+\paragraph{The condition behind the recipe.} The counts above assume kernels
+take a stack of factors and never a named term, so that a channel acting on
+tiles adds an entry to the tile kernel's stack and not a line to its code.
+Section~\ref{sec:stacking} states that rule, the closure it needs, and the one
+addition to the factor interface (gates) that keeps two channels' statements
+about the same tiles from being counted twice.
+
 \paragraph{What nobody escapes.} Two costs stay per channel whatever the
 machinery. A hard rule must be \emph{right}: sound, with an exact seam, and
 the checker only finds the second kind of error. And an existing channel that
@@ -1278,6 +1285,94 @@ should \emph{respond} to the new one needs a declared coupling, which is a
 decision, not code; the default of zero is what keeps $n$ channels from
 costing $n^2$ tables, and it is also why a new channel is invisible to the old
 ones until someone says otherwise.
+
+%-----------------------------------------------------------------------------
+\section{Many channels on one kernel}
+\label{sec:stacking}
+
+Two channels both change the energy of the tiles under them. If the tile
+kernel was written to take \emph{a} parent term, the second channel forces a
+rewrite, and the third again. The recipe of Section~\ref{sec:recipe} holds only
+if this cannot happen. What prevents it is a rule on the kernel side of the
+contract, a closure property of the shapes, and one addition to the factor
+interface.
+
+\paragraph{The rule: a kernel takes a list, never a named term.} The input to a
+kernel for block $B$ at site $p$ is the \emph{stack} of restricted factors,
+$\{e_1, \dots, e_K\}$, each in the kernel's shape, from whatever channels
+declared them. The kernel sums (or ANDs) the stack and draws. It never knows
+which channel a factor came from, how many there are, or at what level they
+live. Adding a channel that affects tiles adds one entry to the stack. This
+is what \texttt{bitgibbs.c} already does with \texttt{acc\_add} over factor
+stacks; the generic version makes it the only way a kernel receives energy.
+A kernel written against a fixed neighbourhood (``the four sides and the
+parent'') violates the rule; one written against ``the factors on $B$, each
+with its offsets'' satisfies it.
+
+\paragraph{Closure: every shape must add.} For the stack to be summed inside
+the kernel, each shape needs a sum (soft) and a meet (hard):
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+shape & soft sum & hard meet \\
+\midrule
+dense vector over $\Dom_B$ & vector add & mask AND \\
+level planes + forbid plane & bit-sliced adder, within a level budget & forbid OR \\
+callable per candidate & sum of calls & conjunction \\
+chain tables $e_i, t_i$ & add site and transition tables & mask AND on both \\
+interval bounds & -- & intersect intervals \\
+\bottomrule
+\end{tabular}
+\end{center}
+One real cost hides here: the bit-sliced kernel has a \emph{level budget}
+($\mathrm{AB} = 5$ bits, 32 levels). Each soft factor declares its level range,
+and the compiler checks the sum fits; if it does not, it coarsens the unit
+(losing resolution, corrected by MH) or moves a factor out of the planes into
+the MH correction. So in that kernel a new soft channel on tiles has a price in
+bits, and the compiler reports it next to the time cost.
+
+\paragraph{Any coarser level may speak to the tiles.} A parent-kind factor's
+offset may point to any ancestor lattice, not only $2h$: a block channel at
+$h = 8$ and a window channel at $h = 64$ both restrict to a tile site by
+reading their cell above it. The chain graph is unchanged (level $h$ is
+conditioned on everything above it, and the order is still a topological
+sort); the restriction just reads the ancestor at the right level.
+
+\paragraph{Double counting, and masks as part of a factor.} Summing is the
+right default for independent statements (an object's template and a density
+count), and wrong for two statements \emph{about the same thing}: the coordinate's
+texture term and an object's template both say what the tiles under a
+footprint look like, and summing counts the evidence twice (\texttt{dsl.md}
+\S6). This is a modelling fact, not a kernel problem, and it is expressed in
+the factor, not in the kernel: a factor may carry a \textbf{gate}, a view of
+some channel at some offset, and contributes only where the gate is open,
+\[
+  E(\ldots)\cdot \1\big[\gamma(z_{c'}(p + o'))\big].
+\]
+The coordinate's tile term is gated off under any footprint; the object's
+honour mask is gated on there. Precedence among channels is then authored, as
+a small ordered list, and compiled into gates. The kernel still sees a stack;
+some entries are zero at some sites. For a view that \emph{is} the gate
+(ownership), promotion already gives it a channel to live on.
+
+\paragraph{Joint satisfiability of hard stacks.} Two hard honour masks on one
+tile site AND together, and the meet can be empty: an object's template cell
+and a density count that cannot both hold. This is joint honourability at the
+tile level, and it is the checker's job (the union of a level's hard tables,
+Section~\ref{sec:hard}), not the kernel's: the kernel only requires
+never-empty, which holds when the state is consistent. A new channel whose
+honour mask can conflict with an existing one is caught at compile time, on
+small halos, before any sweep.
+
+\paragraph{What still forces a kernel change.} Exactly two things. A factor in
+a shape the kernel cannot consume (a radius-2 soft pair term into the
+per-side bit-sliced kernel): then the compiler routes it to the MH correction
+or to the enumerated kernel, and the author may choose to extend the kernel
+instead. And a new structural device (a certificate whose validity does not
+fit the pluggable predicate of the field kernel, a block update of a new
+shape): then it is a new kernel, under the same contract, for that channel's
+block only. Neither touches an existing kernel.
 
 %-----------------------------------------------------------------------------
 \section{Open questions}
