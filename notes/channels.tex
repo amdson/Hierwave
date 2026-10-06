@@ -110,7 +110,7 @@ Everything in this document is about the \emph{within-level} and
 
 What a channel must expose for the sampler to treat it generically. Items marked
 $\dagger$ are present in the code for at least one channel; the rest are
-proposals.
+proposals. Section~\ref{sec:views} reduces this list to views and factors.
 
 \begin{center}
 \small
@@ -414,6 +414,108 @@ Whether $\iota$ should also be $\nu$-soft (letting $a$ close a planned opening w
 nothing fits) is the honourability question for this level: is there always a
 realisation of a plan drawn from exemplar windows with matched interfaces? For
 windows copied verbatim yes; for $a \ne \alpha(u)$ it must be checked.
+
+%-----------------------------------------------------------------------------
+\section{The interface, second pass: channels, views, factors}
+\label{sec:views}
+
+Sections~\ref{sec:objects}--\ref{sec:plan} make the coordinate look like a
+promise: a value chosen above that the level below must honour. That is right,
+and it is the simplification. The difference between a promise and a coordinate
+is not in the channel but in how its statements are used. This section replaces
+the member list of Section~\ref{sec:interface} with a smaller one.
+
+\paragraph{Views.} A channel $c$ exposes a finite set of \emph{views}
+\[
+  \alpha_{c,k} : \Dom_c \to V_{c,k}, \qquad k \in \mathrm{views}(c),
+\]
+each a small-valued statement about the cell. The identity is a view. Examples:
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+channel & views & where they come from \\
+\midrule
+tile $t$ & port byte per side $\iota_d(t)$; node, exit, solid bits & tile set (ports \emph{are} views) \\
+promise $v$ & identity; interface $\iota_d(v)$ & the language \\
+object $a$ & identity; footprint bitmap; slots per side & templates \\
+coordinate $u$ & $N_E(u)$; $\alpha^{\mathrm{own}}(u)$; $\iota_d(u)$; $\alpha_v(u)$ & \textbf{tables over exemplar positions} \\
+certificate $(g,d)$ & identity & -- \\
+\bottomrule
+\end{tabular}
+\end{center}
+A coordinate differs from every other channel in one way only: its views are
+read from precomputed tables indexed by exemplar position, so it exposes as
+many statements as one cares to tabulate, and every tuple of them is
+\emph{jointly realisable by construction}, since the exemplar is a real map. A
+coordinate is a library of consistent promise bundles indexed by position.
+
+\paragraph{Factors.} Every factor is a table over views, with offsets:
+\[
+  E\big(\alpha_{c_1,k_1}(z_{c_1}(p + o_1)),\; \dots,\; \alpha_{c_n,k_n}(z_{c_n}(p + o_n))\big),
+  \qquad E : \textstyle\prod_i V_{c_i,k_i} \to \R \cup \{+\infty\},
+\]
+with $o_i \in \Z^2$ a same-level offset (the neighbour kinds), $o_i = 0$ (cell
+kind) or $o_i$ pointing to the parent lattice (parent kind). Hard is a property
+of the table ($\{0, +\infty\}$), not of the channel. Arity is usually 2; the
+plan constraint $\big(a_p, a_q, \iota_d(u_p)\big)$ and the certificate's validity
+$\big(t_p, g_p, d_p, t_q, g_q, d_q\big)$ are 3- and 6-ary, read as ``the other
+arguments are fixed during this update''. A table may be stored
+($V \times V$ floats, or bit planes) or computed (footprint bitmaps ANDed under a
+shift); the update does not care which. Coupling through views keeps every
+table small: $(\alpha^{\mathrm{own}}(u), a)$ is $|A| \times |A|$, never $m^2 \times |A|$.
+
+\paragraph{Update.} A cell update on a block $B$ of channels enumerates (or
+proposes) joint values, computes their views, sums every factor touching $B$
+with the other arguments fixed, and draws. Exact when $\prod_{c \in B}|\Dom_c|$
+is enumerable; bit-sliced when every factor on $B$ is a per-side relation on
+port-group views; proposal-based otherwise, with the candidate set from
+neighbours' values and the parent. Rates per block are free.
+
+\paragraph{What ``promise'' and ``coordinate'' mean now.} Both are channels.
+\begin{itemize}
+  \item A \textbf{promise} is a channel some of whose views are honoured
+        \emph{hard} by a lower level ($E^{\mathrm{par}}$ or $E^{\mathrm{cell}}$ tables
+        in $\{0, \infty\}$), whose seam factor on its interfaces is exact (a
+        compatible grid is realisable), and which has a hard parent relation
+        $\refine$ (compositional $\alpha$).
+  \item A \textbf{coordinate} is a channel whose views are honoured by a
+        \emph{mix}: $\iota_d(u)$ hard on $a$ (the plan), $\alpha^{\mathrm{own}}(u)$ soft on
+        $a$ ($\nu$), features soft on neighbours ($E_c$) and on tiles ($\tau$),
+        $\alpha_v(u)$ soft on $v$ ($\mathrm{cost}$); whose seams are soft ($\kappa$)
+        except on sides a promise requires; and whose parent relation is soft
+        ($E_{\mathrm{par}}$, finite), so it has no $\refine$ and can never be stuck
+        between levels.
+\end{itemize}
+So $u$ is a promise with respect to exactly its hard views, and realisability
+of a hard view is witnessed per window by the exemplar and across seams by the
+seam rule. The three properties a promise language needs (soundness,
+realisability, exact seam rule) are asked of the \emph{hard views and their
+tables}, view by view, not of the channel.
+
+\paragraph{The data a level needs.} Enough to implement without further
+decisions:
+\begin{itemize}
+  \item channels: $(h_c, \Dom_c, \{\alpha_{c,k}\})$, each view as an array over
+        $\Dom_c$ (for $u$: arrays over exemplar positions, one per view);
+  \item factors: $(\text{arguments } (c_i, k_i, o_i)_i,\ \text{table or kernel},\ \text{hard?})$;
+  \item update blocks: a partition of $\Chan_h$ into jointly updated groups,
+        each with its update kind, candidate generator if proposal-based, colouring
+        (from the largest offset among its factors) and rate;
+  \item per-level schedule: sweeps per block, ramp of any soft-to-hard weights,
+        and the top level's prior.
+\end{itemize}
+The compile-time checks are then mechanical: symmetry of neighbour tables,
+colouring spacing from offsets, never-empty for hard tables under the chosen
+colouring, and a cost report $\sum_B |\Cand_B| \cdot \#\{\text{factors on } B\}$.
+
+\paragraph{Mapping the existing code.} \texttt{port\_gibbs} is this interface at
+$h = 1$ with views = port groups and factors = per-side relations. The promise
+levels (\texttt{promise.py}) are identity-view channels with hard seam and parent
+tables. \texttt{JointLevel} is a two-channel block $(u, v)$ with one cell table.
+\texttt{macroobj} is a one-channel level ($a$) with a computed neighbour kernel
+and a parent table $\nu$ against a fixed $u$. None of them is wrong; they are
+four hand-specialised instances of one update.
 
 %-----------------------------------------------------------------------------
 \section{Open questions}
