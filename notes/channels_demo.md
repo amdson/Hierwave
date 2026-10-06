@@ -179,6 +179,20 @@ fix on the way: the earth ring must start below the trunk's row, or the
 exemplar asks for earth beside the trunk where the real surface has sky,
 and the trunk flickers.  images/chan_combined2.png.
 
+Tree certificate (2026-10-06): the copies looped because the certificate
+only asked for at least one parent, and the exemplar's thick bands were
+grids of joins.  `Certificate(tree=True)` makes the join graph a forest:
+each root cell has exactly one parent (joined, mass >=, smaller d) and
+every other join is to a child (mass <=, larger d, no parent but this
+cell); a trunk's joins are all children.  `coord.parse_exemplar(tree=True)`
+derives the exemplar's ports from a breadth-first spanning tree over
+mass-non-increasing adjacencies, so a band becomes a comb and the
+exemplar itself satisfies the rule.  Roots alone, 300 sweeps: extra
+joins 308 -> 0, cells with more than one parent 205 -> 0, violations 0,
+477 root cells.  Combined, 400 sweeps: 0 / 0 / 0, 3 of 3 trunks, 190
+root cells, 0 coordinate mismatches.  Cost: 26 and 56 ms per sweep (was
+15 and 39), the tree interval needing the two smallest joined d's.
+
 ## What this does not test
 
 Promotion of a coordinate view, exemplar coordinates (the roots use counted

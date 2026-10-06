@@ -65,14 +65,40 @@ CH_MASS = {" ": -1, ".": 0, "T": 3, "1": 1, "2": 2, "3": 3}
 
 
 # --------------------------------------------------------------- exemplar
-def parse_exemplar(kinds: Kinds, rows=EXEMPLAR, ring=1):
+def parse_exemplar(kinds: Kinds, rows=EXEMPLAR, ring=1, tree=True):
     """(alpha (my, mx) int codes, mass grid, mask bool, trunk (y, x)).
-    Root cells become root{m}_{ports}; the trunk keeps its S port only."""
+    Root cells become root{m}_{ports}.  tree: ports follow a breadth-first
+    spanning tree from the trunk over mass-non-increasing adjacencies (a
+    thick band becomes a comb), so the exemplar satisfies the tree
+    certificate; else every 4-adjacency between root cells is a join."""
     g = np.array([[CH_MASS[c] for c in r] for r in rows], np.int64)
     trunk = np.array([[c == "T" for c in r] for r in rows])
     my, mx = g.shape
     alpha = np.full((my, mx), FREE, np.int64)
     rootish = g > 0
+    DIRS4 = ((-1, 0), (0, 1), (1, 0), (0, -1))
+    ports = np.zeros((my, mx, 4), bool)
+    if tree:
+        ty, tx = [int(v) for v in np.argwhere(trunk)[0]]
+        seen = np.zeros((my, mx), bool)
+        seen[ty, tx] = True
+        queue = [(ty, tx)]
+        while queue:
+            y, x = queue.pop(0)
+            for i, (dy, dx) in enumerate(DIRS4):
+                ny, nx = y + dy, x + dx
+                if 0 <= ny < my and 0 <= nx < mx and rootish[ny, nx] and not seen[ny, nx] and g[ny, nx] <= g[y, x]:
+                    seen[ny, nx] = True
+                    ports[y, x, i] = ports[ny, nx, (i + 2) % 4] = True
+                    queue.append((ny, nx))
+        if (rootish & ~seen).any():
+            raise ValueError(f"root cells not reachable from the trunk: {np.argwhere(rootish & ~seen).tolist()}")
+    else:
+        for i, (dy, dx) in enumerate(DIRS4):
+            q = np.zeros((my, mx), bool)
+            ys, xs = slice(max(-dy, 0), my + min(-dy, 0)), slice(max(-dx, 0), mx + min(-dx, 0))
+            q[ys, xs] = rootish[max(dy, 0):my + min(dy, 0), max(dx, 0):mx + min(dx, 0)]
+            ports[..., i] = rootish & q
     for y in range(my):
         for x in range(mx):
             if not rootish[y, x]:
@@ -80,11 +106,7 @@ def parse_exemplar(kinds: Kinds, rows=EXEMPLAR, ring=1):
             if trunk[y, x]:
                 alpha[y, x] = 2 + kinds.index("trunk")
                 continue
-            ps = ""
-            for s, (dy, dx) in zip("NESW", ((-1, 0), (0, 1), (1, 0), (0, -1))):
-                ny, nx = y + dy, x + dx
-                if 0 <= ny < my and 0 <= nx < mx and rootish[ny, nx]:
-                    ps += s
+            ps = "".join(s for s, on in zip("NESW", ports[y, x]) if on)
             if not ps:
                 raise ValueError(f"isolated root cell at {(y, x)}")
             alpha[y, x] = 2 + kinds.index(f"root{g[y, x]}_{ps}")
@@ -281,7 +303,7 @@ def joint_sweep(U, alpha, by_alpha, by_start, lam, K, Kt, fixed, coup,
             KN._energies(y, x, home, grids, hs, views, fac, tabs, e)
             if has_cert:
                 mass, trunk, g_d = views[cert[0]], views[cert[1]], grids[cert[2]]
-                KN.site_weights(y, x, e, g, g_d, mass, trunk, joins, Dmax, delta, T, wt, lo, hi, need)
+                KN.site_weights(y, x, e, g, g_d, mass, trunk, joins, Dmax, delta, T, wt, lo, hi, need, cert[5] == 1)
             else:
                 for t in range(D):
                     wt[t] = e[t] / T

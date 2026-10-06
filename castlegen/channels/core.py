@@ -116,6 +116,8 @@ class Certificate:
     Dmax: int
     delta: float = 0.0            # soft cost per unit of d
     ports: tuple = None           # 4 views (N, E, S, W), 1 = a port on that side; None: every pair joined
+    tree: bool = False            # the join graph is a forest: exactly one parent (mass >=, smaller d) per
+                                  # root cell, every other join to a child (mass <=, larger d)
 
 
 @dataclass
@@ -130,7 +132,7 @@ class Packed:
     fixed: np.ndarray
     colours: np.ndarray           # (rows, cols) int64 colour class per site
     ncol: int
-    cert: np.ndarray              # (5,) int64: massview, trunkview, certchan, Dmax, 1/0 present
+    cert: np.ndarray              # (6,) int64: massview, trunkview, certchan, Dmax, 1/0 present, 1/0 tree
     joins: np.ndarray             # (4, D, D) bool: t at p joined to t' across side d
     delta: float
     radius: int
@@ -210,12 +212,12 @@ class Model:
                         add(PAIR, cidx[home], vidx[f.b], vidx[f.a], -f.off[0], -f.off[1], f.pad_a, f.table.T)
             else:
                 add(COUNT, cidx[f.b[0]], vidx[f.a], vidx[f.b], 0, 0, -1, f.table)
-        cert = np.array([-1, -1, -1, 0, 0], np.int64)
+        cert = np.array([-1, -1, -1, 0, 0, 0], np.int64)
         joins = np.ones((4, 1, 1), np.bool_)
         delta = 0.0
         for c in self.certs:
             if c.tile == home:
-                cert = np.array([vidx[home, c.mass], vidx[home, c.trunk], cidx[c.cert], c.Dmax, 1], np.int64)
+                cert = np.array([vidx[home, c.mass], vidx[home, c.trunk], cidx[c.cert], c.Dmax, 1, int(c.tree)], np.int64)
                 delta = c.delta
                 radius = max(radius, 2)
                 joins = np.ones((4, hc.D, hc.D), np.bool_)

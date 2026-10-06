@@ -95,14 +95,36 @@ def _witnessed(y, x, t, dd, g_t, g_d, mass, joins, rows, cols, skip):
 
 
 @njit(cache=True, inline="always")
-def _cell_valid(y, x, g_t, g_d, mass, trunk, joins, rows, cols, INF):
+def _cell_valid(y, x, g_t, g_d, mass, trunk, joins, rows, cols, INF, tree):
     t = g_t[y, x]
     m, dd = mass[t], g_d[y, x]
     if m == 0:
         return dd == INF
-    if trunk[t]:
-        return dd == 0
-    return dd < INF and _witnessed(y, x, t, dd, g_t, g_d, mass, joins, rows, cols, -1)
+    if not tree:
+        if trunk[t]:
+            return dd == 0
+        return dd < INF and _witnessed(y, x, t, dd, g_t, g_d, mass, joins, rows, cols, -1)
+    # tree: exactly one parent (joined, mass >= m, d_q < dd); every other join a child (mass <= m, d_q > dd)
+    if trunk[t] and dd != 0:
+        return False
+    if dd >= INF:
+        return False
+    parents = 0
+    for d in range(4):
+        ny, nx = y + DIRS[d][0], x + DIRS[d][1]
+        if ny < 0 or ny >= rows or nx < 0 or nx >= cols:
+            continue
+        tq = g_t[ny, nx]
+        if not joins[d, t, tq]:
+            continue
+        dq = g_d[ny, nx]
+        if dq < dd:
+            if mass[tq] < m:
+                return False
+            parents += 1
+        elif dq == dd or mass[tq] > m:
+            return False
+    return parents == (0 if trunk[t] else 1)
 
 
 @njit(cache=True, inline="always")
@@ -137,12 +159,72 @@ def _draw(e, n):
     return arg
 
 
+@njit(cache=True, inline="always")
+def _tree_interval(y, x, t, m, g, g_d, mass, trunk, joins, need, rows, cols, INF, Dmax, delta, T, e, w, lo, hi):
+    if m == 0:
+        for d in range(4):
+            if need[d]:
+                return
+        lo[t], hi[t] = INF, INF + 1
+        w[t] = e[t] / T
+        return
+    d1, d2, i1, nj = INF, INF, -1, 0                   # smallest joined d (the parent), the next, its side
+    for d in range(4):
+        ny, nx = y + DIRS[d][0], x + DIRS[d][1]
+        if ny < 0 or ny >= rows or nx < 0 or nx >= cols:
+            continue
+        tq = g[ny, nx]
+        if joins[d, t, tq]:
+            nj += 1
+            dq = g_d[ny, nx]
+            if dq < d1:
+                d2, d1, i1 = d1, dq, d
+            elif dq < d2:
+                d2 = dq
+        elif need[d]:
+            return                                      # a root that had only p as parent, now unjoined
+    if trunk[t]:
+        for d in range(4):                              # every join is to a child
+            ny, nx = y + DIRS[d][0], x + DIRS[d][1]
+            if ny < 0 or ny >= rows or nx < 0 or nx >= cols:
+                continue
+            tq = g[ny, nx]
+            if joins[d, t, tq] and (g_d[ny, nx] <= 0 or not need[d]):
+                return
+        lo[t], hi[t] = 0, 1
+        w[t] = e[t] / T
+        return
+    if nj == 0 or d1 == d2 or d1 >= INF:
+        return
+    for d in range(4):
+        ny, nx = y + DIRS[d][0], x + DIRS[d][1]
+        if ny < 0 or ny >= rows or nx < 0 or nx >= cols:
+            continue
+        tq = g[ny, nx]
+        if not joins[d, t, tq]:
+            continue
+        if d == i1:
+            if mass[tq] < m or need[d]:                 # the parent: mass >= m, and it keeps a parent of its own
+                return
+        elif mass[tq] > m or not need[d]:               # a child: mass <= m, no parent but p
+            return
+    a, b = d1 + 1, min(d2, Dmax + 1)
+    if a >= b:
+        return
+    lo[t], hi[t] = a, b
+    w[t] = (e[t] + delta * a) / T - _lgeom(b - a, delta / T)
+
+
 @njit(cache=True)
-def site_weights(y, x, e, g, g_d, mass, trunk, joins, Dmax, delta, T, w, lo, hi, need):
+def site_weights(y, x, e, g, g_d, mass, trunk, joins, Dmax, delta, T, w, lo, hi, need, tree):
     """The certificate at one site: from tile energies e[t], the log-weight
     w[t] (inf = no valid d) summed over the valid d interval [lo[t], hi[t]),
-    with the dependants' needs in `need`.  Shared by the tile kernel and
-    any joint kernel that draws the tile with something else."""
+    with the dependants' needs in `need` (a root neighbour with no parent
+    but p).  Shared by the tile kernel and any joint kernel that draws the
+    tile with something else.  tree: the parent is the joined neighbour of
+    smallest d and is unique; the other joined neighbours are p's children
+    (mass <= m, d above p's, and no parent other than p); a non-joined root
+    neighbour must keep a parent of its own."""
     rows, cols = g.shape
     D = e.shape[0]
     INF = Dmax + 1
@@ -159,6 +241,9 @@ def site_weights(y, x, e, g, g_d, mass, trunk, joins, Dmax, delta, T, w, lo, hi,
         if e[t] == np.inf:
             continue
         m = mass[t]
+        if tree:
+            _tree_interval(y, x, t, m, g, g_d, mass, trunk, joins, need, rows, cols, INF, Dmax, delta, T, e, w, lo, hi)
+            continue
         l, h = -1, INF                                  # valid d: l < d < h, d <= Dmax
         ok = True
         for d in range(4):
@@ -229,7 +314,7 @@ def sweep(home, grids, hs, views, fac, tabs, fixed, colours, ncol, cert, joins, 
                         g[y, x] = pick
                     continue
                 mass, trunk, g_d = views[cert[0]], views[cert[1]], grids[cert[2]]
-                site_weights(y, x, e, g, g_d, mass, trunk, joins, Dmax, delta, T, w, lo, hi, need)
+                site_weights(y, x, e, g, g_d, mass, trunk, joins, Dmax, delta, T, w, lo, hi, need, cert[5] == 1)
                 pick = _draw(w, D)
                 if pick < 0:
                     bad += 1
@@ -294,7 +379,7 @@ def total_energy(home, grids, hs, views, fac, tabs, cert, joins, delta):
         INF = cert[3] + 1
         for y in range(rows):
             for x in range(cols):
-                if not _cell_valid(y, x, g, g_d, mass, trunk, joins, rows, cols, INF):
+                if not _cell_valid(y, x, g, g_d, mass, trunk, joins, rows, cols, INF, cert[5] == 1):
                     nviol += 1
                 elif mass[g[y, x]] > 0:
                     total += delta * g_d[y, x]

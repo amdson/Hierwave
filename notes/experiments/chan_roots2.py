@@ -19,13 +19,14 @@ SEED = int(os.environ.get("SEED", 0))
 NU, LAM, WP = float(os.environ.get("NU", 6.0)), float(os.environ.get("LAM", 1.0)), float(os.environ.get("WP", 0.0))
 DANGLE = float(os.environ.get("DANGLE", 1.0))
 KR, KT = int(os.environ.get("KR", 1)), int(os.environ.get("KT", 1))
+TREE = bool(int(os.environ.get("TREE", 1)))
 OUT = os.environ.get("OUT", "images/chan_roots2.png")
 
 SKY_SOIL = Kinds(["sky", "soil"], [frozenset({"sky"}), frozenset({"solid", "earth"})],
                  [(169, 212, 240), (138, 98, 66)])
 kinds = Kinds.concat(SKY_SOIL, roots.KINDS)
 tile = roots.tile_views(Channel("tile", 1, len(kinds)), kinds)
-alpha, g, mask, trunk_yx = coord.parse_exemplar(kinds)
+alpha, g, mask, trunk_yx = coord.parse_exemplar(kinds, tree=TREE)
 assert coord.check_exemplar(kinds, alpha, g) == 0, "exemplar roots not all attached"
 print(f"exemplar {alpha.shape}, {int((alpha >= 2).sum())} root cells, {int((alpha == coord.EARTH).sum())} ring cells, "
       f"{int((alpha == coord.FREE).sum())} free")
@@ -33,7 +34,7 @@ u = coord.coord_channel(alpha)
 cert, trees = roots.cert_channel(roots.certificate().Dmax), roots.trees_channel()
 flat_ground = Factor.unary((tile.name, "root"), np.array([8.0, 0.0, 0.0, 0.0]), name="flat_ground")
 factors = roots.factors(kinds, dangle=DANGLE, counted=False) + [flat_ground]
-m = Model(H, W, [tile, u, cert, trees], factors, [roots.certificate()])
+m = Model(H, W, [tile, u, cert, trees], factors, [roots.certificate(tree=TREE)])
 coupling, coup = coord.coupling(kinds, tile, u, nu=NU)              # applied inside the joint kernel
 print(m.describe("tile"))
 ck = coord.CoordKernel(u, tile, alpha, lam=LAM, w=WP, nu=NU, K=KR, Kt=KT)

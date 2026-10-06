@@ -161,6 +161,7 @@ def tables(kinds: Kinds, alpha=0.1, dangle=4.0, counted=True):
     if not counted:                                             # structure only: a coordinate channel supplies the statistics
         unary[:] = 0.0
         ph[:], pv[:] = 0.0, 0.0
+        p_crowd = 1.0                                           # adjacent-unjoined roots are the exemplar's business too
     for a in range(5):
         for b in range(5):
             pa, pb = 0 < a < BLANK, 0 < b < BLANK
@@ -207,8 +208,8 @@ def factors(kinds: Kinds, tile="tile", trees="trees", beta=1.0, lam=6.0, alpha=0
     ]
 
 
-def certificate(tile="tile", cert="cert", Dmax=4096, delta=0.05):
-    return Certificate(tile, "mass", "trunk", cert, Dmax, delta, ports=("pN", "pE", "pS", "pW"))
+def certificate(tile="tile", cert="cert", Dmax=4096, delta=0.05, tree=False):
+    return Certificate(tile, "mass", "trunk", cert, Dmax, delta, ports=("pN", "pE", "pS", "pW"), tree=tree)
 
 
 def tile_views(tile: Channel, kinds: Kinds):
@@ -260,7 +261,22 @@ def metrics(tile: Channel, cert: Channel, trees: Channel):
         rb[ys, xs] = rv[yq, xq]
         sky_touch += int(((rv == ROOT) & (rb == SKY)).sum())
     deg = sum(v["p" + s][tile.grid] for s in SIDES)
+    # tree statistics: joins, parents per root (joined, smaller d), extra joins beyond one parent each
+    joins_total, parents = 0, np.zeros_like(mass)
+    for i, (dy, dx) in enumerate(((-1, 0), (0, 1), (1, 0), (0, -1))):
+        ys, xs = slice(max(-dy, 0), H + min(-dy, 0)), slice(max(-dx, 0), W + min(-dx, 0))
+        yq, xq = slice(max(dy, 0), H + min(dy, 0)), slice(max(dx, 0), W + min(dx, 0))
+        pa = v["p" + SIDES[i]][tile.grid]
+        pb = np.zeros_like(pa)
+        pb[ys, xs] = v["p" + SIDES[(i + 2) % 4]][tile.grid][yq, xq]
+        joined = (pa == 1) & (pb == 1)
+        joins_total += int(joined.sum())
+        dq = np.full_like(d, INFD)
+        dq[ys, xs] = d[yq, xq]
+        parents += (joined & (dq < d)).astype(parents.dtype)
+    joins_total //= 2
     return dict(rule_violations=int((~ok).sum()), dangling_ports=dangling, sky_contacts=sky_touch,
+                extra_joins=int(joins_total - roots.sum()), multi_parent=int((parents[roots] > 1).sum()),
                 trunks=int(trunks.sum()), trees_wanted=int(trees.grid.sum()), root_cells=int(roots.sum()),
                 mass_hist=np.bincount(mass[roots], minlength=4)[1:].tolist(),
                 deg_hist=np.bincount(deg[roots], minlength=5)[1:].tolist(),
