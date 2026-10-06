@@ -57,13 +57,13 @@ CHARS = {" ": -1, ".": 0, "T": 3, "1": 1, "2": 2, "3": 3}
 
 def make_kinds():
     """trunk, then root{m}_{ports} for m in 1..3 and 1..3 ports."""
-    names, tags, cols = ["trunk"], [frozenset({"solid", "earth", "wood", "trunk", "mass3", "pS"})], [(60, 30, 10)]
+    names, tags, cols = ["trunk"], [frozenset({"solid", "wood", "trunk", "mass3", "pS"})], [(60, 30, 10)]
     base = {1: (205, 150, 90), 2: (165, 105, 50), 3: (120, 70, 25)}
     for m in (1, 2, 3):
         for k in (1, 2, 3):
             for ps in itertools.combinations(SIDES, k):
                 names.append(f"root{m}_{''.join(ps)}")
-                tags.append(frozenset({"solid", "earth", "wood", "root", f"mass{m}", f"deg{k}"} | {f"p{s}" for s in ps}))
+                tags.append(frozenset({"solid", "wood", "root", f"mass{m}", f"deg{k}"} | {f"p{s}" for s in ps}))
                 cols.append(base[m])
     return Kinds(names, tags, cols)
 
@@ -81,9 +81,12 @@ def views(kinds: Kinds):
     return v
 
 
+VIEW_N = {"root": 4, "mass": 4, "trunk": 2, "pN": 2, "pE": 2, "pS": 2, "pW": 2, "mN": 5, "mE": 5, "mS": 5, "mW": 5}
+
+
 def add_views(tile: Channel, kinds: Kinds):
     for k, arr in views(kinds).items():
-        tile.add_view(k, arr)
+        tile.add_view(k, arr, VIEW_N[k])
     return tile
 
 

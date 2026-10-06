@@ -1,9 +1,12 @@
 """Ground channel set: a designed surface channel, the support rule, a count
 honour factor, and soft pair tables over the view `ground`.
 
-Kinds: sky, soil (earth), stone (rock).  Any tile domain containing other
-kinds tagged `solid` / `earth` (roots) is seen through the views, so these
-factors apply unchanged to a combined domain.
+Kinds: sky, soil (earth), stone (rock).  Other kinds in a combined domain
+(roots) are seen through the views: `solid` by tag, so support and the
+count honour apply to them; `ground` maps them to earth, so they take
+soil's place in the texture (an earth-like solid).  Making them transparent
+instead (a zero row in the texture tables) was tried and is wrong: a trunk
+then loses the solid cohesion every surface cell has and is never placed.
 
 surf: level-8 channel, value = rows of the chunk under the surface (0..8),
 from 1D value noise over chunk columns (sample_surface).  Chunks are filled
@@ -22,14 +25,15 @@ KINDS = Kinds(["sky", "soil", "stone"],
 
 
 def views(kinds: Kinds):
-    return {"solid": view_of_tags(kinds, {"solid": 1}),
-            "ground": view_of_tags(kinds, {"sky": 0, "earth": 1, "rock": 2})}
+    """{name: (values, n)}."""
+    return {"solid": (view_of_tags(kinds, {"solid": 1}), 2),
+            "ground": (view_of_tags(kinds, {"sky": 0, "earth": 1, "rock": 2}, default=1), 3)}
 
 
 def tile_channel(kinds: Kinds, name="tile"):
     c = Channel(name, 1, len(kinds))
-    for k, v in views(kinds).items():
-        c.add_view(k, v)
+    for k, (v, n) in views(kinds).items():
+        c.add_view(k, v, n)
     return c
 
 
@@ -112,7 +116,7 @@ def factors(tile="tile", surf="surf", kappa=0.5, unary=(0.0, 0.8, 0.6), beta=1.0
 
 # ---------------------------------------------------------------- metrics
 def metrics(tile: Channel, surf: Channel):
-    solid = tile.views["solid"][tile.grid]
+    solid = tile.views["solid"][tile.grid].astype(bool)
     rows, cols = surf.grid.shape
     cnt = solid.reshape(rows, CH, cols, CH).sum((1, 3))
     target = CH * surf.grid

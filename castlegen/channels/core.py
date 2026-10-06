@@ -70,15 +70,17 @@ class Channel:
     views: dict = field(default_factory=dict)
     grid: np.ndarray = None      # (H / h, W / h) int32, set by Model
     fixed: np.ndarray = None     # bool, same shape: clamped cells (kernel skips them)
+    view_n: dict = field(default_factory=dict)   # values a view can take (tables are this wide)
 
-    def add_view(self, name, arr):
+    def add_view(self, name, arr, n=None):
         arr = np.asarray(arr, np.int64)
         assert arr.shape == (self.D,), (name, arr.shape, self.D)
         self.views[name] = arr
+        self.view_n[name] = int(arr.max()) + 1 if n is None else int(n)
         return self
 
     def nvals(self, view):
-        return int(self.views[view].max()) + 1
+        return self.view_n[view]
 
 
 @dataclass
