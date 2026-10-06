@@ -107,7 +107,8 @@ EXEMPLAR_BIG = [
     "....................................................................................",
     "....................................................................................",
 ]
-EXEMPLARS = {"small": EXEMPLAR, "big": EXEMPLAR_BIG}
+EXEMPLAR_SHEET = [r + "........" + r[::-1] for r in EXEMPLAR_BIG]    # the big system and its mirror image
+EXEMPLARS = {"small": EXEMPLAR, "big": EXEMPLAR_BIG, "sheet": EXEMPLAR_SHEET}
 CH_MASS = {" ": -1, ".": 0, "T": 3, "1": 1, "2": 2, "3": 3}
 
 
@@ -126,10 +127,10 @@ def parse_exemplar(kinds: Kinds, rows=EXEMPLAR, ring=1, tree=True):
     DIRS4 = ((-1, 0), (0, 1), (1, 0), (0, -1))
     ports = np.zeros((my, mx, 4), bool)
     if tree:
-        ty, tx = [int(v) for v in np.argwhere(trunk)[0]]
         seen = np.zeros((my, mx), bool)
-        seen[ty, tx] = True
-        queue = [(ty, tx)]
+        queue = [(int(a), int(b)) for a, b in np.argwhere(trunk)]
+        for yx in queue:
+            seen[yx] = True
         while queue:
             y, x = queue.pop(0)
             for i, (dy, dx) in enumerate(DIRS4):
@@ -163,7 +164,7 @@ def parse_exemplar(kinds: Kinds, rows=EXEMPLAR, ring=1, tree=True):
         d[1:] |= mask[:-1]; d[:-1] |= mask[1:]; d[:, 1:] |= mask[:, :-1]; d[:, :-1] |= mask[:, 1:]
         mask = d
     mask &= g >= 0                                             # never claim sky
-    ty0 = int(np.argwhere(trunk)[0][0])
+    ty0 = int(np.argwhere(trunk)[:, 0].max())
     mask[:ty0 + 1] &= rootish[:ty0 + 1]                        # the ring starts below the trunk row: the surface is the ground's
     alpha[mask & ~rootish] = EARTH
     ty, tx = np.argwhere(trunk)[0]
@@ -176,9 +177,9 @@ def check_exemplar(kinds: Kinds, alpha, g):
     v = R.views(kinds)
     my, mx = g.shape
     seen = np.zeros_like(g, bool)
-    ty, tx = np.argwhere(alpha == 2 + kinds.index("trunk"))[0]
-    stack = [(ty, tx)]
-    seen[ty, tx] = True
+    stack = [(int(a), int(b)) for a, b in np.argwhere(alpha == 2 + kinds.index("trunk"))]
+    for yx in stack:
+        seen[yx] = True
     while stack:
         y, x = stack.pop()
         t = alpha[y, x] - 2
@@ -498,9 +499,9 @@ def exemplar_depth(kinds, alpha):
     v = R.views(kinds)
     my, mx = alpha.shape
     depth = np.full((my, mx), -1, np.int64)
-    ty, tx = [int(a) for a in np.argwhere(alpha == 2 + kinds.index("trunk"))[0]]
-    depth[ty, tx] = 0
-    queue = [(ty, tx)]
+    queue = [(int(a), int(b)) for a, b in np.argwhere(alpha == 2 + kinds.index("trunk"))]
+    for yx in queue:
+        depth[yx] = 0
     while queue:
         y, x = queue.pop(0)
         t = alpha[y, x] - 2
@@ -553,6 +554,34 @@ class Coarse:
         self.ey = np.where(self.wins[:, 0] < 0, my, self.wins[:, 0])   # FREE -> my (never equal to a window row)
         self.ex = np.where(self.wins[:, 1] < 0, mx, self.wins[:, 1])
         self.my, self.mx = my, mx
+        # edge signatures: per side, (position, mass, parent-ward) of every port crossing that
+        # edge, parent-ward meaning the cell's tree parent lies across it; id 0 = none.  Two
+        # sides are compatible when the signatures agree with parent-ward flipped (flip).
+        v = R.views(kinds)
+        depth = exemplar_depth(kinds, alpha)
+        sigs = {(): 0}
+        self.sig = np.zeros((4, self.D), np.int64)
+        DY = ((-1, 0), (0, 1), (1, 0), (0, -1))
+        for w in range(1, self.D):
+            ey, ex = self.wins[w]
+            for d in range(4):
+                key = []
+                for k in range(B):
+                    y, x = (ey, ex + k) if d == 0 else (ey + k, ex + B - 1) if d == 1 else (ey + B - 1, ex + k) if d == 2 else (ey + k, ex)
+                    c = alpha[y, x]
+                    if c >= 2 and v["p" + "NESW"[d]][c - 2]:
+                        ny, nx = y + DY[d][0], x + DY[d][1]
+                        pw = 0 <= ny < my and 0 <= nx < mx and depth[ny, nx] >= 0 and depth[ny, nx] < depth[y, x]
+                        key.append((k, int(v["mass"][c - 2]), int(pw)))
+                self.sig[d, w] = sigs.setdefault(tuple(key), len(sigs))
+        for key in list(sigs):                                          # make sure every flipped signature has an id
+            sigs.setdefault(tuple((k, m, 1 - pw) for k, m, pw in key), len(sigs))
+        self.nsig = len(sigs)
+        self.flip = np.zeros(self.nsig, np.int64)
+        self.has_parent = np.zeros(self.nsig, np.int64)                 # signature has a parent-ward crossing
+        for key, i in sigs.items():
+            self.flip[i] = sigs[tuple((k, m, 1 - pw) for k, m, pw in key)]
+            self.has_parent[i] = int(any(pw for _, _, pw in key))
 
     def channel(self, name="u8"):
         c = Channel(name, self.B, self.D)
@@ -561,15 +590,25 @@ class Coarse:
         c.add_view("self", np.arange(self.D), self.D)
         c.add_view("masked", self.masked, 2)
         c.add_view("trunk8", self.has_trunk, 2)
+        for d, name in enumerate("NESW"):
+            c.add_view("sig" + name, self.sig[d], self.nsig)
         return c
 
-    def factors(self, u8="u8", surf="surf", lam8=INF, f=0.1, bonus=4.0, win_bonus=2.0):
-        """lam8: two masked windows that are not each other's shift; f: a
-        masked window beside a FREE one (per view, so 2 f per boundary
-        edge); bonus on the trunk window, win_bonus on every other masked
-        window (the density knob: a copy of n windows gains n win_bonus
-        against f per boundary edge)."""
+    def factors(self, u8="u8", surf="surf", lam8=INF, f=0.1, bonus=4.0, win_bonus=2.0, cut=2.0):
+        """lam8: two masked windows that are not each other's shift (soft
+        when finite: recombination at a cost); f: a masked window beside a
+        FREE one (per view, so 2 f per boundary edge); bonus on the trunk
+        window, win_bonus on every other masked window (the density knob).
+        Edge compatibility is hard between windows: the ports crossing a
+        shared edge must agree in position and mass; a crossing against
+        FREE or against an edge with no crossing is a cut root at `cut`."""
         my, mx, B = self.my, self.mx, self.B
+        n = self.nsig
+        compat = np.full((n, n), INF)
+        compat[0, 0] = 0.0
+        compat[0, 1:] = np.where(self.has_parent[1:] == 1, INF, cut)       # a parent must be placed; a child may be cut
+        compat[1:, 0] = np.where(self.has_parent[1:] == 1, INF, cut)
+        compat[np.arange(1, n), self.flip[1:]] = 0.0
 
         def shift_table(n, shift):
             """(n + 1, n + 1): 0 where b == a + shift (a, b real), 0 for FREE-FREE,
@@ -589,23 +628,37 @@ class Coarse:
             Factor.pair((u8, "ex"), (u8, "ex"), (0, 1), shift_table(mx, B), name="coh_h_ex"),
             Factor.pair((u8, "ey"), (u8, "ey"), (1, 0), shift_table(my, B), name="coh_v_ey"),
             Factor.pair((u8, "ex"), (u8, "ex"), (1, 0), shift_table(mx, 0), name="coh_v_ex"),
+            Factor.pair((u8, "sigE"), (u8, "sigW"), (0, 1), compat, pad_b=0, pad_a=0, name="compat_h"),
+            Factor.pair((u8, "sigS"), (u8, "sigN"), (1, 0), compat, pad_b=0, pad_a=0, name="compat_v"),
             Factor.pair((u8, "self"), (surf, "rows"), (0, 0), self.surface_ok, name="surface"),
             Factor.pair((u8, "self"), (surf, "rows"), (-1, 0), self.above_ok, pad_b=0, name="surface_above"),
             Factor.unary((u8, "self"), unary, name="window_unary"),
         ]
 
     def joins(self):
-        """(4, D8, D8) bool: window w' on side d of w is w shifted by B that way."""
-        D, B = self.D, self.B
+        """(4, D8, D8) bool: w' on side d of w is joined when a root crosses
+        the shared edge with the same positions and masses on both sides
+        (the edge signatures agree and are not empty)."""
+        D = self.D
         J = np.zeros((4, D, D), np.bool_)
-        key = {(int(ey), int(ex)): w for w, (ey, ex) in enumerate(self.wins) if w > 0}
-        for w in range(1, D):
-            ey, ex = [int(v) for v in self.wins[w]]
-            for d, (dy, dx) in enumerate(((-B, 0), (0, B), (B, 0), (0, -B))):
-                w2 = key.get((ey + dy, ex + dx))
-                if w2 is not None:
-                    J[d, w, w2] = True
+        for d in range(4):
+            a, b = self.sig[d], self.sig[(d + 2) % 4]
+            J[d] = (self.flip[a][:, None] == b[None, :]) & (self.has_parent[a][:, None] == 1)   # witnesses lie parent-ward
         return J
+
+    def recombined_seams(self, u8: Channel):
+        """Adjacent placed windows that are joined but not each other's shift."""
+        g, B = u8.grid, self.B
+        n = 0
+        for (dy, dx) in ((0, 1), (1, 0)):
+            a, b = g[:g.shape[0] - dy, :g.shape[1] - dx], g[dy:, dx:]
+            both = (a > 0) & (b > 0)
+            wa, wb = self.wins[a], self.wins[b]
+            shift = (wb[..., 0] == wa[..., 0] + dy * B) & (wb[..., 1] == wa[..., 1] + dx * B)
+            d = 1 if dx else 2
+            joined = self.joins()[d][a, b]
+            n += int((both & joined & ~shift).sum())
+        return n
 
     def cert_channel(self, Dmax=256, name="d8"):
         return Channel(name, self.B, Dmax + 2).add_view("d", np.arange(Dmax + 2))
@@ -655,33 +708,29 @@ class Coarse:
                 tile.grid[ys, xs] = blk
                 d = depth[ey:ey + B, ex:ex + B]
                 cert.grid[ys, xs] = np.where(d >= 0, d, cert.D - 1)
-        # prune: a placed root cell keeps its tile only if its exemplar-tree path to a trunk
-        # runs through placed cells (coherent neighbours); the rest revert to the ground
+        # depth and pruning over the port tree of the placed tiles themselves (seams may be
+        # recombined): breadth-first from every trunk tile; root tiles not reached revert
         v = R.views(kinds)
-        mx = self.mx
-        placed = uref >= 0
-        is_root = placed & (alpha.ravel()[np.where(placed, uref, 0)] >= 2)
-        reached = np.zeros((H, W), bool)
-        trunk_code = 2 + kinds.index("trunk")
-        stack = [tuple(p_) for p_ in np.argwhere(is_root & (alpha.ravel()[np.where(placed, uref, 0)] == trunk_code))]
-        for y, x in stack:
-            reached[y, x] = True
-        while stack:
-            y, x = stack.pop()
-            c = uref[y, x]
-            t = alpha.ravel()[c] - 2
+        rv_g = rv[tile.grid]
+        is_root = (rv_g == R.ROOT) | (rv_g == R.TRUNK)
+        depth_g = np.full((H, W), -1, np.int64)
+        queue = [(int(a), int(b)) for a, b in np.argwhere(rv_g == R.TRUNK)]
+        for yx in queue:
+            depth_g[yx] = 0
+        head = 0
+        while head < len(queue):
+            y, x = queue[head]; head += 1
+            t = tile.grid[y, x]
             for i, (dy, dx) in enumerate(((-1, 0), (0, 1), (1, 0), (0, -1))):
                 ny, nx = y + dy, x + dx
-                if not (0 <= ny < H and 0 <= nx < W) or reached[ny, nx] or not is_root[ny, nx]:
+                if not (0 <= ny < H and 0 <= nx < W) or depth_g[ny, nx] >= 0 or not is_root[ny, nx]:
                     continue
-                cq = uref[ny, nx]
-                if cq != c + dy * mx + dx:
-                    continue                                            # not the coherent continuation
-                tq = alpha.ravel()[cq] - 2
-                if v["p" + "NESW"[i]][t] and v["p" + "NESW"[(i + 2) % 4]][tq]:
-                    reached[ny, nx] = True
-                    stack.append((ny, nx))
-        orphan = is_root & ~reached
+                tq = tile.grid[ny, nx]
+                if v["p" + "NESW"[i]][t] and v["p" + "NESW"[(i + 2) % 4]][tq] and v["mass"][tq] <= v["mass"][t]:
+                    depth_g[ny, nx] = depth_g[y, x] + 1
+                    queue.append((ny, nx))
+        orphan = is_root & (depth_g < 0)
+        cert.grid[:] = np.where(depth_g >= 0, depth_g, cert.D - 1)
         if orphan.any():
             tile.grid[orphan] = kinds.index(earth_kind)
             cert.grid[orphan] = cert.D - 1

@@ -15,14 +15,14 @@ from castlegen.channels import Kinds, Model, ground, roots, coord
 
 H, W = int(os.environ.get("H", 128)), int(os.environ.get("W", 512))
 SEED = int(os.environ.get("SEED", 0))
-EX = os.environ.get("EX", "big")
+EX = os.environ.get("EX", "sheet")
 S8, SF = int(os.environ.get("S8", 30)), int(os.environ.get("SF", 30))         # coarse sweeps, fine joint sweeps
-LAM8, F8 = float(os.environ.get("LAM8", "inf")), float(os.environ.get("F8", 0.1))
+LAM8, F8, CUT = float(os.environ.get("LAM8", 1.0)), float(os.environ.get("F8", 0.1)), float(os.environ.get("CUT", 2.0))
 BONUS, WBONUS = float(os.environ.get("BONUS", 4.0)), float(os.environ.get("WBONUS", 2.0))
 NU, LAM, MU = float(os.environ.get("NU", 6.0)), float(os.environ.get("LAM", 1.0)), float(os.environ.get("MU", 2.0))
 DANGLE = float(os.environ.get("DANGLE", 1.0))
 KR, KT = int(os.environ.get("KR", 1)), int(os.environ.get("KT", 1))
-OUT = os.environ.get("OUT", "images/chan_combined3.png")
+OUT = os.environ.get("OUT", f"images/chan_combined3{'_' + os.environ['EX'] if os.environ.get('EX') else ''}.png")
 
 kinds = Kinds.concat(ground.KINDS, roots.KINDS)
 tile = roots.tile_views(ground.tile_channel(kinds), kinds)
@@ -35,10 +35,10 @@ coarse = coord.Coarse(kinds, alpha, ground.CH)
 u8, d8 = coarse.channel(), coarse.cert_channel()
 trees = roots.trees_channel()
 trees.grid = np.zeros((H // ground.CH, W // ground.CH), np.int32)
-print(f"exemplar {alpha.shape}: {int((alpha >= 2).sum())} root cells; {coarse.D - 1} windows + FREE")
+print(f"exemplar {alpha.shape}: {int((alpha >= 2).sum())} root cells; {coarse.D - 1} windows + FREE; {coarse.nsig} edge signatures")
 
 # level 8: surf designed, u8 by the generic kernel (no trees channel: the trunk window is the tree)
-m8 = Model(H, W, [u8, surf, d8], coarse.factors(lam8=LAM8, f=F8, bonus=BONUS, win_bonus=WBONUS), [coarse.certificate()])
+m8 = Model(H, W, [u8, surf, d8], coarse.factors(lam8=LAM8, f=F8, bonus=BONUS, win_bonus=WBONUS, cut=CUT), [coarse.certificate()])
 ys = ground.sample_surface(surf, H, W, seed=SEED, mean_depth=0.4)
 print(m8.describe("u8"))
 t0 = time.time()
@@ -47,7 +47,7 @@ d8.grid[:] = d8.D - 1
 bad8 = m8.sweep("u8", S8, seed=SEED)
 e8, v8 = m8.energy("u8")
 nwin, ntrunk = int((u8.grid > 0).sum()), int(coarse.has_trunk[u8.grid].sum())
-print(f"level 8: {S8} sweeps {time.time() - t0:.1f}s  windows {nwin}  trunk windows {ntrunk}  no-candidate {bad8}  viol {v8}")
+print(f"level 8: {S8} sweeps {time.time() - t0:.1f}s  windows {nwin}  trunk windows {ntrunk}  recombined seams {coarse.recombined_seams(u8)}  no-candidate {bad8}  viol {v8}")
 
 # level 1: refinement, then joint sweeps
 roots_structural = roots.factors(kinds, dangle=DANGLE, counted=False)

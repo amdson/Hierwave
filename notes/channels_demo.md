@@ -251,6 +251,33 @@ fine level's business) and the refinement first placed root cells whose
 parent lay in an unplaced window (orphan subtrees that only a tip-by-tip
 dissolution could remove).
 
+## Soft coherence, hard seams (2026-10-06, time-boxed)
+
+Recombination at window seams: coarse coherence (exact shift) made soft
+(lam8 = 1), and inter-block compatibility made hard through edge
+signatures: per window side, the (position, mass, parent-ward) of every
+port crossing the edge, parent-ward meaning the cell's exemplar-tree
+parent lies across it.  Two windows may sit side by side iff their facing
+signatures agree with parent-ward flipped; a child crossing against FREE
+is a cut root (soft), a parent crossing against FREE is forbidden; the
+level-8 certificate's witnesses lie parent-ward.  Monotonicity stays hard
+at the tile level, with certificate depth recomputed over the stitched
+port tree at refinement and unreached root tiles pruned.  Sheet = the big
+system and its mirror image (EXEMPLAR_SHEET, 1008 root cells, 1115
+signatures).
+
+128 x 512: 142 windows, 9 trunks, 28 recombined seams, 2233 root cells,
+0 pruned, 0 / 0 / 0 violations, 21 coordinate mismatches, same budget as
+before.  Two attempts were needed: signatures without direction let 43%
+of placed root cells be pruned (a thin crossing led into a thick band, or
+into a piece whose parent was cut); with direction but symmetric
+witnesses still 32% (a window connected only through a child could keep
+its parent cut).  Direction and parent-ward witnesses fixed both, at the
+price of 100 coarse sites with no legal move (parent cuts forbidden).
+Diversity is modest: 28 of the seams recombine, and visibly only where
+the mirrored copy offers a matching edge.  A sheet of several distinct
+systems is what the mechanism needs; the mechanism itself is in place.
+
 ## What this does not test
 
 Promotion of a coordinate view, exemplar coordinates (the roots use counted
