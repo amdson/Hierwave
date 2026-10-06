@@ -511,4 +511,82 @@ $\nu$ (label entropy) and $\delta$, $D_{\max}$ (the product formula).
   shrinkage-with-no-single-cause class of failure is found by the tool.
 \end{enumerate}
 
+%-----------------------------------------------------------------------------
+\section{Outlook: scaling to game-ready voxel generation}
+\label{sec:outlook}
+
+An assessment, not a plan. The question is whether this approach reaches
+game-ready generation of a varied three-dimensional voxel world. The
+answer is: plausible for a bounded palette of structure types, on the
+order of ten to twenty, with months of engineering rather than weeks, and
+with one open risk that engineering alone does not remove.
+
+\subsection{What transfers directly}
+
+\begin{itemize}
+\item \textbf{The hard-rule layer.} Support, attachment, connectivity and
+  the one-parent tree are exact, local, and were at zero violations in
+  every run. This is what a game needs from a generator: guarantees, not
+  likelihoods.
+\item \textbf{Top-down placement with refinement.} It gives fixed budgets
+  per level, which is the requirement for streaming chunks, and it is
+  what turned sequential growth into 60 sweeps.
+\item \textbf{Exemplar copying with masks and seam recombination.} This is
+  close to what shipped games do with wave-function collapse and model
+  synthesis, with structure coming from a certificate rather than from
+  luck.
+\item \textbf{Biomes as designed coarse channels} that gate which sets
+  apply; the views-from-tags machinery supports this without new code.
+\end{itemize}
+
+\subsection{What needs engineering, not research}
+
+\begin{itemize}
+\item \textbf{Compute.} Three dimensions multiply cells by the chunk side
+  again, and the numba kernel enumerates every kind per candidate: a
+  $128^3$ region at today's per-cell cost is minutes per sweep. The
+  bit-sliced C kernel (\code{bitgibbs.c}) and a GPU port are the known fix,
+  and the factor descriptors were designed to compile to them; 10--50
+  times is the expectation, enough for seconds per region.
+\item \textbf{Chunked execution.} The sweeps here are global over a finite
+  grid. Infinite worlds need halos and chunk-invariant noise, which the
+  constitution specifies and which the coordinate placement makes
+  tractable, since structures are seeded per region from above.
+\item \textbf{A library of computed factors.} Each new class of hard
+  structure cost a kernel change in this pass. The class list is short
+  (support, attachment, connectivity, non-overlap, flow), so this
+  converges, but the kernel will keep changing until it does.
+\item \textbf{Content tooling.} Painting a 3D exemplar is harder than
+  ASCII. The practical route is existing voxel builds as exemplars with
+  masks from their footprints, plus stroke-based painters such as
+  \code{paint\_big.py}.
+\end{itemize}
+
+\subsection{The risk that stays}
+
+Calibration between interacting sets was most of the work in this pass,
+grows with the number of pairs, and the framework measures energy balance
+rather than predicting it. For a varied world with dozens of soft sets
+touching the same tiles, this is what could make the approach not ship.
+Three mitigations are on the table and none is proven:
+\begin{enumerate}
+\item the marginalised (wildcard) gate as the default, so that most sets
+  are neutral to each other by construction;
+\item cross-set coupling kept hard and small through promises rather than
+  soft and texture-level, so that what one set says to another is a few
+  bits with an honour factor below, not an energy to balance;
+\item ablation and per-factor energy breakdown built into the compiler, so
+  that interactions are found by a tool rather than by hand.
+\end{enumerate}
+If these work, the per-pair cost drops to the rare case; if they do not,
+every new set is a session of tuning.
+
+\subsection{Confidence}
+
+High that this reaches a convincing demonstration with a dozen structure
+types in three dimensions. Moderate that it reaches game-ready quality and
+speed with that palette. Low that it scales to a very varied world without
+the calibration problem being solved, which is a research question, not a
+build task.
+
 \end{document}
