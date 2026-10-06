@@ -26,6 +26,7 @@ NRAND = int(os.environ.get("NRAND", 8))
 SW, NU, MINC = int(os.environ.get("SW", 60)), float(os.environ.get("NU", 1.0)), int(os.environ.get("MINC", 3))
 BETA, GAMMA, GSMALL = (float(os.environ.get(k, v)) for k, v in (("BETA", 8), ("GAMMA", 8), ("GSMALL", 30)))
 PEXTRA = float(os.environ.get("PEXTRA", 0.15))
+QUENCH = int(os.environ.get("QUENCH", 0))                 # final sweeps at T = 0.1
 FIT = 24
 METHODS = os.environ.get("METHODS", "plain,forest,count").split(",")
 IMG = os.environ.get("IMG", "/Users/amdson/dev/Hierwave/images")
@@ -86,6 +87,8 @@ def run(lab8, c, method, seed):
         MC.sweeps(np.full(1, lam), np.ones(1), mu, fam, ct, S.st, seed * 1000 + s, pa, NU, cn)
         if first is None and s % 5 == 4 and MC.check(ct, S, lab8, MINC)[0]:
             first = s
+    if QUENCH:                                             # drop transient islands
+        MC.sweeps(np.full(QUENCH, lam), np.full(QUENCH, 0.1), mu, fam, ct, S.st, seed * 1000 + SW, pa, NU, cn)
     return S, MC.check(ct, S, lab8, MINC), first
 
 
