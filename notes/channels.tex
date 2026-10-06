@@ -250,6 +250,93 @@ observation is rule 5 above (rates are free), and the current pipeline is the
 case where $z$ is drawn once.
 
 %-----------------------------------------------------------------------------
+\section{Objects as a block-level coordinate channel}
+\label{sec:objects}
+
+Proposal: there is no separate ``macro room'' domain. The block level $h = B$
+($B = 8$) carries an ordinary coordinate channel $u_B : \Lambda_B \to \Z_m^2$,
+at tile stride, so a window can sit at any tile offset (this is where the phase
+$\phi$ comes from), and objects are read off it by an abstraction. The macro
+coarse level already is this (coordinates per window, pasted); the proposal is
+that the fine macro stage is too.
+
+\paragraph{Two abstractions, two hard rules.} Let $o_E$ be the exemplar's object
+code channel and $W(u) = [u, u+B)^2$ the window a coordinate names.
+\begin{itemize}
+  \item \textbf{Seam form.} $\alpha^{\mathrm{seam}}_d(u) = o_E|_{\partial_d W(u)}$, the
+        codes on the window's side-$d$ edge. Hard neighbour factor between
+        adjacent cells: the \texttt{nbr} rule holds across the seam, pair by pair.
+        This is \texttt{objects.coarse\_term}. Exact and whole-or-absent at every
+        level.
+  \item \textbf{Ownership form.} $\alpha^{\mathrm{own}}(u) \in A = \{\varnothing\} \cup
+        \{(k,\phi)\}$: the object whose centre cell lies in $W(u)$, if any, with
+        footprint $F(k,\phi) \subset \Z^2$ relative to the cell. Hard neighbour
+        factor over $N_{\mathrm{RAD}}(p)$: $F_p \cap F_q = \varnothing$ (overlap), plus
+        attachment or contact as a function of $(\alpha(p), \alpha(q))$. This is
+        \texttt{macroobj} with $(k,\phi)$ replaced by $\alpha^{\mathrm{own}}(u)$.
+\end{itemize}
+
+\paragraph{Why the seam form freezes.} Under the seam form a cell's update must
+keep every partial object on its four seams, so an object straddling a seam can
+only be exchanged for another instance of the same template at the same offset.
+An object of side $s$ lies inside one cell of side $h \ge s$ at a fraction
+$\big((h - s + 1)/h\big)^2$ of positions: at $h = s$ almost none, at $h = 2s$
+one in four. So at the level where the object ``is one cell'' most instances
+still straddle, and the level above does not help, since there the cell holds
+several objects and the window move drags all of them. The macro runs that
+worked are ownership-form runs, and the tile-level finding that single-site
+updates cannot move a rigid object is the seam form at $h = 1$.
+
+\paragraph{The ownership form as $(a, u)$.} Hard terms depend on $u$ only
+through $\alpha^{\mathrm{own}}(u)$; soft terms ($E_c$, $E_{\mathrm{par}}$) depend on
+$u$ fully. Split the channel into $a_p \in A$ and $u_p \in \Z_m^2$ with
+\[
+  E^{\mathrm{cell}}(a, u) = \nu\,\1\big[a \ne \alpha^{\mathrm{own}}(u)\big],
+\]
+hard factors on $a$ alone, soft factors on $u$ alone. Then
+\begin{itemize}
+  \item $a_p \mid \text{rest}$ is an exact heat bath over $A$ ($|A| \approx 1300$):
+        the current block update, with $\nu$ as the only soft term;
+  \item $u_p \mid \text{rest}$ is a coordinate proposal update (coherent shifts,
+        parent, $k$ links), scored by $E_c + E_{\mathrm{par}} + \nu\,\1[\cdot]$, run at
+        whatever rate is wanted (rule 5, Section~\ref{sec:interface}).
+\end{itemize}
+This is \texttt{macro\_objects.md} \S1 stated as a channel: $\nu$ is not a
+heuristic pull toward a pasted parent but the cell coupling between two channels
+of one level, and the current pipeline is the case where $u$ is drawn once. At
+$\nu \to \infty$ the pair collapses to one channel $u$ with $a = \alpha(u)$.
+
+\paragraph{Masking.} With $a_p$ owning a footprint that runs into neighbouring
+cells, the coordinate $u_q$ of a neighbour still states what its whole window
+looks like, including the cells now under $F_p$. The statement must be masked
+there: $E_c(u_q)$ and the tile term $\tau$ are evaluated over
+$W(u_q) \setminus \bigcup_{p} F_p$, and the tile level reads $t = \mathrm{tmpl}[\cdot]$
+on footprints and the coordinate elsewhere. This is the fixed-mask case of
+\texttt{dsl.md} \S6, with the mask a deterministic function of the $a$ channel.
+
+\paragraph{What it gives for free.}
+\begin{itemize}
+  \item \textbf{Interlocking.} Replace $F_p \cap F_q = \varnothing$ by agreement on the
+        overlap, $\mathrm{tmpl}_p = \mathrm{tmpl}_q$ on $F_p \cap F_q$: shared walls and
+        nested pieces are the same radius-$\mathrm{RAD}$ factor with a different
+        table. The seam form would need successor sets for this.
+  \item \textbf{The parent.} $u_B$ has the usual coordinate parent $u_{2B}$ with
+        $E_{\mathrm{par}}$; no hard parent relation is needed for objects, since
+        $\varnothing$ is always admissible. A parent that \emph{promises} an object
+        (a grammar leaf, a required room) is a hard $E^{\mathrm{par}}$ on $a$, and
+        honourability is then the question whether the footprint fits the halo.
+  \item \textbf{Connectivity.} Contacts are a function of $(a_p, a_q)$, so the
+        contact graph is a hard-table neighbour relation on $a$; the port promise
+        and a certificate over objects-as-nodes attach to $a$, not to $u$.
+\end{itemize}
+
+\paragraph{What it costs.} Two channels at the block level instead of one, the
+mask bookkeeping in $E_c$ and $\tau$, and a coordinate proposal set that knows
+about object instances (a candidate for $u_p$ with $a_p$ fixed should prefer
+windows whose $\alpha^{\mathrm{own}}$ equals $a_p$: the instances of $(k, \phi)$ in
+the exemplar, which is a precomputed list).
+
+%-----------------------------------------------------------------------------
 \section{Open questions}
 \label{sec:open}
 
@@ -261,8 +348,9 @@ The agenda, roughly in the order they block each other.
         differ in which moves exist: a block value moves a whole object; codes
         cannot. Interlocking blocks (footprints that nest or share walls) break
         both: ownership is no longer per block, and the code rule's successor is
-        a set. What is the domain and abstraction that lets a coarse cell commit
-        to ``an object of family $f$ overlapping me'' without owning it?
+        a set. Section~\ref{sec:objects} proposes the ownership form on a
+        coordinate channel; open within it: the proposal set for $u$ given $a$,
+        and whether a coarser cell needs to commit to objects it does not own.
   \item \textbf{Hard factors of radius $r > 1$ and their parents.} A room's
         footprint is a hard neighbour factor over $N_3$. What must the parent
         level carry so that $\refine$ is nonempty: a footprint envelope, a count,
