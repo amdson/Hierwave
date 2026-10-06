@@ -1063,6 +1063,20 @@ views are small.
 Each step down is a known omission from the identity, so the price of each
 is nameable: the entropy term, the finite part, the off-adjacency terms.
 
+\paragraph{In practice.} Exact sampling of $p^*$ is not the goal; plausible,
+coherent output under parameters the author controls is. The identity is
+still useful under that goal, for two reasons. It says which omissions are
+safe: the support must be right (a wrong support is a stuck sampler or an
+invalid map), the finite part only shifts statistics, and a shifted statistic
+is a knob. And it says what a knob \emph{is}: a weight on a soft table is a
+tempered estimate of a free energy, so turning it up or down has a meaning (more
+or less credit for how well the level below can complete a value) rather than
+being a tuning accident. The working default is therefore: support from the
+checker or by hand; pair and unary tables from counts where a corpus exists and
+from the mean-energy proxy where it does not; each table with a weight the
+author sets. Refit by self-play only where a run shows coherence failing across
+a level boundary.
+
 \paragraph{What self-play cannot see, and what fixes it.} The cluster
 expansion is local; a conflict that is nonlocal at the lower level
 (reachability across many cells) does not appear in a pair term. It appears
@@ -1179,39 +1193,58 @@ No table is learned; nothing is specific to the tree's exemplar.
 \section{Open questions}
 \label{sec:open}
 
-The agenda, roughly in the order they block each other.
+\paragraph{Settled in this document (by argument, not experiment).}
+\begin{itemize}
+  \item Objects: ownership form on a block-level coordinate, with the object as
+        a promoted view $a$ coupled by $\nu$ (Sections~\ref{sec:objects},
+        \ref{sec:promote}). Interlocking is a different overlap table.
+  \item Connectivity: planned in the coordinate update through interfaces,
+        honoured hard by $a$, global half as the window promise
+        (Section~\ref{sec:plan}). The forest heuristic is replaced, not fixed.
+  \item Interface: channels expose views; factors are tables on views with
+        offsets; hard is a property of the table; a promise is a channel in a
+        honour factor (Sections~\ref{sec:views}, \ref{sec:hard}).
+  \item Hard factors live on small channels; promote a view when it does not
+        (Section~\ref{sec:promote}).
+  \item Each update block brings its own kernel under one invariance contract;
+        the generic layer delivers restricted factors in the kernel's shape
+        (Section~\ref{sec:kernels}).
+  \item Top-down only, as a rule of the model; soundness requires the hard
+        factors to contain $\mathrm{supp}\,F$ of the level below
+        (Section~\ref{sec:direction}).
+  \item Learned terms are the cluster expansion of the cumulative free energy
+        below, with self-play as the definition and counts, mean energy or
+        support as the practical estimators (Section~\ref{sec:ideal}).
+\end{itemize}
+
+\paragraph{Still open.}
 \begin{enumerate}
-  \item \textbf{What a macro object is as a channel.} Is a rigid object a value of
-        a block-level channel (one cell owns it, as macroobj) or a tile-level code
-        channel (every cell carries its template cell, as objects.py)? The two
-        differ in which moves exist: a block value moves a whole object; codes
-        cannot. Interlocking blocks (footprints that nest or share walls) break
-        both: ownership is no longer per block, and the code rule's successor is
-        a set. Section~\ref{sec:objects} proposes the ownership form on a
-        coordinate channel; open within it: the proposal set for $u$ given $a$,
-        and whether a coarser cell needs to commit to objects it does not own.
-  \item \textbf{Hard factors of radius $r > 1$ and their parents.} A room's
-        footprint is a hard neighbour factor over $N_3$. What must the parent
-        level carry so that $\refine$ is nonempty: a footprint envelope, a count,
-        a port pattern? This is the compositional $\alpha$ for objects.
-  \item \textbf{Connectivity for objects.} Replace the forest heuristic by the
-        port promise plus a certificate in which an object is a super-node with a
-        precomputed port pattern. Which existing certificate (the $(g,d)$ field, the
-        keyed promise) extends to irregular nodes?
-  \item \textbf{Joint honourability.} A mechanical check that $\prod_c \refine_c$ is
-        nonempty for all allowed parent values and halos, run at compile time on
-        small cases. What is its cost as the number of hard channels grows, and is
-        a product of per-channel checks ever sufficient?
-  \item \textbf{Which couplings to declare.} With $n$ channels there are
-        $\binom{n}{2}$ possible cell and neighbour couplings. Ground truth is
-        $F = -\log Z$ of the lower levels; which pairs get a table (learned, counted
-        or fitted by self-play) and which couple only through tiles and hard rules?
-  \item \textbf{Update blocks and rates.} Which channels are updated jointly (hard
-        cell couplings force it), what bounds the joint domain, and how rates are
-        set per channel (hard-sweep count per soft update).
-  \item \textbf{The cost formula.} Per-step work as
-        $\sum_B |\Cand_B| \cdot (\text{features} + \text{table reads} + \text{declared couplings})$,
-        reported at compile time, so adding a channel has a visible price.
+  \item \textbf{The experiment.} Contact-mode macro at full scale with the
+        $(u, a)$ split and the interface seam factor: does planning openings in
+        $u$ remove the patchwork, and does $a \ne \alpha(u)$ ever leave a planned
+        opening unrealisable (the honourability question of Section~\ref{sec:plan})?
+  \item \textbf{The proposal set for $u$ given $a$.} Instances of $(k, \phi)$ in
+        the exemplar as a precomputed list, plus coherent shifts, parent and $k$
+        links; the MH reverse set where it depends on the current value.
+  \item \textbf{Factor shapes.} The concrete representation of a restricted
+        factor for each kernel (dense vector, level planes, callable, chain
+        tables, interval bounds) and the conversions between them; whether
+        quantised cross-channel terms into the bit-sliced kernel are corrected
+        by MH or accepted as truncation.
+  \item \textbf{Joint blocks.} The cap on a product domain and what the compiler
+        suggests when it is exceeded (promotion, a chain block, a partition
+        schedule).
+  \item \textbf{Calibration.} The measurement that sets sweeps and rates per
+        block (view autocorrelation, violation decay under a ramp) and how it is
+        run on finite windows.
+  \item \textbf{The honourability checker.} Enumeration on small halos over the
+        union of a level's hard tables; its cost as hard channels multiply, and
+        whether per-channel checks ever suffice.
+  \item \textbf{Self-play tooling.} Clamped two-cell runs of a corrected kernel
+        with the mean-energy proxy; when a refit is worth running.
+  \item \textbf{A coarser commitment to objects.} Whether a window-level cell
+        must promise objects it does not own (an envelope, a count), or whether
+        $\varnothing$ always being admissible plus the window promise is enough.
 \end{enumerate}
 
 \end{document}
