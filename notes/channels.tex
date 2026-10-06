@@ -518,6 +518,96 @@ and a parent table $\nu$ against a fixed $u$. None of them is wrong; they are
 four hand-specialised instances of one update.
 
 %-----------------------------------------------------------------------------
+\section{Promises are hard factors, not a kind of variable}
+\label{sec:hard}
+
+Section~\ref{sec:views} still names two usage patterns. They collapse further:
+there are only channels and factors, and the hard factors are what used to be
+called promises.
+
+\paragraph{Hard and soft subsystems.} Split the factor set of a level into
+$\mathcal F^{\mathrm{hard}}_h$ (tables in $\{0, +\infty\}$) and
+$\mathcal F^{\mathrm{soft}}_h$ (finite). Write
+\[
+  H_h(z_{2h}) = \big\{ z_h : E(z_h, z_{2h}) = 0 \ \text{for every } E \in \mathcal F^{\mathrm{hard}}_h \big\}
+\]
+for the hard set of a level given its parent. The level conditional of
+Eq.~\eqref{eq:level} is
+\[
+  g_h(z_h \mid z_{2h}) = \frac{\1[z_h \in H_h(z_{2h})]\; e^{-E^{\mathrm{soft}}_h(z_h, z_{2h})/T}}{Z_h(z_{2h})} .
+\]
+The hard subsystem fixes the support; the soft subsystem fixes the
+distribution on it. The two have different sources and different obligations:
+\begin{center}
+\small
+\begin{tabular}{@{}lp{2.9in}p{2.1in}@{}}
+\toprule
+ & hard factors & soft factors \\
+\midrule
+source & authored (sockets, templates, masks) or derived (compiled from a level below) & learned (counts, pseudo-likelihood, self-play) \\
+count & a handful per channel type: seam, refine, honour & as many as declared \\
+specific to & a channel \emph{type} (support, ports, objects), taking the tile set as data & an exemplar \\
+checked by & the compiler (Section~\ref{sec:views}) & nothing; errors show as atypical output \\
+tempered & never & by $T$ and the ramps \\
+\bottomrule
+\end{tabular}
+\end{center}
+This is the constitution's line: general rules, no rules specific to one tile
+set. A hard rule belongs to a channel type and takes the tile set as data.
+
+\paragraph{The three hard patterns.} Every hard factor so far is one of:
+\begin{enumerate}
+  \item \textbf{seam}: $(c, \iota_d, 0)$ with $(c, \iota_{\bar d}, e_d)$ at the same level
+        (compat; the tile rules; overlap and contact on $a$);
+  \item \textbf{refine}: $(c, \mathrm{id}, 0)$ with $(c, \mathrm{id}, \mathrm{par})$, the
+        channel against its own coarser copy (merge consistency);
+  \item \textbf{honour}: $(c, \alpha_k, \mathrm{par})$ with $(c', \mathrm{id}, 0)$ for a finer
+        channel $c'$, or at one level $(c, \alpha_k, 0)$ with $(c', \mathrm{id}, 0)$
+        (a view of a coarser or sibling channel equals what the finer one
+        realises: $t = \mathrm{tmpl}[o]$, the plan mask on $a$, $A_b(x) = \pi_b$,
+        validity of a certificate).
+\end{enumerate}
+A channel ``is a promise'' exactly when it appears in a honour factor as the
+coarser or viewed argument. By that test $u$ (through $\iota$), $a$ (through
+$\mathrm{tmpl}$), $v$, the object code $o$ and the certificate fields all are;
+nothing is a promise by type.
+
+\paragraph{Strong downward, soft elsewhere.} The user's description, read in
+this notation: a channel's \emph{downward} factors (honour) are hard, its
+\emph{sideways} factors (seam) are hard where the guarantee needs them and soft
+otherwise, and its \emph{upward} factor (refine) is hard for derived channels
+and soft ($E_{\mathrm{par}}$) for free ones. A guarantee $G$ holds for the output
+iff it is implied by the hard subsystem alone, along an unbroken chain of
+honour and seam factors from its certificate down to the tiles. A soft link
+anywhere in that chain turns the guarantee into a tendency; it does not break
+the sampler. That is the whole rule for deciding what is hard: make hard
+exactly the factors on the chain of each guarantee, and nothing else.
+
+\paragraph{What the correctness conditions attach to.} They are conditions on
+$\mathcal F^{\mathrm{hard}}$ as a system, not on channels:
+\begin{itemize}
+  \item \textbf{soundness}: $z \in \bigcap_h H_h \Rightarrow G(x)$, by the chain argument above;
+  \item \textbf{honourability}: $H_h(z_{2h}) \ne \varnothing$ for every $z_{2h}$ the levels
+        above can produce, decided within a local halo (top-down never stuck);
+  \item \textbf{never empty}: under the chosen colouring and update blocks the
+        current value stays in every hard mask (local Gibbs never stuck);
+  \item \textbf{exactness of seams} (quality, not correctness): a seam table no
+        stronger than the tile-level rules imply, or coverage is lost.
+\end{itemize}
+The first three are what the compiler checks; the fourth is what the
+self-play or the derived-rule compiler would eventually improve. For one
+language these are the four properties of \texttt{coarse\_to\_fine.tex}
+\S5.1; here they are asked once of the union of all hard tables at a level,
+which is where joint honourability (support with connectivity, objects with
+the plan) lives.
+
+\paragraph{Coupling strength as a knob.} With hard and soft as two ends, a
+factor may be ramped ($\lambda$ in the field sampler, $\mathrm{lam} \to \mathrm{HARD}$
+in the macro runs) and ends hard; a run that ends with a finite weight has
+turned a guarantee into a tendency for that run. Ramps are a sampler device
+for mixing and do not change which factors are hard in the model.
+
+%-----------------------------------------------------------------------------
 \section{Open questions}
 \label{sec:open}
 
