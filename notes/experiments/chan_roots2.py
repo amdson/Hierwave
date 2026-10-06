@@ -10,7 +10,7 @@ import os, time
 import numpy as np
 from PIL import Image
 
-from castlegen.channels import Channel, Factor, Kinds, Model, roots, coord
+from castlegen.channels import Channel, Factor, Kinds, Model, roots, coord, ground
 
 H, W = int(os.environ.get("H", 64)), int(os.environ.get("W", 192))
 R0 = int(os.environ.get("R0", 12))
@@ -20,13 +20,14 @@ NU, LAM, WP = float(os.environ.get("NU", 6.0)), float(os.environ.get("LAM", 1.0)
 DANGLE = float(os.environ.get("DANGLE", 1.0))
 KR, KT = int(os.environ.get("KR", 1)), int(os.environ.get("KT", 1))
 TREE = bool(int(os.environ.get("TREE", 1)))
-OUT = os.environ.get("OUT", "images/chan_roots2.png")
+EX = os.environ.get("EX", "small")                                  # exemplar: small | big
+OUT = os.environ.get("OUT", f"images/chan_roots2{'_big' if os.environ.get('EX') == 'big' else ''}.png")
 
 SKY_SOIL = Kinds(["sky", "soil"], [frozenset({"sky"}), frozenset({"solid", "earth"})],
                  [(169, 212, 240), (138, 98, 66)])
 kinds = Kinds.concat(SKY_SOIL, roots.KINDS)
-tile = roots.tile_views(Channel("tile", 1, len(kinds)), kinds)
-alpha, g, mask, trunk_yx = coord.parse_exemplar(kinds, tree=TREE)
+tile = roots.tile_views(ground.tile_channel(kinds), kinds)          # ground views too, for the diagnostics
+alpha, g, mask, trunk_yx = coord.parse_exemplar(kinds, rows=coord.EXEMPLARS[EX], tree=TREE)
 assert coord.check_exemplar(kinds, alpha, g) == 0, "exemplar roots not all attached"
 print(f"exemplar {alpha.shape}, {int((alpha >= 2).sum())} root cells, {int((alpha == coord.EARTH).sum())} ring cells, "
       f"{int((alpha == coord.FREE).sum())} free")
@@ -34,7 +35,18 @@ u = coord.coord_channel(alpha)
 cert, trees = roots.cert_channel(roots.certificate().Dmax), roots.trees_channel()
 flat_ground = Factor.unary((tile.name, "root"), np.array([8.0, 0.0, 0.0, 0.0]), name="flat_ground")
 factors = roots.factors(kinds, dangle=DANGLE, counted=False) + [flat_ground]
-m = Model(H, W, [tile, u, cert, trees], factors, [roots.certificate(tree=TREE)])
+extra_channels = []
+if os.environ.get("SUPPORT"):                                       # diagnostics: the ground set's rules one at a time
+    factors.append(ground.factors()[0])
+if os.environ.get("COUNT"):
+    surf = ground.surf_channel()
+    extra_channels.append(surf)
+    factors.append(ground.factors()[-1])
+m = Model(H, W, [tile, u, cert, trees] + extra_channels, factors, [roots.certificate(tree=TREE)])
+if os.environ.get("COUNT"):
+    surf.grid[:] = 0
+    for i in range(surf.grid.shape[0]):
+        surf.grid[i] = int(np.clip((i + 1) * ground.CH - R0, 0, ground.CH))
 coupling, coup = coord.coupling(kinds, tile, u, nu=NU)              # applied inside the joint kernel
 print(m.describe("tile"))
 ck = coord.CoordKernel(u, tile, alpha, lam=LAM, w=WP, nu=NU, K=KR, Kt=KT)
@@ -45,7 +57,7 @@ tile.fixed[:R0] = True
 u.fixed[:R0] = True
 ck.init_free()
 cert.grid[:] = cert.D - 1
-roots.sample_trees(trees, lambda j: R0, SEED, spacing=5, p=0.7)
+roots.sample_trees(trees, lambda j: R0, SEED, spacing=int(os.environ.get("SPACING", 5)), p=float(os.environ.get("PTREE", 0.7)))
 print("trees wanted:", int(trees.grid.sum()))
 
 t0 = time.time()

@@ -21,12 +21,13 @@ NU, LAM = float(os.environ.get("NU", 6.0)), float(os.environ.get("LAM", 1.0))
 DANGLE = float(os.environ.get("DANGLE", 1.0))
 KR, KT = int(os.environ.get("KR", 1)), int(os.environ.get("KT", 1))
 TREE = bool(int(os.environ.get("TREE", 1)))
+EX = os.environ.get("EX", "small")                                  # exemplar: small | big
 SPACING, PTREE = int(os.environ.get("SPACING", 4)), float(os.environ.get("PTREE", 0.6))
-OUT = os.environ.get("OUT", "images/chan_combined2.png")
+OUT = os.environ.get("OUT", f"images/chan_combined2{'_big' if os.environ.get('EX') == 'big' else ''}.png")
 
 kinds = Kinds.concat(ground.KINDS, roots.KINDS)
 tile = roots.tile_views(ground.tile_channel(kinds), kinds)
-alpha, g, mask, _ = coord.parse_exemplar(kinds, tree=TREE)
+alpha, g, mask, _ = coord.parse_exemplar(kinds, rows=coord.EXEMPLARS[EX], tree=TREE)
 assert coord.check_exemplar(kinds, alpha, g) == 0
 u = coord.coord_channel(alpha)
 surf, trees, cert = ground.surf_channel(), roots.trees_channel(), roots.cert_channel(roots.certificate().Dmax)
@@ -37,7 +38,7 @@ ck = coord.CoordKernel(u, tile, alpha, lam=LAM, nu=NU, K=KR, Kt=KT)
 print(m.describe("tile"))
 print(f"{len(kinds)} kinds, {len(factors)} factors + coupling")
 
-ys = ground.sample_surface(surf, H, W, seed=SEED, mean_depth=0.4)
+ys = ground.sample_surface(surf, H, W, seed=SEED, mean_depth=0.4, **({"octaves": ()} if os.environ.get("FLAT") else {}))
 ground.init_tiles(tile, surf, kinds)
 ck.init_free()
 cert.grid[:] = cert.D - 1

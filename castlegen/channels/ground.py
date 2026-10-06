@@ -3,10 +3,16 @@ honour factor, and soft pair tables over the view `ground`.
 
 Kinds: sky, soil (earth), stone (rock).  Other kinds in a combined domain
 (roots) are seen through the views: `solid` by tag, so support and the
-count honour apply to them; `ground` maps them to earth, so they take
-soil's place in the texture (an earth-like solid).  Making them transparent
-instead (a zero row in the texture tables) was tried and is wrong: a trunk
-then loses the solid cohesion every surface cell has and is never placed.
+count honour apply to them; `ground` maps them to OTHER, a wildcard in the
+texture tables: against a neighbour of kind x it takes the (x, x) term,
+against sky the solid term, and its unary is the mean of the solids'.  A
+root cell is then texture-neutral wherever it stands, which is the gate of
+channels.tex section 16 in its marginalised form: the ground says nothing
+about cells it does not own, but keeps saying what it says about their
+neighbours.  Two wrong gates were tried first: OTHER as earth (a root cell
+in fine-grained stone paid the lost rock cohesion; copies stalled at a
+third of their size) and OTHER as a zero row (a root cell lost the solid
+cohesion every solid gets; no copy grew at all).
 
 surf: level-8 channel, value = rows of the chunk under the surface (0..8),
 from 1D value noise over chunk columns (sample_surface).  Chunks are filled
@@ -18,6 +24,7 @@ from .core import Channel, Factor, Kinds, view_of_tags
 
 INF = np.inf
 CH = 8                                                           # chunk side
+OTHER = 3                                                        # ground view: a kind this set does not own
 
 KINDS = Kinds(["sky", "soil", "stone"],
               [frozenset({"sky"}), frozenset({"solid", "earth"}), frozenset({"solid", "rock"})],
@@ -27,7 +34,7 @@ KINDS = Kinds(["sky", "soil", "stone"],
 def views(kinds: Kinds):
     """{name: (values, n)}."""
     return {"solid": (view_of_tags(kinds, {"solid": 1}), 2),
-            "ground": (view_of_tags(kinds, {"sky": 0, "earth": 1, "rock": 2}, default=1), 3)}
+            "ground": (view_of_tags(kinds, {"sky": 0, "earth": 1, "rock": 2}, default=OTHER), 4)}
 
 
 def tile_channel(kinds: Kinds, name="tile"):
@@ -99,7 +106,7 @@ def pair_tables(contact=(("sky", "sky", -1.0), ("solid", "solid", -0.8), ("rock"
     its energy for every unordered (contact, beside) or ordered (above) pair
     whose classes match."""
     cls = {"sky": [0], "solid": [1, 2], "earth": [1], "rock": [2]}
-    Eh, Ev = np.zeros((3, 3)), np.zeros((3, 3))
+    Eh, Ev = np.zeros((4, 4)), np.zeros((4, 4))
     for a, b, e in contact:
         for i in cls[a]:
             for j in cls[b]:
@@ -116,10 +123,15 @@ def pair_tables(contact=(("sky", "sky", -1.0), ("solid", "solid", -0.8), ("rock"
         for i in cls[a]:
             for j in cls[b]:
                 Ev[i, j] += e
+    for E in (Eh, Ev):                                                        # OTHER: the wildcard
+        for x in (1, 2):
+            E[OTHER, x], E[x, OTHER] = E[x, x], E[x, x]
+        E[OTHER, 0], E[0, OTHER] = E[1, 0], E[0, 1]
+        E[OTHER, OTHER] = (E[1, 1] + E[2, 2]) / 2
     return Eh, Ev
 
 
-def factors(tile="tile", surf="surf", kappa=0.5, unary=(0.0, 0.8, 0.6), beta=1.0):
+def factors(tile="tile", surf="surf", kappa=0.5, unary=(0.0, 0.8, 0.6, 0.7), beta=1.0):
     """The ground set's factors on the tile channel `tile` and the surface
     channel `surf`."""
     Eh, Ev = pair_tables()

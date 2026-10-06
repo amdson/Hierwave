@@ -193,6 +193,27 @@ joins 308 -> 0, cells with more than one parent 205 -> 0, violations 0,
 root cells, 0 coordinate mismatches.  Cost: 26 and 56 ms per sweep (was
 15 and 39), the tree interval needing the two smallest joined d's.
 
+Large exemplar (2026-10-06): `coord.EXEMPLAR_BIG`, 40 x 84, 504 root
+cells, painted from strokes by `notes/experiments/paint_big.py` (a 3-wide
+taproot thinning to mass 1, two main laterals with drops and twigs,
+mid-depth laterals, lower twigs); `EX=big` in both scripts.  Roots alone
+(96 x 360, 600 sweeps, 66 ms/sweep, 4 trunks): 1214 root cells, 0
+violations, 0 extra joins, still growing.  Combined (128 x 384, 800
+sweeps, 107 ms/sweep): 510 root cells, 4 of 4 trunks, 0 / 0 / 0.
+
+The ground gate, third try: with OTHER mapped to earth the copies in the
+ground stalled at 411 cells (a root cell in fine-grained stone pays the
+lost rock cohesion); with OTHER as a zero row nothing grew at all (a root
+cell loses the solid cohesion every solid gets, about 3 per cell).  The
+gate that works is a wildcard: OTHER takes the (x, x) texture term
+against a neighbour of kind x, the solid term against sky, and the mean
+solid unary, so a root cell is texture-neutral wherever it stands.  That
+is the marginalised form of the section 16 gate: the ground says nothing
+about cells it does not own but keeps its statements about their
+neighbours.  What still clips the copies in the ground is the terrain
+itself: laterals that would rise above the local surface cannot be copied
+(roots never touch sky), so systems under a slope come out one-sided.
+
 ## What this does not test
 
 Promotion of a coordinate view, exemplar coordinates (the roots use counted
