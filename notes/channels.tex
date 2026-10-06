@@ -608,6 +608,61 @@ turned a guarantee into a tendency for that run. Ramps are a sampler device
 for mixing and do not change which factors are hard in the model.
 
 %-----------------------------------------------------------------------------
+\section{Promoting a view to a channel}
+\label{sec:promote}
+
+A view $\alpha_{c,k}$ is a deterministic function of $z_c$, so a hard factor on
+it is a mask on $z_c$'s candidates. That is fine when $z_c$ is small and
+enumerated (tiles: the port bytes are deterministic views and the tile update
+scores every tile). It is a problem when $z_c$ is large and proposal-updated
+(a coordinate): the hard factor rejects most candidates, and the exemplar may
+hold no window that matches both the texture and the hard requirement, so the
+channel freezes or coverage is lost. The remedy is the $(a, u)$ split of
+Section~\ref{sec:objects}, as a general operation.
+
+\paragraph{The operation.} Given a channel $c$ with view $\alpha : \Dom_c \to V$,
+add a channel $w$ with $\Dom_w = V$ at the same level and
+\begin{itemize}
+  \item move every factor that read $\alpha(z_c)$ to read $w$ instead, hard ones
+        included (seam, refine, honour by the level below);
+  \item add one soft cell factor $E^{\mathrm{cell}}(w, z_c) = \mathrm{cost}(w, \alpha(z_c))$,
+        either $\nu\,\1[w \ne \alpha(z_c)]$ or the calibrated form
+        $-\log p(w \mid u)$, a smoothed histogram of $\alpha$ over exemplar windows
+        near $u$ (\texttt{joint\_sampler.md}'s $\mathrm{cost}(u, v)$);
+  \item give $w$ an exact update (small domain) and let $z_c$'s proposal update
+        score $\mathrm{cost}(w, \alpha(\cdot))$ per candidate, or marginalise $w$ inside
+        each candidate's score, $\bar\pi(u) \propto e^{-\Delta E(u)}\sum_w e^{-\mathrm{cost}(w, \alpha(u))}\1[w \text{ allowed}]$,
+        which also credits a candidate for how many hard-feasible $w$ it admits.
+\end{itemize}
+As $\nu \to \infty$ the pair collapses to the deterministic view; the marginal
+over $w$ of the promoted model is the original model with the hard factors
+softened by exactly the cost table. So promotion is not a different model but
+the same one with one knob, and the knob is what lets a hard system be
+satisfied when the library has no exact match.
+
+\paragraph{What a promise is, finally.} A promise in the old sense is a promoted
+view of the coordinate: $v$ with $\mathrm{cost}(u, v)$ is $\alpha_v$ promoted, $a$
+with $\nu$ is $\alpha^{\mathrm{own}}$ promoted. The pattern exists twice in the code
+already. The rule for new hard factors follows:
+\begin{quote}
+  Put every hard factor on a small-domain channel. If the natural statement is a
+  view of a large channel, promote the view. Keep a view deterministic only
+  when its channel is enumerated exactly.
+\end{quote}
+Promotion costs one channel, one cost table and the masking of the large
+channel's statement where the promoted one overrides it (Section~\ref{sec:objects});
+it buys fast exact sweeps for the hard system, never-empty by construction,
+and free update rates between the hard and the soft side.
+
+\paragraph{Levels.} A promoted channel has a coarser copy where a refine factor
+is wanted ($w_{2h}$ with a merge), and the coarser copy is itself the promoted
+view of $u_{2h}$ with its own cost table. Honour runs downward: the level below
+realises $w_h$ hard, not $\alpha(u_h)$. So the hard chain of a guarantee runs
+entirely through promoted channels, and the coordinates touch it only through
+cost tables. This is the picture the question asked for: hard variables, softly
+coupled to the block channel, hard-coupled sideways and downward.
+
+%-----------------------------------------------------------------------------
 \section{Worked example: a tree with mass-monotone branches}
 \label{sec:tree}
 
@@ -621,7 +676,10 @@ $u$ (mass tabulated over exemplar positions), or tiles aggregated per block
 (mass as $\alpha$ of the block's wood cells). The recipe does not depend on
 the choice; only where the view tables come from.
 
-\paragraph{Views (two, plus one bit).}
+\paragraph{Views (two, plus one bit).} Deterministic if $z$ is enumerated
+exactly (objects, aggregated tiles); promoted to channels with a cost table if
+$z$ is a coordinate (Section~\ref{sec:promote}). Everything below reads the same
+either way.
 \begin{itemize}
   \item $\mathrm{mass}(z) \in \{0, 1, \dots, M\}$, with $0$ meaning no branch;
   \item $\mathrm{join}_d(z) \in \{0,1\}^{B}$, the cells on side $d$ at which wood
