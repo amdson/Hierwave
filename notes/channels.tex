@@ -957,6 +957,122 @@ count honour factor is hard, nothing flows up, and that is the intent. In
 neither case is a bottom-up factor written.
 
 %-----------------------------------------------------------------------------
+\section{The ideal, and the chain as its approximation}
+\label{sec:ideal}
+
+Interactions between levels will conflict in ways nobody wrote down. The
+position taken here: the \emph{ideal} is the undirected joint of every declared
+factor over every level, sampled by an algorithm too expensive to run
+(Gibbs up and down all levels to equilibrium); the directed chain is its
+approximation; and the learned terms are \emph{defined} as what makes the
+approximation exact, with self-play as their estimator and cheaper things used
+in practice. This section makes the three parts precise.
+
+\paragraph{The ideal.} With levels $h_{\text{top}}, \dots, 1$ and the energies
+$E_h(z_h \mid z_{2h})$ of Section~\ref{sec:direction} (within-level and parent
+factors of level $h$, hard ones as masks),
+\[
+  p^*(z) \;=\; \frac{1}{Z^*}\, \exp\!\Big(-\tfrac1T \sum_h E_h(z_h \mid z_{2h})\Big).
+\]
+Every unforeseen conflict is in $p^*$: a coarse configuration whose fine
+completions are all bad or all infeasible has small or zero marginal under
+$p^*$, whether or not anyone anticipated it.
+
+\paragraph{The identity.} Define, from the bottom up, the cumulative free
+energy of everything below a level,
+\[
+  \tilde F_{1}(z_2) = -T\log \sum_{x} e^{-E_1(x \mid z_2)/T},
+  \qquad
+  \tilde F_{h}(z_{2h}) = -T\log \sum_{z_h} e^{-[E_h(z_h \mid z_{2h}) + \tilde F_{h/2}(z_h)]/T}.
+\]
+Then, with the corrected level energies $\tilde E_h = E_h + \tilde F_{h/2}$,
+\begin{equation}
+  p^*(z) \;=\; \prod_h \tilde g_h(z_h \mid z_{2h}),
+  \qquad
+  \tilde g_h(z_h \mid z_{2h}) = \frac{e^{-\tilde E_h(z_h \mid z_{2h})/T}}{\sum_{z_h'} e^{-\tilde E_h(z_h' \mid z_{2h})/T}} ,
+  \label{eq:telescope}
+\end{equation}
+by telescoping: each normaliser is the partition function of everything below
+$2h$ given $z_{2h}$, which is $e^{-\tilde F_h(z_{2h})/T}$, and the next level up
+cancels it. So \emph{a directed chain whose level energies include the
+cumulative free energy of the levels below is the undirected joint, sampled
+top-down in one pass}. The chain as used, $\tilde F \equiv 0$, is the
+approximation; the only thing it drops is $\tilde F$. With estimates $\hat F$ in
+place of $\tilde F$,
+\[
+  \log p^*(z) - \log g(z) \;=\; \sum_h \big(\hat F_{h/2} - \tilde F_{h/2}\big)(z_h) \;+\; \text{(the same errors, re-normalised one level up)},
+\]
+so every discrepancy between the ideal and the chain is an error in some
+$\hat F$, and an error at level $h$ shows up as a wrong marginal at level $2h$,
+nowhere else.
+
+\paragraph{The learned terms, defined.} The soft within-level tables of a
+coarse level are an approximation to $\tilde F_{h/2}$ in cluster-expanded
+form (Section~\ref{sec:direction}): a per-cell term, a pair term per
+adjacency, both over views. This is the definition the question asks for: a
+learned coupling between channels at level $h$ is a term of the cluster
+expansion of the free energy of the corrected level $h/2$. It has three
+properties worth having.
+\begin{itemize}
+  \item It is \textbf{recursive and two-level}. $\tilde F_h$ is computed from
+        $E_h$ and $\tilde F_{h/2}$ only, so self-play at level $h$ runs the
+        \emph{corrected} kernel of level $h/2$, not the whole stack below. Fit
+        from the bottom: tiles first, then each level against the one below it.
+  \item It \textbf{absorbs the unforeseen}. Any conflict among lower factors,
+        hard or soft, local or carried by a certificate, raises $\tilde F$ on the
+        coarse values that provoke it. Nothing has to be anticipated; it has
+        to be measured.
+  \item It is \textbf{the sampler's own free energy if measured with the sampler}.
+        Running the fixed-step fine kernel under clamping, rather than an exact
+        sampler, estimates the free energy \emph{as realised by that kernel at
+        that budget}: the coarse level then prefers values the real fine stage
+        can complete well, which is what cross-scale consistency as a training
+        goal means (constitution, non-goals).
+\end{itemize}
+
+\paragraph{Self-play as the estimator.} For a view pair $(v, v')$ on two
+adjacent cells and a small set of halo values: clamp the coarse channel, run
+the corrected kernel of the level below for its scheduled sweeps, record
+\[
+  \hat F_W \approx -T\log Z_W \ \ \text{(thermodynamic integration or AIS)}
+  \qquad\text{or}\qquad
+  \hat F_W = \langle E \rangle \ \ (\text{the } T \to 0 \text{ proxy}),
+\]
+and set $f_2(v, v') = \hat F_{\{p,q\}} - \hat F_{\{p\}} - \hat F_{\{q\}}$, $f_1(v) = \hat F_{\{p\}}$
+up to a constant, $+\infty$ on runs that end infeasible. Cost:
+$|V|^2 \times$ halos $\times$ one fine run per pair table, feasible because
+views are small.
+
+\paragraph{Cheaper in practice, in order of fidelity.}
+\begin{enumerate}
+  \item \textbf{A corpus.} If fine samples exist (an exemplar, an exact reference
+        sampler), counting the push-forward gives $-\log \hat q = \hat F + \text{const}$
+        with no runs at all; this is self-play someone already did.
+        Pseudo-likelihood fits the same thing as conditionals.
+  \item \textbf{Mean energy.} $\langle E \rangle$ instead of $-T \log Z$: drops the
+        entropy of the completions; right at $T \to 0$, biased toward coarse
+        values with few good completions over many fair ones.
+  \item \textbf{Support only.} The honourability checker: $\hat F \in \{0, \infty\}$.
+        This is the derived hard rules, and it is the minimum a sound level
+        needs (Section~\ref{sec:direction}).
+  \item \textbf{Truncation.} Pairs along adjacency only, halos marginalised by
+        a few draws, views coarser than the channel.
+  \item \textbf{Nothing}: channels couple only through tiles and hard rules,
+        $\hat F \equiv 0$ beyond the support. The current state of the code.
+\end{enumerate}
+Each step down is a known omission from the identity, so the price of each
+is nameable: the entropy term, the finite part, the off-adjacency terms.
+
+\paragraph{What self-play cannot see, and what fixes it.} The cluster
+expansion is local; a conflict that is nonlocal at the lower level
+(reachability across many cells) does not appear in a pair term. It appears
+once a certificate or promise has made it local, as a term on the certificate's
+views. So certificates and self-play are complementary: certificates make
+$\tilde F$ local, self-play measures the local $\tilde F$. The rule for an
+unforeseen conflict discovered in a run is then: if it is local, it will be
+absorbed by refitting; if it is not, it needs a certificate first.
+
+%-----------------------------------------------------------------------------
 \section{Worked example: a tree with mass-monotone branches}
 \label{sec:tree}
 
