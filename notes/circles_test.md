@@ -163,3 +163,30 @@ against `reference()` (double-centred, max abs error and the pattern),
 the top-table sparsity (entries that should be zero), the leak ordering
 S1 / S2 / S3 / S0 on the top contrast, and the held-out `edge_air_top`.
 Outputs `images/circles_*`, results appended here.
+
+## Corrections after the build
+
+- The ring (8-neighbour dilation of the 13-cell disc, minus the disc) has
+  24 cells, not 16; the footprint is 37 tiles.  Spill is still at most one
+  cell.
+- `dem` has one air value, so a tile in two rings pays `kappa` once if
+  dirt; the spec's `f_a(n)` is `f_a(1)`.  At the dials: a shared ring tile
+  gains `f0 - f_a = -0.83`, a conflict tile costs `f_c - f_d - f_a + f0 =
+  +2.63`.  Pairs that only share ring tiles attract (up to 4 shared tiles,
+  -3.3), pairs with conflicts repel; the induced top coupling is net
+  attractive, raw `top_h` is -0.69 at NE->NW and SE->SW and exactly 0
+  elsewhere.
+- An object costs `F_obj ~ 26.95` in free energy (tile entropy lost over
+  the footprint), so with `lam = 3` and no other term `p*` has no objects.
+  Raising `lam` past that freezes the top level instead (given the tiles
+  the corner is determined, so no top conditional moves).  Fix, as in the
+  sugar test: a designed presence bonus `pres`, unary `-b` on present
+  with `b = F_obj - log(#offsets)` by default, so an isolated block is
+  50/50 absent / present and `lam = 3` tilts it.  The learned `mid_u`
+  then carries only what the neighbours and the boundary induce.
+- `top_move` is a Metropolis independence move with the factorised
+  `top_probs` as proposal and the exact 17^4 sum as target (tiles shared
+  between the four mid cells); exact, but it can stick from a start with
+  heavily overlapping objects, so the oracle starts with one object per
+  chosen corner.
+- `symmetrise` is exact on `p*` only for `nty == ntx`.
