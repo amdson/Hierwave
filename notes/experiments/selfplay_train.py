@@ -300,13 +300,16 @@ RUNS, STEPS, K = int(os.environ.get("RUNS", 4)), int(os.environ.get("STEPS", 150
 BURN, SWEEPS = int(os.environ.get("BURN", 50)), int(os.environ.get("SWEEPS", 200))
 S_T, S_M, S_F = int(os.environ.get("S_T", 30)), int(os.environ.get("S_M", 30)), int(os.environ.get("S_F", 20))
 ETA = float(os.environ.get("ETA", 0.5))                    # 2.0 oscillated on Potts (notes/potts_test.md)
+# SCALE=fwd: per-entry preconditioning, gap / max(forward frequency, FLOOR / table size) (the diagonal
+# Fisher of a frequency, so the step is ~ eta * log(p_fwd / p_target)); each entry's step clipped to CLIP nats
+SCALE, FLOOR, CLIP = os.environ.get("SCALE", ""), float(os.environ.get("FLOOR", 0.1)), float(os.environ.get("CLIP", 1.0))
 EVAL, EVERY, FINAL = int(os.environ.get("EVAL", 16)), int(os.environ.get("EVERY", 10)), int(os.environ.get("FINAL", 64))
 SEED = int(os.environ.get("SEED", 0))
 OUT = os.environ.get("OUT", f"images/{MODEL}_selfplay.json")
 TAG = os.environ.get("TAG", "")
 os.makedirs("images", exist_ok=True)
 print(f"MODEL {MODEL} dials {H.dials}  nty=ntx={NT}  RUNS {RUNS}  STEPS {STEPS}  K {K}  BURN {BURN}  SWEEPS {SWEEPS}  "
-      f"S_T/S_M/S_F {S_T}/{S_M}/{S_F}  ETA {ETA}  EVAL {EVAL} every {EVERY}  FINAL {FINAL}  schemes {SCHEMES}  "
+      f"S_T/S_M/S_F {S_T}/{S_M}/{S_F}  ETA {ETA} SCALE {SCALE or 'none'} FLOOR {FLOOR} CLIP {CLIP}  EVAL {EVAL} every {EVERY}  FINAL {FINAL}  schemes {SCHEMES}  "
       f"kappas {KAPPAS}")
 
 
@@ -403,7 +406,7 @@ def fmt(v):
 
 results = json.load(open(OUT)) if os.path.exists(OUT) and os.environ.get("APPEND", "1") == "1" else {}
 CONFIG = dict(MODEL=MODEL, **H.dials, NT=NT, RUNS=RUNS, STEPS=STEPS, K=K, BURN=BURN, SWEEPS=SWEEPS, S_T=S_T,
-              S_M=S_M, S_F=S_F, ETA=ETA, EVAL=EVAL, EVERY=EVERY, FINAL=FINAL, SEED=SEED)
+              S_M=S_M, S_F=S_F, ETA=ETA, SCALE=SCALE, FLOOR=FLOOR, CLIP=CLIP, EVAL=EVAL, EVERY=EVERY, FINAL=FINAL, SEED=SEED)
 
 
 def rkey(kk):
@@ -456,11 +459,17 @@ for ik, kappa in enumerate(KAPPAS):
         t_train = 0.0
         for s in range(STEPS):
             t1 = time.time()
-            gs = []
+            gs, sts = [], []
             for r in range(RUNS):
                 st = tr.run(theta)
+                sts.append({k: st[k] for k in FIT})
                 gs.append(tr.gap(sc, st, target))
-            theta = step(theta, mean_stats(gs), eta=ETA)
+            g = mean_stats(gs)
+            if SCALE == "fwd":
+                pf = mean_stats(sts)
+                g = {k: np.clip(g[k] / np.maximum(pf[k], FLOOR / np.size(pf[k])), -CLIP / ETA, CLIP / ETA)
+                     for k in FIT}
+            theta = step(theta, g, eta=ETA)
             t_train += time.time() - t1
             if (s + 1) % EVERY == 0:
                 ev, _ = forward_eval(P, theta, EVAL, SEED + 777)
