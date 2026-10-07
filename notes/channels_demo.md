@@ -299,21 +299,32 @@ blocks (400 sweeps, 14 s), forward 12 x 12.
 
 | horizontal pairs of present neighbours | full side | partial | corner | apart | present | sugar |
 |---|---|---|---|---|---|---|
-| ideal | 0.092 | 0.114 | 0.013 | 0.780 | 0.590 | 0.088 |
-| forward, untrained | 0.010 | 0.027 | 0.003 | 0.960 | 1.000 | 0.039 |
-| forward, trained | 0.091 | 0.128 | 0.009 | 0.772 | 0.539 | 0.090 |
+| ideal | 0.047 | 0.115 | 0.002 | 0.836 | 0.352 | 0.190 |
+| forward, untrained | 0.010 | 0.027 | 0.003 | 0.960 | 1.000 | 0.153 |
+| forward, trained | 0.049 | 0.134 | 0.000 | 0.817 | 0.313 | 0.190 |
 
-Learned table at the shared edge: -1.9 at full side contact, -1.1 to
--1.4 at partial, -0.2 one cell apart.  Checks: two 4 x 4 rectangles
-abutting on a side regain 10 ring cells for the lattice gas at about
-0.19 nats per site at z = 0.74, so about 1.9 nats; and the presence
-unary moved from +6 to -3.6, about 10 nats, against 36 excluded sites
-at 0.19 plus log 25 for the offset entropy, about 10.  Both learned
-numbers are the free-energy quantities they should be.  First attempt
-failed: the ideal at mu 0.7 placed 5% objects (statistics on two or
-three rectangles) and the pair tables were fitted on all entries, so
-the absent-absent gap swamped the step; fixed by a denser ideal and the
-conditional fit.  images/learn_sugar.png: ideal, untrained, trained.
+Vertical pairs fit less well (partial 0.081 trained against 0.113 ideal);
+the forward statistics are a few hundred objects per evaluation and the
+trace is noisy.  Learned table at the shared edge: -1.7 to -1.8 at full
+side contact and misalignment 1, -1.3 at 2, -0.6 at 3, -0.1 one cell
+apart.  Checks: two 4 x 4 rectangles abutting on a side regain 10 ring
+cells for the lattice gas at about 0.19 nats per site at z = 0.74, so
+about 1.9 nats; and the presence unary moved from +6 to -4.3, about 10.3
+nats, against 36 excluded sites at 0.19 plus log 25 for the offset
+entropy, about 10.  Both learned numbers are the free-energy quantities
+they should be.  mu stays at 0.29 through the fit, as it should: given
+the objects the two fine levels are the same distribution.
+
+Two earlier attempts failed.  The ideal at mu 0.7 placed 5% objects
+(statistics on two or three rectangles) and the pair tables were fitted
+on all entries, so the absent-absent gap swamped the step; fixed by a
+denser ideal and the conditional fit.  Then stone had energy 0 on free
+cells, so the tile sweeps grew stone blobs over about half the plane;
+the ideal's tile Gibbs and its collapsed object moves (which integrate
+over water and sugar only) targeted different distributions, and the
+fit dragged mu to -0.28 to cover the mismatch.  Fixed by an infinite
+unary on stone (the painted rectangles are fixed cells, which the
+kernel skips).  images/learn_sugar.png: ideal, untrained, trained.
 
 ## What this does not test
 

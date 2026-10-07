@@ -49,12 +49,14 @@ class Sugar:
         return obj, tile
 
     def tile_factors(self, mu):
-        """Hard: sugar beside sugar or stone forbidden; unary mu on sugar."""
+        """Hard: sugar beside sugar or stone forbidden; unary mu on sugar;
+        stone forbidden on free cells (it comes only from the objects, which
+        paint fixes, and the kernel skips fixed cells)."""
         E = np.zeros((3, 3))
         E[SUGAR, SUGAR] = E[SUGAR, STONE] = E[STONE, SUGAR] = INF
         return [Factor.pair(("tile", "kind"), ("tile", "kind"), (0, 1), E, pad_b=WATER, pad_a=WATER, name="h"),
                 Factor.pair(("tile", "kind"), ("tile", "kind"), (1, 0), E, pad_b=WATER, pad_a=WATER, name="v"),
-                Factor.unary(("tile", "kind"), np.array([0.0, mu, 0.0]), name="mu")]
+                Factor.unary(("tile", "kind"), np.array([0.0, mu, INF]), name="mu")]
 
     def obj_factors(self, b, theta_h, theta_v):
         """Presence bonus b (energy -b on present) and the learned pair tables."""
