@@ -3,7 +3,8 @@ of channel grids, a tuple of views, factor descriptor rows and a tuple of
 tables, and knows nothing about which channel set wrote them.
 
 Per site, colour by colour: the energy of every candidate value is the sum
-of its factor rows (pair / count / unary), then one Gumbel-max draw over the
+of its factor rows (pair / count / unary, and with below packing the
+below-pair / below-count rows of finer channels that read it), then one Gumbel-max draw over the
 finite candidates.
 
 Certificate (channels.tex, 14): the home channel's cells carry a mass, a
@@ -57,6 +58,27 @@ def _energies(y, x, home, grids, hs, views, fac, tabs, out):
                 continue
             for t in range(D):
                 out[t] += tab[av[t], vb]
+        elif kind == 3:                                         # below-pair: b is home, a = the fine cells
+            r = hc // hb
+            vh = views[fac[f, 3]]
+            nu = tab.shape[0]
+            hist = np.zeros(nu, np.int64)
+            for yy in range(y * r, y * r + r):
+                for xx in range(x * r, x * r + r):
+                    hist[av[g[yy, xx]]] += 1
+            for u in range(nu):
+                if hist[u] > 0:
+                    for t in range(D):
+                        out[t] += hist[u] * tab[u, vh[t]]
+        elif kind == 4:                                         # below-count
+            r = hc // hb
+            vh = views[fac[f, 3]]
+            s = 0
+            for yy in range(y * r, y * r + r):
+                for xx in range(x * r, x * r + r):
+                    s += av[g[yy, xx]]
+            for t in range(D):
+                out[t] += tab[vh[t], s]
         else:                                                   # count
             r = hb // hc
             qy = (y * hc) // hb
@@ -287,7 +309,9 @@ def site_weights(y, x, e, g, g_d, mass, trunk, joins, Dmax, delta, T, w, lo, hi,
 def sweep(home, grids, hs, views, fac, tabs, fixed, colours, ncol, cert, joins, delta, T):
     g = grids[home]
     rows, cols = g.shape
-    D = views[fac[0, 2]].shape[0] if fac.shape[0] > 0 else 0
+    D = 0
+    if fac.shape[0] > 0:
+        D = views[fac[0, 3 if fac[0, 0] >= 3 else 2]].shape[0]   # the home view's domain
     has_cert = cert[4] == 1
     if has_cert:
         D = views[cert[0]].shape[0]
@@ -326,8 +350,8 @@ def sweep(home, grids, hs, views, fac, tabs, fixed, colours, ncol, cert, joins, 
 
 @njit(cache=True)
 def total_energy(home, grids, hs, views, fac, tabs, cert, joins, delta):
-    """(finite energy, inf count): the home-side rows at the current state,
-    each pair once (reflected rows, those with a negative offset in the home
+    """(finite energy, inf count): the home-side rows at the current state
+    (below rows skipped: they belong to the finer channel), each pair once (reflected rows, those with a negative offset in the home
     channel, skipped), counts once per block, plus the certificate."""
     g = grids[home]
     rows, cols = g.shape
@@ -339,6 +363,8 @@ def total_energy(home, grids, hs, views, fac, tabs, cert, joins, delta):
             t = g[y, x]
             for f in range(fac.shape[0]):
                 kind = fac[f, 0]
+                if kind >= 3:                                   # counted on the fine side
+                    continue
                 av = views[fac[f, 2]]
                 tab = tabs[fac[f, 7]]
                 if kind == 2:

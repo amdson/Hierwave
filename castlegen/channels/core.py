@@ -16,7 +16,10 @@ trunk with d = 0 or has a 4-neighbour q with mass_q >= mass_p and d_q < d_p.
 
 Model.compile(chan) packs, for the kernel of `chan`, the factors homed on it
 plus the reflections of same-level pair factors (transposed table, negated
-offset), and nothing homed below it.  Kinds is a tiny tile-set stand-in
+offset), and nothing homed below it.  compile(chan, below=True) also packs
+the factors homed on strictly finer channels that read `chan` (pairs at
+offset (0, 0) and counts), so the candidate energies are the full
+conditional of the joint (bidirectional).  Kinds is a tiny tile-set stand-in
 (name, tags, colour) so the demo does not depend on castlegen.tileset."""
 from __future__ import annotations
 
@@ -25,7 +28,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 INF_E = np.inf
-PAIR, COUNT, UNARY = 0, 1, 2
+PAIR, COUNT, UNARY, BPAIR, BCOUNT = 0, 1, 2, 3, 4
 
 
 # ------------------------------------------------------------------ kinds
@@ -123,7 +126,20 @@ class Certificate:
 
 @dataclass
 class Packed:
-    """What a kernel reads for one home channel."""
+    """What a kernel reads for one home channel.
+
+    fac rows (kind, bchan, aview, bview, oy, ox, pad, tab):
+      0 pair    tab[aview(home cell), bview(bchan at q)], aview the home view
+      1 count   tab[bview(bchan block), block sum of aview over home]
+      2 unary   tab[aview(home cell), 0]
+      3 below-pair   bchan = the finer channel, aview its view, bview the home
+                view, oy = ox = 0, pad = -1: sum over the fine cells s of the
+                home cell's block of tab[aview(z_s), bview(home cell)]
+      4 below-count  bchan, aview, bview as for 3: tab[bview(home cell),
+                block sum of aview over bchan]
+    Tables of kinds 3 and 4 are the factor's own (not transposed).
+    src[f]: index into model.factors of row f; transposed[f]: row f reads
+    the transpose of that factor's table (a reflected same-level pair)."""
     home: int
     grids: tuple
     hs: np.ndarray
@@ -137,6 +153,8 @@ class Packed:
     joins: np.ndarray             # (4, D, D) bool: t at p joined to t' across side d
     delta: float
     radius: int
+    src: np.ndarray = None        # (F,) int64
+    transposed: np.ndarray = None  # (F,) bool
 
 
 # ------------------------------------------------------------------ model
@@ -181,7 +199,7 @@ class Model:
             assert c.ports is None or all(p in t.views for p in c.ports), c
 
     # ----------------------------------------------------------- packing
-    def compile(self, home: str) -> Packed:
+    def compile(self, home: str, below: bool = False) -> Packed:
         hc = self.chan(home)
         cidx = {c.name: i for i, c in enumerate(self.channels)}
         vidx, views = {}, []
@@ -189,19 +207,26 @@ class Model:
             for v, arr in c.views.items():
                 vidx[c.name, v] = len(views)
                 views.append(np.ascontiguousarray(arr, np.int64))
-        rows, tabs = [], []
+        rows, tabs, src, transp = [], [], [], []
         radius = 0
+        fi = 0
 
-        def add(kind, b, av, bv, oy, ox, pad, table):
+        def add(kind, b, av, bv, oy, ox, pad, table, tr=False):
             rows.append([kind, b, av, bv, oy, ox, pad, len(tabs)])
             tabs.append(np.ascontiguousarray(table, np.float64).reshape(table.shape[0], -1))
+            src.append(fi)
+            transp.append(tr)
 
-        for f in self.factors:
+        for fi, f in enumerate(self.factors):
             if f.a[0] != home:
                 if f.kind == PAIR and f.b[0] == home and self.chan(f.a[0]).h == hc.h:
                     # read from b's side: a sits at p - off
-                    add(PAIR, cidx[f.a[0]], vidx[f.b], vidx[f.a], -f.off[0], -f.off[1], f.pad_a, f.table.T)
+                    add(PAIR, cidx[f.a[0]], vidx[f.b], vidx[f.a], -f.off[0], -f.off[1], f.pad_a, f.table.T, True)
                     radius = max(radius, abs(f.off[0]), abs(f.off[1]))
+                elif below and f.kind != UNARY and f.b[0] == home and self.chan(f.a[0]).h < hc.h:
+                    # read from the coarse side: the fine cells lie inside the home cell
+                    assert f.off == (0, 0), f"{f.name}: a below-pair needs offset (0, 0)"
+                    add(BPAIR if f.kind == PAIR else BCOUNT, cidx[f.a[0]], vidx[f.a], vidx[f.b], 0, 0, -1, f.table)
                 continue
             if f.kind == UNARY:
                 add(UNARY, -1, vidx[f.a], -1, 0, 0, -1, f.table[:, None])
@@ -210,7 +235,7 @@ class Model:
                 if f.b[0] == home:
                     radius = max(radius, abs(f.off[0]), abs(f.off[1]))
                     if f.off != (0, 0):
-                        add(PAIR, cidx[home], vidx[f.b], vidx[f.a], -f.off[0], -f.off[1], f.pad_a, f.table.T)
+                        add(PAIR, cidx[home], vidx[f.b], vidx[f.a], -f.off[0], -f.off[1], f.pad_a, f.table.T, True)
             else:
                 add(COUNT, cidx[f.b[0]], vidx[f.a], vidx[f.b], 0, 0, -1, f.table)
         cert = np.array([-1, -1, -1, 0, 0, 0], np.int64)
@@ -243,15 +268,16 @@ class Model:
                       np.array([c.h for c in self.channels], np.int64), tuple(views), fac,
                       tuple(tabs) if tabs else (np.zeros((1, 1)),), np.ascontiguousarray(hc.fixed),
                       np.ascontiguousarray(colours, np.int64), ncol, cert, np.ascontiguousarray(joins),
-                      float(delta), radius)
+                      float(delta), radius, np.array(src, np.int64), np.array(transp, np.bool_))
 
     # ---------------------------------------------------------- sampling
-    def sweep(self, home: str, n: int, seed: int = 0, T: float = 1.0):
+    def sweep(self, home: str, n: int, seed: int = 0, T: float = 1.0, below: bool = False):
         """n Gibbs sweeps of channel `home` (level 1).  Grids are updated in
         place.  Returns the violation count of the last sweep (sites with no
-        finite candidate)."""
+        finite candidate).  below: also read the factors homed on finer
+        channels (the joint's full conditional)."""
         from . import kernel
-        P = self.compile(home)
+        P = self.compile(home, below)
         hc = self.chan(home)
         assert P.grids[P.home] is hc.grid or np.shares_memory(P.grids[P.home], hc.grid)
         kernel.seed(seed)
@@ -268,17 +294,17 @@ class Model:
         P = self.compile(home)
         return kernel.total_energy(P.home, P.grids, P.hs, P.views, P.fac, P.tabs, P.cert, P.joins, P.delta)
 
-    def site_energies(self, home: str, y: int, x: int):
+    def site_energies(self, home: str, y: int, x: int, below: bool = False):
         """(D,) conditional energies of site (y, x) of `home` over its domain
         (the factor rows only; no certificate), for tests."""
         from . import kernel
-        P = self.compile(home)
+        P = self.compile(home, below)
         D = self.chan(home).D
         return kernel.site_energies(y, x, P.home, P.grids, P.hs, P.views, P.fac, P.tabs, D)
 
     def describe(self, home: str) -> str:
         P = self.compile(home)
-        names = ["pair", "count", "unary"]
+        names = ["pair", "count", "unary", "bpair", "bcount"]
         lines = [f"{home}: {P.fac.shape[0]} factor rows, radius {P.radius}, {P.ncol} colours"
                  + (", certificate" if P.cert[4] else "")]
         for r in P.fac:
