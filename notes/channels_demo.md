@@ -326,6 +326,45 @@ fit dragged mu to -0.28 to cover the mismatch.  Fixed by an infinite
 unary on stone (the painted rectangles are fixed cells, which the
 kernel skips).  images/learn_sugar.png: ideal, untrained, trained.
 
+## Fitting the hand-tuned knobs (2026-10-06)
+
+`notes/experiments/learn_knobs.py`.  A recovery test: can moment matching
+replace the tuning session of chan_combined3?  Nine soft knobs, each a
+linear multiplier on a statistic: level 8 lam8, f, cut, bonus, win_bonus
+(statistic = finite energy change of u8 with the knob raised by one, so
+exactly the multiplied count), level 1 nu, lam, mu, dangle (mismatches,
+incoherent coordinate pairs, cells off the refinement, dangling ports).
+Targets: the hand-tuned procedure's averages over 6 seeds.  Start: every
+knob at 1.  The model is the budgeted procedure.  Level 8 fitted first
+(150 steps, 6 min), then level 1 on it (100 steps, 11 min).  Evaluation
+on 4 fresh seeds.
+
+| | lam8 | f | cut | bonus | win_bonus | nu | lam | mu | dangle |
+|---|---|---|---|---|---|---|---|---|---|
+| hand-tuned | 1.00 | 0.10 | 2.00 | 4.00 | 2.00 | 6.00 | 1.00 | 2.00 | 1.00 |
+| fitted | 0.86 | 0.02 | 1.87 | 2.71 | 1.70 | 5.77 | 0.92 | 1.97 | 1.04 |
+
+| held out | windows | trunk windows | seams | root cells | trunks | pruned, violations, no-candidate |
+|---|---|---|---|---|---|---|
+| hand-tuned | 176 | 11.8 | 37 | 2887 | 12.5 | 0 |
+| all knobs 1 | 0 | 0 | 0 | 6134 | 244 | 0 |
+| fitted | 194 | 12.5 | 40 | 3188 | 13.0 | 0 |
+
+Level 1 recovers the hand values to within noise.  Level 8 matches its
+statistics but not all its values: f fell to about 0 and the bonuses sit
+lower, a cheaper perimeter paying for smaller bonuses; bonus was still
+drifting up (2.65 to 3.04 over the last 50 steps), so that direction is
+flat and slow, not converged.  Per-seed statistics vary by a factor of two
+(the surface), which is most of the noise.  images/learn_knobs.png:
+hand-tuned, all knobs 1 (a mat of roots along the surface: no windows,
+nothing holding the tiles to the exemplar), fitted.  Indistinguishable
+from the hand-tuned run by eye.
+
+What this does not do: it rescales table shapes designed by hand, with
+targets from the hand-tuned run.  The tables the fine level implies (a
+per-window unary, soft pair tables over compatible edge signatures) are
+not learned here; that is the sugar test's job at scale.
+
 ## What this does not test
 
 Promotion of a coordinate view, exemplar coordinates (the roots use counted
