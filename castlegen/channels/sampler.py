@@ -2,7 +2,7 @@
 channel on the numba kernel (kernel.sweep_cap over core.Model.compile(home,
 hard_first=True)).  Generic: nothing here knows a channel set.
 
-Sampler(model, home, K, hb, seed, adm=False)
+Sampler(model, home, K, hb, seed, adm=True)
   init()            dormancy (dsl_updates C1): A_p = {t : E_par,p(t) < inf}, E_par the
                     hard rows that read other channels (parents, painted channels) or
                     are unaries; |A_p| = 1 sets z_p and marks p dormant; an hb x hb
@@ -111,7 +111,7 @@ def generate(levels, S, rng=None, painters=None, relax=None):
 
 
 class Sampler(ChannelSampler):
-    def __init__(self, model, home, K=None, hb=1, seed=0, soft_model=None, adm=False):
+    def __init__(self, model, home, K=None, hb=1, seed=0, soft_model=None, adm=True):
         self.model, self.home, self.hb = model, home, int(hb)
         self.adm, self.adm_id = bool(adm), None
         self.name, self.soft_model = home, soft_model
