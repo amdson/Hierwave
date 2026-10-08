@@ -575,3 +575,233 @@ level is identical by construction (shared seeds, the cap is on obj only).
 fraction, a fully dormant world costs 2-3% of a fully active one for its
 block loop, and `init` is 0.07 ms.  The obj level is 1-15% of a forward
 run; tiles dominate.
+
+### Stages 4-5: the bootstrap fit
+
+Script `notes/experiments/circles_biome_fit.py` (callbacks and
+`materialise` in `castlegen/channels/biome_fit.py`, test
+`tests/test_biome_fit.py`), outputs `images/cbio_stage45.json`,
+`images/cbio_stage45_heldout.json` (`HELDOUT=1`), `images/cbio_fit_tables.png`,
+renders `images/cbio_fit_oracle.png`, `images/cbio_fit_top_<targets>_K<K>.png`,
+log `images/cbio_stage45_log.txt`.  Wall time 1453 s + 90 s (holdout run).
+
+Config: `nty = ntx = 6`, default dials, forward `S_T = S_M = 30`, `S_F =
+20` on the old (non-Sampler) path, `train.fit` with `iters = 5`,
+`n_contexts = 8`, `l2 = 1e-4`, holdout 0.1, 8 consistency probes per
+context; AIS `K = 32`, `M = 16`, `L = 30`, linear schedule.  Mid: stamp
+features (68: 4 unary + 4 x 16 OFF8 pair counts over `dem`), designed
+offset from the designed + support model (mask, pres, `INF` on the
+support: `fit` drops the inadmissible values before calling the
+targets), K-step = draw from `pi`, `dem` repainted, tiles whose demand
+changed redrawn.  Tables by `materialise`: single objects and pairs
+painted on a 5 x 5 block canvas (`u[0]`, `g_d[0, .]` exactly 0); the
+test checks it reproduces `PAIR` / `obj_u` to 1e-9 from
+`theta = (fz on free / dirt / air, 0 elsewhere)` (the true psi is a
+unary over the paint, so the feature set contains it exactly).
+
+Mid targets: `exact` = `Oracle.mid_probs`; `ais` = `AISTargets("tile",
+block + spill border)` with the default split: honour reads `dem`, so it
+is in `p_0`, nothing is annealed and AIS is exact (max L1 to `mid_probs`
+6e-14 over 20 sites); `aisH` = the same with `anneal_names=["honour"]`
+(`INF -> L`), the estimated-targets column, run on 4 contexts with 1
+probe each because every probe costs `2 D` window runs (an AIS run is
+10 ms here against 0.057 ms for the exact split).
+
+#### Stage 4, the mid level
+
+Double-centred over the finite entries against `reference()`.
+"Held-out" = present pairs `(t, t')` that never occurred as (candidate,
+neighbour value) in a data record (probes excluded); `n` per offset h /
+v / d1 / d2, of 1002 / 1014 / 1024 / 1024 finite present pairs; in
+brackets those with a nonzero interaction.
+
+| setting | records | held-out n | held-out max err | all max err | obj_u err | slope / corr h, v | viol targets / fit | KL held | s | tau obj\|biome, tile\|obj |
+|---|---|---|---|---|---|---|---|---|---|---|
+| exact K0 | 692 | 52/26/62/60 (2/2/0/0) | **0.0005** | 0.0010 | 0.0003 | 1.000/1.000, 1.000/1.000 | 7e-15 / 2e-14 | 7e-6 | 27 | 1.20, 0.91 |
+| exact K3 | 2768 | 2/0/0/0 | 0.0001 | 0.0009 | 0.0003 | 1.000/1.000, 1.000/1.000 | 8e-15 / 3e-14 | 2e-6 | 41 | 1.23, 1.39 |
+| ais K0 | 692 | 52/26/62/60 | 0.0005 | 0.0010 | 0.0003 | 1.000/1.000, 1.000/1.000 | 9e-14 / 3e-14 | 7e-6 | 44 | 1.20, 0.91 |
+| ais K3 | 2768 | 2/0/0/0 | 0.0001 | 0.0009 | 0.0003 | 1.000/1.000, 1.000/1.000 | 9e-14 / 3e-14 | 2e-6 | 64 | 1.23, 1.39 |
+| aisH K0 (4 ctx) | 340 | 130/179/203/317 | 0.86 | 0.97 | 0.80 | 0.81/0.976, 0.67/0.81 | 21 / 2e-14 | 0.62 | 315 | 1.09, 1.05 |
+| aisH K3 (4 ctx) | 1360 | 10/6/30/47 | 0.50 | 1.06 | 0.90 | 0.69/0.985, 0.67/0.987 | 27 / 1e-14 | 0.67 | 509 | 1.23, 1.02 |
+
+Gate (exact, K = 0, held-out within 0.05): **passed**, 0.0005.  Named
+shared-ring entries of `obj_h` (double-centred; the two most attractive
+conflict-free pairs, raw -3.42 each): disc 4 (centre (2, 5)) left of
+disc 9 (centre (4, 2)): reference -2.243, exact / ais -2.243, aisH K0
+-2.08, aisH K3 -1.25; bar 20 left of bar 17: -2.447, -2.446 / -2.447,
+-2.06, -1.76.
+
+AIS with honour annealed (20 sites, every candidate): L1 to `mid_probs`
+median 0.89, max 1.54; `(log Z - exact) / se` median -4.6, 35% within 3
+se.  The delta-method se saturates at 1 (one chain dominates the
+weights: se p90 0.98, max 1.00), so it is not an error bar here; the
+estimate is biased low by several nats, differently per candidate.
+
+The held-out count above is small because the forward contexts cover
+almost every pair.  89% of the slots are dormant at stage 4, since
+`bio_u0` without the learned top unary puts 88% of the biomes at none,
+but the remaining slots still see nearly all values next to each other.
+The strict test (`HELDOUT=1`) uses exact targets at K = 0, with every
+biome forced to admit one family, so the other family's 16 values never
+occur:
+
+| contexts admit | pairs with an unseen value: n (interacting), max err h / v / d1 / d2 | unseen-unseen max err h / v | obj_u max err |
+|---|---|---|---|
+| discs only | 756 (65) / 768 (16) / 768 / 768: 0.0003 / 0.0002 / 0.0001 / 0.00005 | 0.0003 / 0.00004 | 0.032 |
+| bars only | 746 (83) / 758 (50) / 768 / 768: 0.0008 / 0.0015 / 0.0007 / 0.0004 | 0.0008 / 0.0014 | 0.040 |
+
+#### Stage 5, the top level
+
+Mid bias installed: the `exact K0` stamp theta materialised (`obj_*`),
+the same for every top setting.  Tabular `bio_h`, `bio_v`, `bio_u`,
+designed offset `bio_u0`.  Targets:
+
+- `exact` = `Oracle.top_probs`, i.e. `p*(T | its four slots)`, *not*
+  collapsed over the slots.
+- `ais` = `AISTargets("obj", the cell's 2 x 2 slots)`, with
+  `after_change` = paint allow + dormancy (slots of a none cell set to
+  absent and fixed).  The annealed rows are `obj_h/v/d1/d2` and `sup_*`
+  (same-level, `INF -> L = 30`): a support conflict costs 30 nats
+  instead of being forbidden, a weight of e^-30 per violation, negligible
+  at the end of the anneal.  `p_0` = pres + obj_u + mask (inf kept).  The
+  neighbouring slots are a fixed boundary, and their rows to the window
+  are kept.
+- `hook` = the same window with log Z by enumeration over the admissible
+  values under the installed tables (`biome_fit.Bench.top_hook`, checked
+  against brute force through `Model.energy`).  This is the exact
+  collapsed target, added as a third column.
+
+K-step: paint allow, dormancy, `Oracle.mid_move` on the four slots.
+Oracle moments: 50 + 400 sweeps (group = identity).
+
+L1 to the oracle moments, 64 forward runs with everything installed
+(`edge_air_top` held out):
+
+| setting | records | KL held | viol targets | s | obj_h | obj_u | bio_h | bio_v | bio_u | present_disc | present_bar | contact | dormant | edge_air_top | conflict |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| exact K0 | 1440 | 0.46 | 1e-16 | 12 | 1.385 | 1.221 | 1.793 | 1.768 | 1.470 | 0.554 | 0.056 | 0.100 | 0.684 | 0.093 | 0 |
+| exact K3 | 5760 | 0.83 | 1e-16 | 13 | 0.986 | 0.879 | 1.384 | 1.373 | 1.049 | 0.406 | 0.029 | 0.092 | 0.460 | 0.073 | 0 |
+| ais K0 | 1440 | 0.028 | 1.4 | 65 | 0.386 | 0.240 | 0.222 | 0.194 | 0.143 | 0.104 | 0.026 | 0.054 | 0.032 | 0.016 | 0 |
+| ais K3 | 5760 | 0.033 | 1.3 | 131 | 0.386 | 0.237 | 0.216 | 0.186 | 0.137 | 0.100 | 0.023 | 0.054 | 0.030 | 0.015 | 0 |
+| hook K0 | 1440 | 0.021 | 4e-16 | 51 | 0.396 | 0.244 | 0.236 | 0.212 | 0.153 | 0.107 | 0.029 | 0.054 | 0.034 | 0.016 | 0 |
+| hook K3 | 5760 | 0.028 | 7e-16 | 135 | 0.377 | 0.231 | 0.205 | 0.170 | 0.129 | 0.097 | 0.024 | 0.050 | 0.030 | 0.014 | 0 |
+| mid only (no top term) | | | | | 1.656 | 1.488 | 1.906 | 1.917 | 1.731 | 0.616 | 0.127 | 0.152 | 0.866 | 0.106 | 0 |
+| eval noise | | | | | 0.291 | 0.053 | 0.064 | 0.071 | 0.036 | 0.013 | 0.002 | 0.003 | 0.007 | 0.002 | 0 |
+
+(obj_v / d1 / d2 track obj_h within 0.02 in every row.)  The fit's
+consistency violation is 1e-15 to 3e-14 everywhere.  Both the tabular
+top potential and the mid stamp potential are joint potentials (form
+(i)), so they are closed by construction.
+
+Biome histogram (none / discs / bars / both):
+
+| source | none | discs | bars | both |
+|---|---|---|---|---|
+| oracle | 0.014 | 0.531 | 0.074 | 0.381 |
+| hook K3 | 0.044 | 0.469 | 0.108 | 0.379 |
+| ais K0 | 0.046 | 0.462 | 0.114 | 0.378 |
+| exact K0 | 0.698 | 0.094 | 0.125 | 0.083 |
+| exact K3 | 0.474 | 0.230 | 0.138 | 0.158 |
+
+Learned `bio_u` in the gauge `bio_u[none] = 0`:
+
+| setting | none | discs | bars | both |
+|---|---|---|---|---|
+| zeroth order | 0 | -2.77 | -2.77 | -4.39 |
+| exact K0 | 0 | -0.94 | -1.74 | -2.62 |
+| exact K3 | 0 | -2.39 | -2.15 | -3.88 |
+| ais K0 | 0 | -3.73 | -3.02 | -5.24 |
+| ais K3 | 0 | -3.66 | -2.95 | -5.18 |
+| hook K0 | 0 | -3.74 | -2.97 | -5.24 |
+| hook K3 | 0 | -3.78 | -3.00 | -5.27 |
+
+The collapsed fits sit about 1 nat below zeroth order on discs and both,
+and 0.2-0.9 nats below on bars.  That is the shared-ring attraction and
+the cheaper edge objects, which make `p*` prefer discs.  Learned `bio_h`
+/ `bio_v` double-centred are small (|entries| <= 0.19).  The oracle's
+`-log(p(T,T') / p(T) p(T'))` pattern reaches 0.6 (max difference 0.62
+for the collapsed fits, 0.71-0.97 for exact).  That pattern is a
+marginal-correlation statistic of a strongly unary-driven chain, not the
+coupling, so the comparison is qualitative only.
+
+`Phi_top(none)`: the AIS `log Z` of the none candidate is exactly 0.0
+(se 0) at all 36 cells of a fresh context in every setting, and so is
+the hook's.  There is one configuration (dormancy fixes the four slots
+at absent), and materialisation gives `u[0] = 0` and `g_d[0, .] = 0`, so
+`F = 0` with no learned term.  AIS against the hook at the other three
+candidates: |delta log Z| max 0.23-0.47, se median 0.085-0.11, 99-100%
+within 3 se, at 3.3 ms per run.  `tau(obj | biome)` at the final theta
+is 1.2-1.6 sweeps.
+
+The residual on the collapsed rows is the world boundary.  Presence on
+edge / interior slots:
+
+| run | edge | interior |
+|---|---|---|
+| oracle | 0.90 | 0.79 |
+| forward (hook K3) | 0.72 | 0.78 |
+| forward obj, oracle's biome clamped | 0.77 | 0.78 |
+| oracle obj, same biomes | 0.91 | 0.77 |
+
+An object at the world edge loses its off-grid ring tiles (~0.85 nat
+each).  `stamp_features` sees this, because its paint is clipped, but
+the position-free materialised tables cannot carry it.  That accounts
+for the whole of the `obj_u` and `present_disc` gap and most of
+`bio_u`'s.
+
+**What the numbers show.**
+
+1. *Stamp features generalise to unseen pairs, exactly.*  The true
+   induced potential is a unary over the `dem` paint, which the feature
+   set contains.  So 692 records give every table to 1e-3, and a fit
+   that never saw a bar (or a disc) recovers every pair involving it to
+   1.5e-3.  Q1 stays with derived features.
+2. *The cost of estimated targets.*  On this model the default
+   `AISTargets` is exact at 0.06 ms per window, because honour is a
+   parent row and the tiles are independent given `dem`.  Forcing honour
+   into the anneal makes AIS 175 times dearer and badly wrong at K = 32,
+   M = 16.  It is biased several nats low, the targets are inconsistent
+   by 20 nats, and the tables are off by 0.5-1 with the attraction
+   shrunk (slope 0.7-0.8).  The reported se saturates and does not flag
+   this.  The lesson is the split, not the AIS budget: anything that
+   reads only parents belongs in `p_0`.  At the top, where AIS does real
+   work (obj pairs and support annealed), it matches the exact collapsed
+   hook within its se, and the fits and end-to-end monitors of `ais` and
+   `hook` agree within eval noise.
+3. *What K buys.*  Nothing at the mid level: the fit is already exact at
+   K = 0, and K = 3 is 4x the records and covers every pair.  At the top
+   it depends on the targets:
+   - With `top_probs`, the non-collapsed `p*(T | slots)`, the bootstrap
+     is the S1 leak in its purest form.  Contexts from `q` are 88% none
+     (all slots absent), and their target is `softmax(-bio_u0)`, which
+     favours none again, so the fit learns only a third of the unary.
+     K = 3 moves the contexts and halves the gap (dormant 0.68 -> 0.46,
+     bio_u L1 1.47 -> 1.05) but stays far off.
+   - With the collapsed targets (`ais`, `hook`), K changes nothing
+     measurable, because the target no longer depends on where the slots
+     are.
+
+   So the top target must be collapsed over the level below (AIS or a
+   hook), which is what C2 says.  `ExactTargets(top_probs)` is the wrong
+   object for a sampler that draws `T` before its slots.
+4. `Phi_top(none) = 0` exactly, from every setting.
+5. *End to end.*  `conflict` is 0 everywhere.  The collapsed settings
+   take the none share of the biome histogram from 0.87 (mid only) to
+   0.04, against the oracle's 0.01, and cut every L1 by 4-12x.  But the
+   gate (within eval noise on the fitted features) **fails**: bio_u
+   0.13-0.15 against noise 0.036, obj_u 0.23-0.24 against 0.053, and
+   present_disc 0.10 against 0.013, with obj_h at noise.  The cause is
+   the world-boundary discount above, not the top fit.  The fix is a
+   boundary-aware install (an edge-class `obj_u`, or the batched-delta
+   stamp potential at edge slots), not tuning; the dials were not
+   touched.
+
+Deviations:
+
+- `aisH` ran on 4 contexts with 1 probe each, because of the cost.
+- `fit_windows` was not run.
+- The top AIS window is the four written slots, not dilated.  The
+  neighbouring slots enter as a fixed boundary through the annealed
+  rows' window, so `log Z(none) = 0` holds in absolute value.
+- The `hook` column is an addition.
+- Every top setting uses the `exact K0` mid tables.
