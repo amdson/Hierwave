@@ -1015,3 +1015,631 @@ Tests: `tests/test_migrate.py` (7).  The full suite has 8 pre-existing
 failures unrelated to the channel code (`pipeline.py:217` NameError in
 test_flow / test_promise / test_support; data files missing in
 test_blockconn / test_blockfield).
+
+# The biome circles test, stage 5b
+
+Follows `notes/circles_biome_test.md` ("Stages 4-5: the bootstrap fit").
+
+### Stage 5b: the boundary
+
+The stage 5 end-to-end gate failed, and the failure was attributed to the
+world boundary.  This stage tests whether the boundary is the whole story.
+
+Script `notes/experiments/circles_biome_edge.py`, output
+`images/cbio_stage5b.json`, log `images/cbio_stage5b_log.txt`, renders
+`images/cbio_edge_oracle.png` and `images/cbio_edge_forward.png` (torus,
+final setting), and `images/cbio_edge_forward_open.png` (open world, stage 5
+potentials).  Wall time 177 s.
+
+Config: `NT = 6`, forward `S = (30, 30, 20)` on the old path, 64 runs per
+eval, oracle 50 + 400 sweeps, seeds as in stage 5.  The "all" row of part 1
+reproduces the stage 5 `hook K0` row exactly (obj_h 0.396, obj_u 0.244,
+bio_u 0.153, present_disc 0.107).
+
+- **Eval noise** = L1 between two independent 64-run forward evals (seeds
+  901 / 902), as in stage 5.
+- **Oracle noise** = L1 between two independent 400-sweep oracle chains.
+
+A forward-vs-oracle L1 carries both, so a fit with no bias sits at roughly
+`sqrt((noise^2 + oracle_noise^2) / 2)`, i.e. 0.7-0.9 x eval noise.  The gate
+is the stage 5 one: every fitted feature (`obj_h/v/d1/d2`, `obj_u`, `bio_h/v`,
+`bio_u`) has L1 <= eval noise, and `conflict = 0`.
+
+**Periodic world.**  The generic kernel cannot wrap: a pair row whose
+neighbour is off the grid reads `pad` or vanishes (`kernel._energies`), and
+`kernel.py` is not ours to change.  So `CirclesBiome(nty, ntx,
+periodic=True)` (added to `circles_biome.py`) stores the torus padded with a
+ghost ring one top cell wide (8 x 8 top cells for the 6 x 6 torus).
+
+- **Ghost cells.**  Ghost cells are fixed and are exact copies of the
+  opposite interior cells (`C.sync`).  Every interior site therefore reads
+  its wrapped neighbours through the unchanged kernel, `stamp_features`,
+  `_delta` and `Bench.top_hook`.
+- **Forward.**  The forward sweeps one class of a torus-proper colouring at
+  a time and syncs after each class: `(y + x) % 2` at the top, 2 x 2 at the
+  mid level, one class for tiles.  This is exact Gibbs on the torus, not a
+  lagged copy.
+- **Oracle.**  The oracle writes a mid move to every copy of the slot,
+  repaints and redraws around each copy, then syncs.
+- **Paints and stats.**  `paint_dem` / `paint_allow` sync.  `stats` crops the
+  torus and wraps every pair, ring and top-edge band.
+- **Tests.**  The new tests check the wrapped paint against an independent
+  modular painter, and `mid_probs` against direct torus painting.  They also
+  check the tile energy identity on a periodic 2 x 2 world, that ghosts stay
+  copies after oracle and forward runs, and that `stats_region(margin=0)` is
+  `stats`.
+- **Not supported.**  The Sampler path (`use_sampler`) is not wired for the
+  torus and asserts.
+
+#### 1. Interior-only evaluation (open world, stage 5 potentials)
+
+The interior is defined per level:
+
+- `int`: top cells, slots and tiles at least one block of their own level
+  from the edge (4 x 4 top cells, 10 x 10 slots).
+- `deep`: the slots and tiles inside the interior top cells (8 x 8 slots).
+
+L1 to the oracle, with the eval noise below each row:
+
+| region | obj_h | obj_v | obj_d1 | obj_d2 | obj_u | bio_h | bio_v | bio_u | present_disc | present_bar | dormant | contact | bio_hist | edge_air_top | conflict | gate |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| all | 0.396 | 0.390 | 0.391 | 0.391 | **0.244** | **0.236** | **0.212** | **0.153** | 0.107 | 0.029 | 0.034 | 0.054 | 0.153 | 0.016 | 0 | fail |
+| noise | 0.291 | 0.304 | 0.345 | 0.333 | 0.053 | 0.064 | 0.071 | 0.036 | 0.013 | 0.002 | 0.007 | 0.003 | 0.036 | 0.002 | 0 | |
+| oracle noise | 0.138 | 0.134 | 0.142 | 0.149 | 0.035 | 0.062 | 0.056 | 0.042 | 0.014 | 0.008 | 0.004 | 0.001 | 0.042 | 0.001 | 0 | |
+| int | 0.317 | 0.316 | 0.342 | 0.340 | **0.089** | 0.108 | **0.126** | 0.035 | 0.036 | 0.013 | 0.025 | 0.008 | 0.035 | 0.010 | 0 | fail |
+| noise | 0.369 | 0.368 | 0.417 | 0.395 | 0.080 | 0.161 | 0.083 | 0.057 | 0.017 | 0.002 | 0.007 | 0.005 | 0.057 | 0.003 | 0 | |
+| oracle noise | 0.165 | 0.167 | 0.179 | 0.184 | 0.043 | 0.106 | 0.095 | 0.034 | 0.008 | 0.001 | 0.006 | 0.003 | 0.034 | 0.000 | 0 | |
+| deep | 0.389 | 0.402 | 0.430 | 0.422 | 0.101 | 0.108 | **0.126** | 0.035 | 0.028 | 0.003 | 0.012 | 0.013 | 0.035 | 0.010 | 0 | fail |
+| noise | 0.453 | 0.474 | 0.543 | 0.512 | 0.102 | 0.161 | 0.083 | 0.057 | 0.021 | 0.002 | 0.009 | 0.002 | 0.057 | 0.004 | 0 | |
+
+Moments (oracle / forward):
+
+| region | present_disc | present_bar | dormant | contact | edge_air_top |
+|---|---|---|---|---|---|
+| all | 0.665 / 0.558 | 0.159 / 0.188 | 0.014 / 0.048 | 0.342 / 0.396 | 0.539 / 0.523 |
+| int | 0.615 / 0.579 | 0.172 / 0.185 | 0.018 / 0.043 | 0.385 / 0.377 | 0.536 / 0.526 |
+| deep | 0.604 / 0.576 | 0.188 / 0.185 | 0.024 / 0.036 | 0.373 / 0.386 | 0.534 / 0.524 |
+
+Biome histogram, none / discs / bars / both:
+
+| | all | int |
+|---|---|---|
+| oracle | 0.014 / 0.531 / 0.074 / 0.381 | 0.024 / 0.484 / 0.108 / 0.383 |
+| forward | 0.048 / 0.458 / 0.117 / 0.377 | 0.036 / 0.467 / 0.112 / 0.385 |
+
+Presence on the world-edge ring of slots / elsewhere:
+
+- oracle 0.912 / 0.787;
+- forward 0.707 / 0.764.
+
+The open world's interior is not the torus either.  The L1 of the
+open-world `int` oracle to the torus oracle is:
+
+- bio_u 0.052;
+- present_disc 0.039;
+- dormant 0.025;
+- obj_u 0.080.
+
+So in a 6 x 6 world the edge reaches the interior through the slot pairs and
+the biome chain.
+
+#### 2. Periodic world: refit and evaluate
+
+**Mid fit (stage 4 exact K0 on the torus).**
+
+- Size and time: 692 records, 16 s.
+- Fit quality: consistency violation 5e-15 (targets) / 2e-14 (fit).
+- Error to `reference()` (double-centred, finite present pairs): max 9e-5;
+  obj_u 2e-5.
+- Against the open-world exact-K0 tables: max difference 1e-3 on the
+  admissible entries.
+
+The mid potential does not see the boundary, as expected: the induced
+potential is a unary over the paint, and the edge only removes paint.
+
+**Top fit (stage 5 hook K0 on the torus).**
+
+- Size and time: 1440 records, 56 s.
+- Fit quality: KL held 0.023, consistency violation 9e-16.
+
+Learned `bio_u`, gauge none = 0:
+
+| world | none | discs | bars | both |
+|---|---|---|---|---|
+| zeroth order | 0 | -2.77 | -2.77 | -4.39 |
+| open (stage 5) | 0 | -3.74 | -2.97 | -5.24 |
+| torus | 0 | -2.46 | -1.82 | -3.19 |
+
+The stage 5 fit's 1.0-1.3 nats of extra pull toward discs and both was the
+cheaper edge objects.  On the torus the learned unary sits 0.3-1.2 nats
+*above* zeroth order: the support between neighbouring slots costs
+configurations.
+
+**End to end on the torus**, L1 to the torus oracle:
+
+| setting | obj_h | obj_v | obj_d1 | obj_d2 | obj_u | bio_h | bio_v | bio_u | present_disc | present_bar | dormant | contact | edge_air_top | conflict | gate |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| torus fits, S = 30 | 0.249 | 0.242 | 0.257 | 0.260 | 0.064 | 0.062 | 0.065 | 0.035 | 0.021 | 0.002 | 0.008 | 0.008 | 0.002 | 0 | **pass** |
+| eval noise | 0.296 | 0.307 | 0.331 | 0.310 | 0.068 | 0.085 | 0.067 | 0.048 | 0.026 | 0.016 | 0.007 | 0.003 | 0.004 | 0 | |
+| oracle noise | 0.128 | 0.133 | 0.132 | 0.134 | 0.033 | 0.061 | 0.052 | 0.026 | 0.008 | 0.003 | 0.002 | 0.001 | 0.006 | 0 | |
+| torus fits, repeat eval | 0.235 | 0.242 | 0.249 | 0.243 | 0.057 | 0.070 | 0.069 | 0.040 | 0.009 | 0.000 | 0.004 | 0.006 | 0.003 | 0 | at noise (bio_v 0.069 / 0.067) |
+| open-world thetas on the torus | 0.244 | 0.241 | 0.261 | 0.250 | 0.058 | **0.114** | **0.112** | **0.067** | 0.009 | 0.002 | 0.009 | 0.001 | 0.005 | 0 | fail |
+| torus fits, S_T = S_M = 100 | 0.235 | 0.226 | 0.240 | 0.240 | 0.041 | 0.109 | 0.099 | 0.065 | 0.012 | 0.011 | 0.000 | 0.005 | 0.006 | 0 | (single eval, see below) |
+
+Moments of the torus run:
+
+- Biome histogram, oracle 0.043 / 0.473 / 0.116 / 0.369, forward 0.034 /
+  0.475 / 0.106 / 0.385.
+- present_disc 0.576 / 0.597.
+- Presence on the torus's first and last rows and columns / elsewhere:
+  oracle 0.759 / 0.767, forward 0.784 / 0.783.  The edge excess is gone.
+
+#### 4. What remains, against noise
+
+Single 64-run evals compared with a single noise draw are a coin flip at
+this level.  So the final setting was evaluated four times per budget (4 x
+64 runs) against a 2000-sweep oracle chain:
+
+- `L1 pool` is the 256-run mean against the long oracle.
+- `noise pool` is L1(runs 1-128, runs 129-256).  A bias-free `L1 pool`
+  should be about half of it plus the long oracle's own noise.
+- The long oracle against the 400-sweep oracle: obj_h 0.105, obj_u 0.034,
+  bio_u 0.037.
+
+| budget | quantity | obj_h | obj_v | obj_d1 | obj_d2 | obj_u | bio_h | bio_v | bio_u | present_disc | present_bar | dormant | contact |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| S = 30 | mean single-eval L1 | 0.217 | 0.221 | 0.232 | 0.230 | 0.041 | 0.053 | 0.052 | 0.030 | 0.006 | 0.003 | 0.002 | 0.002 |
+| | L1 pool | 0.114 | 0.118 | 0.125 | 0.124 | 0.023 | 0.027 | 0.027 | 0.016 | 0.003 | 0.002 | 0.001 | 0.000 |
+| | noise pool | 0.209 | 0.219 | 0.230 | 0.221 | 0.037 | 0.046 | 0.038 | 0.009 | 0.004 | 0.003 | 0.002 | 0.002 |
+| S = 100 | mean single-eval L1 | 0.215 | 0.223 | 0.233 | 0.225 | 0.046 | 0.059 | 0.058 | 0.034 | 0.007 | 0.006 | 0.002 | 0.003 |
+| | L1 pool | 0.116 | 0.118 | 0.118 | 0.119 | 0.027 | 0.042 | 0.045 | 0.029 | 0.003 | 0.003 | 0.002 | 0.003 |
+| | noise pool | 0.215 | 0.221 | 0.233 | 0.217 | 0.038 | 0.063 | 0.066 | 0.049 | 0.013 | 0.013 | 0.002 | 0.005 |
+
+**What the numbers show.**
+
+1. **The boundary is the whole story.**
+   - *Torus.*  With the boundary removed, the same pipeline passes the
+     stage 5 gate: the stage 4 exact-K0 mid fit, then the stage 5 hook-K0
+     top fit, then the forward.  Every fitted feature is within eval noise
+     (bio_v at noise on a repeat eval) and conflict is 0.
+   - *Monitors.*  Every monitor is at noise as well: present_disc 0.021
+     against 0.026, dormant 0.008 against 0.007.  The open world showed
+     0.107 and 0.034.
+   - *What the torus removed.*  It removed the only thing that changed.
+     Mid tables, targets, features, dials and sweep budget are the same as
+     in stage 5, and the mid theta agrees with the open-world one to 1e-3.
+2. **Why interior-only evaluation is not enough.**  On the open world,
+   restricting to the interior cuts the residual 2-7x:
+   - obj_u 0.244 -> 0.089, bio_u 0.153 -> 0.035, present_disc 0.107 ->
+     0.036.
+   - bio_u and bio_h pass on the interior.
+
+   The interior gate still fails, for two reasons:
+   - *Biased fit.*  The top theta is position free but was fitted on
+     contexts mixing edge and interior cells.  Its unary is the average:
+     1.0-1.3 nats too attractive for an interior cell.  Installed on the
+     torus, the open-world thetas give bio_u 0.067 and bio_h 0.114, against
+     0.035 and 0.062 for the torus fit.
+   - *Leaking edge.*  In a 6 x 6 world the edge reaches the interior
+     through the slot pairs and the biome chain.  The open-world interior
+     oracle differs from the torus oracle by bio_u 0.052 and present_disc
+     0.039.
+
+   So the edge both biases the fit and contaminates the evaluation region.
+   Masking the evaluation cannot undo the first.  A periodic training world
+   removes both.
+3. **The remaining residual is noise.**
+   - *Mid level.*  Pooled over 256 runs against a 2000-sweep oracle, every
+     feature's L1 is at the level its noise predicts: obj_h 0.114 against
+     about 0.105 expected (half of noise pool), obj_u 0.023 against about
+     0.019, before the long oracle's own noise is added.
+   - *Top level.*  The largest pooled ratio is in the top features (bio_u
+     0.016 against noise pool 0.009 at S = 30).  But the same quantity at
+     S = 100 is 0.029 against 0.049, so neither budget shows a bias that
+     the other does not.
+   - *What bias is left.*  Any residual top-level bias is below about
+     0.02-0.03 in bio_u L1 at this sample size.  Its probable source, if
+     real, is the top pair terms: bio_h / bio_v are tabular nearest-
+     neighbour only and the target is collapsed under the K = 0 contexts.
+     Mid pairs beyond the 4 offsets cannot contribute, since the support
+     and the shared-ring term are exactly nearest-neighbour.
+4. **The sweep budget is not a factor.**
+   - The pooled L1 at S = 100 matches S = 30 within noise on every feature.
+   - S = 100 against S = 30 directly: obj_u 0.077 against noise 0.068,
+     bio_u 0.050 against 0.048.
+
+   The chains are mixed at 30 sweeps: tau(obj | biome) is 1.2-1.6 sweeps.
+5. **No edge-aware unary was needed.**  Item 3, an `obj_u_edge` per edge
+   class, was not built, because the periodic world passes.  It would only
+   serve a bounded toy world.
+
+**Consequence for the design docs.**  Toy worlds used for training and
+end-to-end gates should be periodic, because production worlds are infinite
+and have no edge.  An edge biases the position-free learned potentials and
+leaks into the interior statistics.
+
+Deviations:
+
+- The periodic world is a padded torus with ghost copies and a per-colour
+  sync, not a wrapping kernel, because the generic kernel's off-grid rule
+  cannot wrap.  This is exact Gibbs on the torus for the old path; the
+  Sampler path is not supported.
+- `materialise` / `all_tables` take the open-world `CirclesBiome` (C0).  The
+  tables do not depend on the world, and the padded `dem_of` would treat a
+  5 x 5 canvas as a world grid.  `ghost_width` now returns 0 for non-world
+  shapes as a guard.
+- Additions beyond the brief:
+  - oracle noise;
+  - the `deep` interior;
+  - the open-world thetas on the torus;
+  - the pooled 4 x 64-run residual against a 2000-sweep oracle.
+- Not rerun on the torus: stage 4/5 AIS columns and K = 3.
+
+### Stage 6b: the Potts leak with collapsed targets
+
+The question: was the Potts leak (S1's top tables at ~0.7 of S0's,
+notes/potts_test.md "top_h / top_v: the leak") a target error and not a
+context error?  S1's top target is p*(T | mid), a one-site conditional that
+reads the level below T.  The target a top-down sampler needs, since it draws
+T before its mid cells, is the collapsed conditional: T's mid cells (and
+their tiles) integrated out.
+
+Script: `notes/experiments/potts_collapsed.py`.  Output:
+`images/potts_collapsed.json`, `images/potts_collapsed_tables.png` (top_h
+double-centred per target type next to S0's published table).  Whole run
+156 s on one core.
+
+Config: nty = ntx = 6 (12 x 12 mid, 48 x 48 tiles), lam = 3, kappa 8 / J 0.1
+and kappa 1 / J 0.3.  All fits are `train.fit`, iters 5, n_contexts 8, l2
+1e-4, tabular feats, holdout 0.1.  Contexts are fresh forward runs (30 / 30 /
+20 sweeps) at the current tables, and they share their Channel objects with
+an `Oracle`.
+
+- Mid: `ExactTargets(Oracle.mid_probs)`, K = 0, top tables 0 (stage 6
+  setup a), refitted at both settings.  kappa 8: mid_h by d = -0.398 /
+  +0.001 / +0.396 (reference BM J d = -0.40 / 0 / +0.40).  kappa 1: -0.295 /
+  +0.018 / +0.259 (published S1 -0.29 / +0.02 / +0.26, S0 -0.31 / +0.02 /
+  +0.26).  The mid tables are then fixed for every top fit.
+- Top: top_h, top_v and top_u are fitted with the fitted mid tables
+  installed.  The designed offset is 0, because no designed factor is homed
+  on top (`designed_energies(orc.model, "top")`).  The learned top tables
+  enter only through the fit's X theta, as in biome_fit.  Target types:
+  - **frozen**: `ExactTargets(softmax(-site_energies("top", below=True)))`,
+    i.e. S1's p*(T | mid) = softmax(-lam #(own mid cells outside palette)).
+  - **ais**: `AISTargets(child "mid", region = the cell's 2 x 2 mid block,
+    designed_e 0, after_change none, K 32, M 16, L 30)`.  p_0 holds lam (the
+    parent row) and mid_u; mid_h / mid_v are annealed.  As in the circles
+    run, the region is the written cells only.  The neighbouring mid cells
+    are a fixed boundary, with their mid_h / mid_v rows into the window
+    kept.
+  - **hook**: the same window, log Z computed exactly by a column transfer
+    matrix over the window (`window_logz`, checked against brute force).
+  - **hook4** (extra): the window dilated by the mid tables' reach (one mid
+    cell), so 4 x 4 cells, exact.  The fixed boundary then sits at distance
+    2 from T's cells, and the ring cells keep their lam rows to the
+    neighbouring tops.
+  - K = 3 (frozen and hook): T is drawn from the target, then
+    `Oracle.mid_move` runs at its 4 mid cells (a collapsed draw given T and
+    the boundary tiles, with the block's tiles redrawn).
+- Eval:
+  - Forward L1 to the oracle moments (50 + 400 sweeps, symmetrised as in
+    potts_train.py, whose `symmetrise` is copied because that script runs on
+    import), over two independent 64-run evals (L1 a / L1 b).
+  - eval noise = L1 between those two evals.
+  - edge_same_top (held out).
+  - The fit's final `viol_targets` (the consistency of the targets; the
+    fit's own is about 1e-15 everywhere).
+  - tau of the mid kernel with top clamped (`autocorr_clamped(fw.model,
+    "mid", ["top"])`, at the final tables).
+
+#### Contrast (double-centred learned top tables; one run each)
+
+| setting | target | K | disjoint - same (h / v) | one-colour - same (h / v) | ratio to S0 | edge_same_top (eval a / b) |
+|---|---|---|---|---|---|---|
+| kappa 8, J 0.1 | S0 published | | 0.73 / 0.71 | 0.31 / 0.32 | 1 | .397 (oracle .395) |
+| | S1 published | | 0.50 / 0.53 | 0.25 / 0.26 | 0.72 | .381 |
+| | S3 published | 3 | 0.67 / 0.70 | 0.30 / 0.29 | 0.95 | .392 |
+| | frozen | 0 | 0.26 / 0.05 | 0.09 / 0.07 | 0.22 | .359 / .369 |
+| | frozen | 3 | 0.58 / 0.62 | 0.28 / 0.25 | 0.83 | .396 / .381 |
+| | ais | 0 | 0.70 / 0.67 | 0.31 / 0.30 | 0.96 | .392 / .390 |
+| | hook | 0 | 0.71 / 0.68 | 0.31 / 0.30 | 0.96 | .392 / .392 |
+| | hook | 3 | 0.71 / 0.72 | 0.30 / 0.31 | 0.99 | .394 / .392 |
+| | hook4 | 0 | 0.72 / 0.72 | 0.31 / 0.32 | 1.00 | .391 / .392 |
+| kappa 1, J 0.3 | S0 published | | 0.60 / 0.58 | 0.26 / 0.26 | 1 | .365 (oracle .365) |
+| | S1 published | | 0.38 / 0.39 | 0.20 / 0.19 | 0.65 | .356 |
+| | S3 published | 3 | 0.52 / 0.52 | 0.22 / 0.24 | 0.88 | .361 |
+| | frozen | 0 | 0.00 / -0.20 | -0.06 / -0.09 | -0.16 | .350 / .354 |
+| | frozen | 3 | 0.19 / 0.42 | 0.09 / 0.11 | 0.52 | .355 / .355 |
+| | ais | 0 | 0.50 / 0.50 | 0.23 / 0.23 | 0.85 | .359 / .359 |
+| | hook | 0 | 0.50 / 0.50 | 0.23 / 0.23 | 0.85 | .359 / .359 |
+| | hook | 3 | 0.49 / 0.49 | 0.22 / 0.23 | 0.83 | .358 / .360 |
+| | hook4 | 0 | 0.50 / 0.51 | 0.23 / 0.23 | 0.85 | .359 / .359 |
+
+The ratio to S0 is (disjoint h + v) / (S0's published h + v).  The
+contrast is invariant under double-centring, so these numbers compare
+directly with potts_test.md's.
+
+#### L1 to the oracle moments (64-run eval a; eval b in brackets for the top keys)
+
+| setting | target | mid_h | mid_v | mid_u | top_h | top_v | top_u |
+|---|---|---|---|---|---|---|---|
+| kappa 8 | frozen K0 | 0.133 | 0.158 | 0.107 | 0.215 (0.214) | 0.300 (0.227) | 0.118 (0.098) |
+| | frozen K3 | 0.111 | 0.116 | 0.073 | 0.168 (0.186) | 0.187 (0.163) | 0.100 (0.095) |
+| | ais K0 | 0.051 | 0.054 | 0.034 | 0.096 (0.131) | 0.077 (0.093) | 0.043 (0.075) |
+| | hook K0 | 0.045 | 0.051 | 0.026 | 0.082 (0.125) | 0.070 (0.089) | 0.038 (0.065) |
+| | hook K3 | 0.042 | 0.040 | 0.023 | 0.067 (0.104) | 0.050 (0.078) | 0.030 (0.045) |
+| | hook4 K0 | 0.038 | 0.041 | 0.019 | 0.073 (0.077) | 0.058 (0.054) | 0.031 (0.024) |
+| | eval noise (range over runs) | 0.06-0.09 | 0.06-0.08 | 0.03-0.06 | 0.10-0.16 | 0.09-0.11 | 0.03-0.07 |
+| kappa 1 | frozen K0 | 0.114 | 0.145 | 0.079 | 0.238 (0.224) | 0.331 (0.245) | 0.108 (0.069) |
+| | frozen K3 | 0.121 | 0.119 | 0.086 | 0.204 (0.187) | 0.146 (0.112) | 0.090 (0.060) |
+| | ais K0 | 0.097 | 0.100 | 0.071 | 0.134 (0.111) | 0.119 (0.093) | 0.073 (0.053) |
+| | hook K0 | 0.099 | 0.101 | 0.073 | 0.134 (0.110) | 0.123 (0.092) | 0.073 (0.051) |
+| | hook K3 | 0.095 | 0.099 | 0.070 | 0.121 (0.103) | 0.105 (0.083) | 0.069 (0.030) |
+| | hook4 K0 | 0.100 | 0.103 | 0.077 | 0.135 (0.107) | 0.122 (0.077) | 0.076 (0.028) |
+| | eval noise (range over runs) | 0.06-0.07 | 0.06-0.09 | 0.03-0.04 | 0.08-0.15 | 0.08-0.11 | 0.04-0.06 |
+
+Published S0 for scale: kappa 8 top_h / top_v 0.081 / 0.073, kappa 1 0.087 /
+0.071.
+
+#### Diagnostics
+
+Consistency violation of the targets (final iteration, max over probes):
+
+- frozen and hook: 1e-15.  These targets do not depend on the neighbouring
+  top at all.  frozen reads only T's own mid cells; the 2 x 2 hook reads
+  the fixed neighbouring mid cells, never the neighbouring T.  So the
+  closure check is trivially passed.
+- ais: 0.32 (kappa 8) / 0.28 (kappa 1).  This is AIS noise around the
+  hook's 0: the closure sums 8 log-probabilities.
+- hook4: 0.35 / 0.19, exact, so this is a real inconsistency.  The ring
+  cells read the neighbouring tops, and windowed conditionals with a frozen
+  boundary at distance 2 are not conditionals of one joint.  It costs
+  nothing in the learned tables.
+
+The fit's own violation is about 1e-15 throughout.  tau(mid | top clamped)
+is 1.0-1.4 for every run (the mid kernel mixes in about one sweep).
+
+AIS vs the exact hook, on a fresh context at the final tables, over all 36
+cells x 4 candidates:
+
+| setting | dlogZ mean | max abs dlogZ | AIS se median / p90 / max (during the fit) | within 3 se | target L1 mean / max | ms per AIS run | fit seconds (AIS / hook) |
+|---|---|---|---|---|---|---|---|
+| kappa 8 | +0.003 | 0.104 | 0.032 / 0.047 / 0.089 | 98% | 0.024 / 0.053 | 0.93 | 15.7 / 1.4 |
+| kappa 1 | +0.004 | 0.063 | 0.024 / 0.035 / 0.067 | 98% | 0.016 / 0.032 | 1.00 | 16.9 / 1.3 |
+
+#### What the numbers show
+
+(a) **The collapsed target closes the leak at K = 0 at kappa 8.**  With T's
+mid cells integrated out under lam and the installed mid tables, the top
+contrast is 0.96 of S0 by AIS and 0.96 by the exact hook.  The dilated
+exact window gives 1.00.  The fitted-feature L1s are at or below eval noise
+on every key, and edge_same_top is .392 against oracle .395 and S0 .397.
+For comparison, S1 published 0.72 and .381, and S3 (K = 3 end-to-end)
+published 0.95.  K buys nothing: hook K3 gives 0.99 against hook K0's 0.96,
+inside the +-0.05 spread between entries that are equal by symmetry.
+
+(b) **At kappa 1 the collapsed target gives 0.85, against S1's 0.65 and
+S3's 0.88.**  ais, hook and hook4 agree to 0.01 and K = 3 gives 0.83, so
+the 0.15 that remains is not in the top target's window or in the AIS.  It
+is likely in what the top target integrates against, the mid tables:
+
+- At kappa 1 the top-top coupling is induced partly through tile
+  correlations across the top edge that a pairwise mid table carries only
+  in projection.
+- The mid tables' own target `Oracle.mid_probs` conditions on the boundary
+  tiles of the neighbouring blocks.
+- The mid L1s at kappa 1 sit at 0.10 against noise 0.07 in every variant,
+  while at kappa 8 they are at noise.
+
+This attribution was not separately tested.  edge_same_top is .359 (oracle
+.365, S1 .356, S3 .361).
+
+(c) **The leak was a target error.**  The context is the same in every row:
+forward runs at the current tables, one pass, K = 0.  Only the target
+changes.  frozen to collapsed moves the contrast from 0.22 to 0.96 at kappa
+8 and from -0.16 to 0.85 at kappa 1.  Fitted by train.fit's
+pseudo-likelihood regression, the frozen target is much worse than
+published S1's RB moment matching (0.22 / -0.16 against 0.72 / 0.65), and
+noisy (h / v 0.26 / 0.05).  The reason: p*(T | mid) is nearly a one-hot on
+the current T, since the mid cells were drawn from that T.  The regression
+therefore returns the forward's own q(T | neighbours), a fixed point at any
+theta, and the fit stays near its start.  K = 3 with collapsed mid moves
+lets the mid cells move under T and recovers part of it (0.83 / 0.52), as
+S3 did.  The collapsed target needs none of this.
+
+(d) **AIS against the exact hook at the top.**  The two give
+indistinguishable tables (contrast 0.70 / 0.67 against 0.71 / 0.68 at kappa
+8; identical at kappa 1).  log Z agrees to 0.003 on average, with 98% of
+values within 3 se, a median se of 0.02-0.03 at K = 32, M = 16, and
+per-site target L1 of 0.02.  AIS costs 1 ms per run, 11x the hook's fit
+time (16 s against 1.4 s per fit); both are negligible.
+
+(e) **The window.**  The circles convention (the written cells only, the
+neighbouring mid cells a fixed boundary through the annealed rows) is
+enough.  The 2 x 2 window's target never reads the neighbouring tops.  The
+top coupling is learned through the forward's correlation between a
+neighbouring top and its mid cells on the shared edge.  It is
+self-consistent (violation 0) and matches S0 at kappa 8.  Dilating by the
+mid tables' reach reads the neighbouring tops directly through the ring's
+lam rows.  That moves 0.96 to 1.00 at kappa 8 and nothing at kappa 1, at
+18-25x the hook's cost, and it makes the targets mildly inconsistent.
+
+(f) **Consequence for the design docs** (notes/dsl_updates.md C2, the
+targets of reference_math section 4).  The target at a site must integrate
+out everything below the site's level that the sampler draws after the
+site, including the site's own children at the home level's child level.
+A one-site conditional of p* that reads a finer level is the frozen-site
+target:
+
+- p*(T | mid) here.
+- The plain mid conditional with the tiles fixed (S1f).
+- p*(T | slots) on the biome circles.
+
+It reproduces the leak, and under train.fit's regression it does worse than
+leak: the fit stalls at the forward's own conditional.  The fix is in the
+target, not in the contexts or K.  The collapsed target over the child
+sampler with its installed learned potential, the parent row in p_0, and
+the window's written cells with the neighbouring child cells as a fixed
+boundary, is enough at K = 0.  An exact hook, where one exists, is a cheap
+drop-in for AIS.  What it cannot fix is error already in the child level's
+learned potential: that propagates up, which is the kappa 1 residual.
+
+Deviations from the brief:
+
+- Mid tables were refitted at both settings.  images/bootstrap_potts.json
+  holds kappa 8 only, and the refit matches it: -0.398 / +0.001 / +0.396
+  against -0.398 / +0.001 / +0.396.
+- Extra rows: hook K = 3 and the dilated hook4.
+- The K-step after_change is the collapsed `Oracle.mid_move` at T's 4 mid
+  cells, so a K-step is a p*-invariant block move.
+- One training run per row.  Expect about +-0.05 on a contrast entry.
+
+### Stage 7b: the admissible list
+
+The fix queued by stage 7 (notes/circles_biome_stage7.md, "Hard-row cost"):
+dsl_updates C1's candidates-from-the-allowed-set, built into the Sampler.
+Script `notes/experiments/circles_biome_scale2.py` (results
+`images/cbio_stage7b.json`, log `images/cbio_stage7b_log.txt`, 53 s);
+the stage 7 script is unchanged.
+
+**Design as built.**
+
+- `kernel.adm_lists(..., rows_sel, D)` (new): for every home site, the
+  energies of all D values under the parent rows (`Sampler.parent_rows()`:
+  hard unaries and hard pairs whose other channel is not home, the same
+  rows dormancy reads), and the list of finite ones with their parent
+  energy.  Lists are deduplicated by content (a 64-bit hash of (value,
+  energy bits), confirmed by full comparison) into CSR arrays `adm_ptr`,
+  `adm_idx` (ascending values), `adm_e`, with `adm_id[y, x]` (int32) naming
+  the site's list.  Memory O(sites + #distinct x |A|): 4.3 kB at every N
+  here (7 lists of 33), against 46 kB for a dense (sites x D) bool at
+  N = 20.  Build time O(sites x D x #parent rows), once per `init`.
+- `Sampler(..., adm=True)` (new, default off): `init()` builds the lists,
+  takes dormancy from them (a list of length 1; identical to the
+  `admissible()` route), and records the remaining hard rows (`sib_rows`, the
+  same-level ones: here the support at 8 offsets) as contiguous runs
+  `[f0, f1)` of packed rows.  `sweep()` then runs `kernel.sweep_adm`;
+  `candidates(y, x)` returns its set (`kernel.site_candidates_adm`).
+  Invariant (docstring): the lists are valid until the parents change;
+  `init()` again after they do; `refresh()` drops them (back to `sweep_cap`
+  until the next `init`).  Certificate channels, `relax` and the tempered
+  kernels keep `sweep_cap` (their parents are softened or the draw needs all
+  D).
+- `kernel.sweep_adm` / `_site_adm` (new): at a site, copy the list and its
+  parent energies, run the sib hard rows on the list only (skipping values
+  already inf), then exactly `_site_cap`'s logic on what remains: K = None,
+  every listed value, soft rows on all of them; K > 0, `cand[0] = z_p`
+  (energy inf if z_p is unlisted), the n listed values != z_p that the sib
+  rows admit in ascending order, the same partial Fisher-Yates
+  (`randint(0, n - j)`, energies swapped alongside), soft rows on the capped
+  set, Gumbel-max draw.  The set of n finite candidates and their order are
+  those of `sweep_cap` (which drops the same values as inf), and `_draw`
+  consumes one uniform per finite entry, so the random stream is the same:
+  **bit-identical** to `sweep_cap` for the same seed, not just equal in
+  distribution.  The one caveat is floating-point order: the parent energy is
+  summed first, so if a parent row with nonzero finite entries were packed
+  after a sib row the sum could differ in the last bit (not the case in any
+  model here: the masks are 0 / inf).
+- One detail mattered for speed: evaluating the sib rows one `_rows` call
+  per row (`f, f + 1`) cost ~0.4 us per site more than one call over a range
+  (it made the adm path *slower* than the old one at N = 2, 5).  The sib rows
+  are therefore passed as runs; here they are one run (the parent mask is
+  packed first).
+
+**Tests** (`tests/test_sampler.py`, additive): `test_adm_identity` (grids
+equal to `sweep_cap` after `init` + 4 sweeps, same seed, for Potts(2, 2)
+top/mid/tile with and without a hard palette parent row, Circles(2, 2)
+top/mid/tile with and without a hard slot row, the toy with a hard parent
+mask, K in None / 2 / 4 (K skipped on certificate homes); and CirclesBiome(2,
+2) with 5 random families and pair masks, obj, K None / 8, 10 sweeps);
+`test_adm_lists_and_dormancy` (the list at every site = `admissible()` under
+the parent rows; dormant = lists of length 1 = `C.dormant_of(allow)`; at most
+one list per biome value; dormant sites unchanged by 20 sweeps; every value
+drawn admissible; `candidates` = z_p plus admissible values);
+`test_adm_long_run_biome` (6000 sweeps each, 30 batches: family histogram,
+value parity and energy, old path vs adm path with different seeds, |z| < 4
+at K None and 8; observed max |z| 1.2 / 1.6).  In the scale script the
+forwards on both paths end in the same states (present fractions equal to
+the last digit at every N and K).
+
+**Per-site cost** (us per active obj site per sweep; probe at active
+fraction 1, S_M = 30 sweeps, 80 interleaved reps, medians; "stage 7" is the
+stage 7 table; "old" is `sweep_cap` re-measured in this run, interleaved
+with "adm", so the old/adm comparison shares the load; the machine carried
+two other experiments, which is why "old" sits above stage 7 at N >= 5):
+
+| N | D | K=8 stage 7 | K=8 old | **K=8 adm** | K=None stage 7 | K=None old | **K=None adm** | hard only K=8 old / adm | K=8 adm, tables spread 10 x 10 | forward K=8 old / adm | forward K=None old / adm |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2 | 33 | 1.14 | 0.99 | **0.96** | 2.09 | 1.81 | **1.79** | 0.76 / 0.73 | 1.09 | 1.01 / 0.98 | 1.89 / 1.80 |
+| 5 | 81 | 1.62 | 1.91 | **1.47** | 2.88 | 3.38 | **2.48** | 1.61 / 1.18 | 2.04 | 2.10 / 1.83 | 3.67 / 2.78 |
+| 10 | 161 | 2.31 | 2.83 | **1.77** | 4.40 | 5.29 | **2.82** | 2.46 / 1.38 | 2.73 | 2.97 / 1.96 | 5.34 / 2.97 |
+| 20 | 321 | 3.00 | 3.43 | **1.66** | 5.92 | 6.87 | **2.56** | 3.03 / 1.23 | 2.82 | 3.81 / 2.18 | 7.19 / 2.72 |
+
+Init and lists:
+
+| N | init ms old / adm (probe, 144 sites) | distinct lists (all biomes non-none) | list lengths | list bytes | dense bool bytes |
+|---|---|---|---|---|---|
+| 2 | 0.077 / 0.133 | 1 | 33 (= all of D) | 1 120 | 4 752 |
+| 5 | 0.124 / 0.215 | 7 | 33 each | 4 336 | 11 664 |
+| 10 | 0.167 / 0.296 | 7 | 33 each | 4 336 | 23 184 |
+| 20 | 0.187 / 0.316 | 7 | 33 each | 4 336 | 46 224 |
+
+Packed obj rows 19; hard 5 at N = 2 (mask + 4 orthogonal supports) and 9 at
+N >= 5 (mask + 8 supports); 1 parent row (the mask) at every N.
+
+### What the numbers show (stage 7b)
+
+(a) *The O(D) hard pass is gone.*  At N = 20 the capped update drops from
+3.43 to 1.66 us (2.1x) and the full one from 6.87 to 2.56 us (2.7x); the
+hard-only probe from 3.03 to 1.23 us.  From N = 5 to N = 20 (D 81 -> 321,
+4x) the adm cost at K = 8 is 1.47 / 1.77 / 1.66, flat within the load noise,
+where the old path grows 1.91 -> 3.43; at K = None it is 2.48 / 2.82 / 2.56
+against 3.38 -> 6.87.  The cost now follows |A_p| = 33, not D.  Every
+active site is visited over 33 values whatever N is, as predicted.
+
+(b) *The claim "flat at the N = 2 cost (~1.1 us)" holds only from N = 5 on.*
+N = 2 is cheaper (0.96) for a structural reason, not a D one: its two shapes
+never meet diagonally, so only 4 of the 8 supports are hard (5 hard rows, not
+9) and the other 4 run as soft rows on the 8 capped values instead of hard
+rows on 33.  At N = 2 the list is all of D, so adm = old there (0.96 vs 0.99:
+no overhead from the list).  The fair baseline for N >= 5 is ~1.5 us.
+
+(c) *What remains that depends on D is memory, not work.*  The work per site
+is now constant (33 values x 8 sib rows, 8 values x 10 soft rows), but the
+tables the rows read are D x D: 16 pair tables (8 support, 8 learned pair
+directions) are 0.84 MB at D = 81 and 13.2 MB at D = 321, so the per-candidate
+lookups `tab[c, v_b]` fall out of L1 then L2 as D grows.  The cache check
+reads the same values from tables spread 10 x 10 apart in memory (100x the
+footprint): +0.13 us at N = 2, +0.6 at N = 5, +1.0 at N = 10, +1.2 at N = 20,
+so the residual N = 5 -> 20 drift (and much of the remaining gap to N = 2)
+is in the memory hierarchy.  Remedies, not done here: store the tables
+value-of-neighbour-major (the 33 admitted values are two runs of 16
+consecutive anchors, so a column read is a few cache lines), or evaluate
+support and pair energies from the stamp features rather than D^2 tables.
+The table storage (4 D^2 support entries) is the remaining quadratic
+memory cost, unchanged by this stage.
+
+(d) *What is O(D) and is fine.*  `adm_lists` runs the parent rows over all
+D at every site once per `init`: 0.13 -> 0.32 ms per init (1.7x the old
+`admissible()` dormancy pass, which it replaces), against 30 sweeps of
+~0.2-0.4 ms each at the obj level.  It could be O(#distinct contexts x D) by
+keying on the parent values instead of the site, but at these sizes it is
+not worth it.  The five per-sweep scratch arrays are size D (allocation,
+not work).  The list memory is O(sites) for `adm_id` plus one list per
+distinct parent context (7-8 here), not O(sites x D).
+
+(e) *Forward runs.*  With dormancy (12.7% none) the forward obj stage at
+K = 8 goes 3.81 -> 2.18 us per active site at N = 20 and 7.19 -> 2.72 at
+K = None, with identical samples (bit-identical kernel).  The
+gains are slightly smaller than in the probe because the forward obj grid
+starts empty and fills, and its sites are partly dormant (skipped in both).
+
+Deviations: `adm` is an opt-in constructor flag (default off) so that the
+concurrently running stage 4-5 experiments, which build Samplers through
+`Forward`, are untouched; `Forward` does not expose it (circles_biome.py
+was not edited), and the scale2 script switches it on through a `Forward`
+subclass.  Since the path is bit-identical, flipping the default (or
+passing it from `Forward`) is safe once those runs are done.  The machine
+was loaded (load average 6-8) during the timed run; the old/adm comparison
+is interleaved and fair, the absolute numbers are ~10-20% above an idle
+machine.
