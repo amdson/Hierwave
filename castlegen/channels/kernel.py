@@ -567,3 +567,209 @@ def total_energy(home, grids, hs, views, fac, tabs, cert, joins, delta, convs=No
                 elif mass[g[y, x]] > 0:
                     total += delta * g_d[y, x]
     return total, nviol
+
+
+# ------------------------------------------------- hard rows first, candidate cap, active blocks
+# Packed from Model.compile(home, hard_first=True): rows [0, nhard) hold a +inf
+# entry, rows [nhard, F) are soft.  A candidate is admissible iff its hard
+# energy is finite; soft rows are evaluated on admissible candidates only.
+
+@njit(cache=True, inline="always")
+def _rows(y, x, home, grids, hs, views, fac, tabs, convs, f0, f1, cand, nc, out, scratch, skip):
+    """out[i] += rows f0..f1-1 at z_p = cand[i], for i < nc (skip: only where out[i] < inf)."""
+    hc = hs[home]
+    g_home = grids[home]
+    for f in range(f0, f1):
+        kind = fac[f, 0]
+        av = views[fac[f, 2]]
+        if kind == 5:
+            for t in range(scratch.shape[0]):
+                scratch[t] = 0.0
+            _conv_energies(y, x, g_home, av, convs[fac[f, 7]], fac[f, 4], fac[f, 5], fac[f, 6], scratch)
+            for i in range(nc):
+                if not skip or out[i] < np.inf:
+                    out[i] += scratch[cand[i]]
+            continue
+        tab = tabs[fac[f, 7]]
+        if kind == 2:
+            for i in range(nc):
+                if not skip or out[i] < np.inf:
+                    out[i] += tab[av[cand[i]], 0]
+            continue
+        b = fac[f, 1]
+        hb = hs[b]
+        g = grids[b]
+        if kind == 0:
+            qy = (y * hc) // hb + fac[f, 4]
+            qx = (x * hc) // hb + fac[f, 5]
+            if 0 <= qy < g.shape[0] and 0 <= qx < g.shape[1]:
+                vb = views[fac[f, 3]][g[qy, qx]]
+            elif fac[f, 6] >= 0:
+                vb = fac[f, 6]
+            else:
+                continue
+            for i in range(nc):
+                if not skip or out[i] < np.inf:
+                    out[i] += tab[av[cand[i]], vb]
+        elif kind == 3:
+            r = hc // hb
+            vh = views[fac[f, 3]]
+            nu = tab.shape[0]
+            hist = np.zeros(nu, np.int64)
+            for yy in range(y * r, y * r + r):
+                for xx in range(x * r, x * r + r):
+                    hist[av[g[yy, xx]]] += 1
+            for u in range(nu):
+                if hist[u] > 0:
+                    for i in range(nc):
+                        if not skip or out[i] < np.inf:
+                            out[i] += hist[u] * tab[u, vh[cand[i]]]
+        elif kind == 4:
+            r = hc // hb
+            vh = views[fac[f, 3]]
+            s = 0
+            for yy in range(y * r, y * r + r):
+                for xx in range(x * r, x * r + r):
+                    s += av[g[yy, xx]]
+            for i in range(nc):
+                if not skip or out[i] < np.inf:
+                    out[i] += tab[vh[cand[i]], s]
+        else:
+            r = hb // hc
+            qy = (y * hc) // hb
+            qx = (x * hc) // hb
+            vb = views[fac[f, 3]][g[qy, qx]]
+            s = 0
+            for yy in range(qy * r, qy * r + r):
+                for xx in range(qx * r, qx * r + r):
+                    if yy != y or xx != x:
+                        s += av[g_home[yy, xx]]
+            for i in range(nc):
+                if not skip or out[i] < np.inf:
+                    out[i] += tab[vb, s + av[cand[i]]]
+
+
+@njit(cache=True, inline="always")
+def _site_cap(y, x, home, grids, hs, views, fac, tabs, convs, nhard, K, cand, eh, out, scratch):
+    """Candidate set and energies at (y, x); returns nc.  Hard rows on all D
+    first (eh); K <= 0: cand = 0..D-1, out = eh plus the soft rows.  K > 0:
+    cand[0] = z_p, cand[1:nc] = min(K - 1, n) values drawn uniformly without
+    replacement from the n admissible values != z_p (z_p read only to
+    include it), out[i] = energy of cand[i]."""
+    D = eh.shape[0]
+    for t in range(D):
+        cand[t] = t
+        eh[t] = 0.0
+    _rows(y, x, home, grids, hs, views, fac, tabs, convs, 0, nhard, cand, D, eh, scratch, True)
+    if K <= 0:
+        for t in range(D):
+            out[t] = eh[t]
+        _rows(y, x, home, grids, hs, views, fac, tabs, convs, nhard, fac.shape[0], cand, D, out, scratch, nhard > 0)
+        return D
+    z = grids[home][y, x]
+    n = 0
+    for t in range(D):
+        if t != z and eh[t] < np.inf:
+            n += 1
+            cand[n] = t
+    cand[0] = z
+    k = min(K - 1, n)
+    for j in range(k):
+        r = j + np.random.randint(0, n - j)
+        c = cand[1 + j]
+        cand[1 + j] = cand[1 + r]
+        cand[1 + r] = c
+    nc = 1 + k
+    for i in range(nc):
+        out[i] = eh[cand[i]]
+    _rows(y, x, home, grids, hs, views, fac, tabs, convs, nhard, fac.shape[0], cand, nc, out, scratch, nhard > 0)
+    return nc
+
+
+@njit(cache=True)
+def site_candidates(y, x, home, grids, hs, views, fac, tabs, convs, nhard, K, D):
+    """(cand, e): the set the capped kernel draws over at (y, x) and its
+    energies (K <= 0: every value, inf where a hard row forbids it)."""
+    cand = np.empty(D, np.int64)
+    eh = np.empty(D)
+    out = np.empty(D)
+    nc = _site_cap(y, x, home, grids, hs, views, fac, tabs, convs, nhard, K, cand, eh, out, np.empty(D))
+    return cand[:nc].copy(), out[:nc].copy()
+
+
+@njit(cache=True)
+def admissible(home, grids, hs, views, fac, tabs, convs, rows_sel, D):
+    """(rows, cols, D) bool: finite energy under the packed rows listed in
+    rows_sel (the hard rows a caller treats as parents)."""
+    g = grids[home]
+    R, C = g.shape
+    ok = np.empty((R, C, D), np.bool_)
+    cand = np.arange(D)
+    e = np.empty(D)
+    scratch = np.empty(D)
+    for y in range(R):
+        for x in range(C):
+            for t in range(D):
+                e[t] = 0.0
+            for i in range(rows_sel.shape[0]):
+                f = rows_sel[i]
+                _rows(y, x, home, grids, hs, views, fac, tabs, convs, f, f + 1, cand, D, e, scratch, True)
+            for t in range(D):
+                ok[y, x, t] = e[t] < np.inf
+    return ok
+
+
+@njit(cache=True)
+def sweep_cap(home, grids, hs, views, fac, tabs, fixed, dormant, active, hb, colours, ncol, cert, joins, delta,
+              T, convs, nhard, K, D):
+    """One sweep of `sweep` with hard rows first, the candidate cap K (K <= 0:
+    full enumeration, the same draws as `sweep`) and block skipping: sites
+    are visited colour by colour, block by block (hb x hb home cells,
+    active[by, bx] tested first), raster inside a block; fixed or dormant
+    sites are skipped.  hb = 1 is `sweep`'s raster order.  The certificate
+    path needs K <= 0."""
+    g = grids[home]
+    rows, cols = g.shape
+    has_cert = cert[4] == 1
+    cand = np.empty(D, np.int64)
+    eh = np.empty(D)
+    e = np.empty(D)
+    scratch = np.empty(D)
+    w = np.empty(D)
+    lo = np.empty(D, np.int64)
+    hi = np.empty(D, np.int64)
+    Dmax = cert[3]
+    need = np.empty(4, np.bool_)
+    nby = (rows + hb - 1) // hb
+    nbx = (cols + hb - 1) // hb
+    bad = 0
+    for col in range(ncol):
+        for by in range(nby):
+            for bx in range(nbx):
+                if not active[by, bx]:
+                    continue
+                for y in range(by * hb, min(rows, by * hb + hb)):
+                    for x in range(bx * hb, min(cols, bx * hb + hb)):
+                        if colours[y, x] != col or fixed[y, x] or dormant[y, x]:
+                            continue
+                        nc = _site_cap(y, x, home, grids, hs, views, fac, tabs, convs, nhard, K, cand, eh, e,
+                                       scratch)
+                        if not has_cert:
+                            for i in range(nc):
+                                e[i] /= T
+                            pick = _draw(e, nc)
+                            if pick < 0:
+                                bad += 1
+                            else:
+                                g[y, x] = cand[pick]
+                            continue
+                        mass, trunk, g_d = views[cert[0]], views[cert[1]], grids[cert[2]]
+                        site_weights(y, x, e, g, g_d, mass, trunk, joins, Dmax, delta, T, w, lo, hi, need,
+                                     cert[5] == 1)
+                        pick = _draw(w, D)
+                        if pick < 0:
+                            bad += 1
+                        else:
+                            g[y, x] = pick
+                            g_d[y, x] = lo[pick] + _tgeom(hi[pick] - lo[pick], delta / T)
+    return bad
