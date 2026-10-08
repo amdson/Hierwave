@@ -427,3 +427,60 @@ def test_forward_sampler_relax():
         mv.append(s["mask_viol"])
     assert F.soft is not None and np.isfinite(F.soft.factors[0].table).all()
     assert 0 <= np.mean(mv) < 0.2
+
+
+def test_random_families():
+    from castlegen.channels.circles_biome import random_families
+    rng = np.random.default_rng(3)
+    fams = random_families(6, rng)
+    assert len({tuple(f[1]) for f in fams}) == 6
+    C = CirclesBiome(2, 2, families=fams)
+    assert C.D == 1 + sum(len(f[2]) for f in fams)
+    for name, cells, offs in fams:
+        cs = set(cells)
+        assert 6 <= len(cs) <= 14 and min(a for a, _ in cs) == 0 and min(b for _, b in cs) == 0
+        seen, todo = set(), [cells[0]]                     # 4-connected
+        while todo:
+            p = todo.pop()
+            if p in seen:
+                continue
+            seen.add(p)
+            todo += [(p[0] + u, p[1] + v) for u, v in ((1, 0), (-1, 0), (0, 1), (0, -1)) if (p[0] + u, p[1] + v) in cs]
+        assert seen == cs, name
+        assert 1 <= len(offs) <= 16 and len(set(offs)) == len(offs)
+    for o in range(1, C.D):
+        f = C.FAM[o] - 1
+        cs = {(C.ANCH[o, 0] + a, C.ANCH[o, 1] + b) for a, b in fams[f][1]}
+        dirt = {(y, x) for y, x, s in C.STAMP[o] if s == 1}
+        ring = {(y, x) for y, x, s in C.STAMP[o] if s == 2}
+        assert dirt == cs and all(0 <= y < C.BM and 0 <= x < C.BM for y, x in dirt)
+        dil = {(y + u, x + v) for y, x in cs for u in (-1, 0, 1) for v in (-1, 0, 1)}
+        assert ring == dil - cs and all(-1 <= y <= C.BM and -1 <= x <= C.BM for y, x in ring)
+
+
+def test_masks_random_families_run():
+    from castlegen.channels.circles_biome import random_families, random_pair_masks
+    rng = np.random.default_rng(5)
+    fams, masks = random_families(5, rng), random_pair_masks(5, rng)
+    assert masks[0] == 0 and len(masks) == 8 and all(bin(m).count("1") == 2 for m in masks[1:])
+    C = CirclesBiome(2, 2, families=fams, masks=masks)
+    assert C.P == 8 and np.allclose(C.bio_u0, 4 * np.log1p([0] + [2] * 7))
+    for f in range(5):
+        assert np.array_equal(C.FAMOK[f + 1], (np.array(masks) >> f) & 1 == 1)
+    biome = C.channels()[0]
+    assert np.array_equal(np.asarray(biome.views["allow_f2"]), (np.array(masks) >> 2) & 1)
+    th = C.theta0()
+    th["bio_u"] = -C.bio_u0
+    for kw in (dict(), dict(use_sampler=True), dict(use_sampler=True, K=8)):
+        F = Forward(C, th, seed=1, **kw)
+        for _ in range(2):
+            s = F.run(S_T=3, S_M=3, S_F=2)
+            assert s["conflict"] == 0 and s["mask_viol"] == 0
+            dorm = C.dormant_of(F.allow)
+            assert (F.obj.grid[dorm] == 0).all() and np.array_equal(dorm, C.MASKS[F.allow.grid] == 0)
+    O = Oracle(C, seed=2)
+    O.sweep(3)
+    s = C.stats(O.biome, O.obj, O.tile)
+    assert s["conflict"] == 0 and s["mask_viol"] == 0 and s["bio_h"].shape == (8, 8)
+    assert C.render(O.biome, O.obj, O.tile).shape == (C.H, C.W, 3)
+    assert C.group() == [(0, 0, 0)] or (0, 0, 0) in C.group()

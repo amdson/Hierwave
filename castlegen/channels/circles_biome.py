@@ -57,6 +57,50 @@ def default_families():
             ("bar", bar, [(ry, rx) for ry in range(2, 6) for rx in range(1, 5)])]
 
 
+def random_families(N, rng, cells=(6, 14), BM=8, box=5, n_off=16):
+    """N distinct connected stamps for the scaling probe: each grows a random
+    4-connected set of n cells (n uniform in cells, inclusive) from a seed,
+    keeping its bounding box within box x box (so at least (BM - box + 1)^2
+    anchor offsets keep it inside the block); cells relative to the box's
+    top-left corner, offsets every in-block anchor, n_off of them at random
+    (sorted) when there are more.  Names f0, f1, ..."""
+    out, seen = [], set()
+    while len(out) < N:
+        n = int(rng.integers(cells[0], cells[1] + 1))
+        cs = {(0, 0)}
+        while len(cs) < n:
+            fr = sorted({(a + u, c + v) for a, c in cs for u, v in ((1, 0), (-1, 0), (0, 1), (0, -1))} - cs)
+            y, x = fr[int(rng.integers(len(fr)))]
+            ys, xs = [a for a, _ in cs] + [y], [c for _, c in cs] + [x]
+            if max(ys) - min(ys) < box and max(xs) - min(xs) < box:
+                cs.add((y, x))
+        y0, x0 = min(a for a, _ in cs), min(c for _, c in cs)
+        cs = tuple(sorted((a - y0, c - x0) for a, c in cs))
+        if cs in seen:
+            continue
+        seen.add(cs)
+        h, w = max(a for a, _ in cs) + 1, max(c for _, c in cs) + 1
+        offs = [(ay, ax) for ay in range(BM - h + 1) for ax in range(BM - w + 1)]
+        if len(offs) > n_off:
+            offs = [offs[k] for k in sorted(rng.choice(len(offs), n_off, replace=False))]
+        out.append((f"f{len(out)}", list(cs), offs))
+    return out
+
+
+def random_pair_masks(N, rng, n=7):
+    """[0] + n family-pair bitmasks: consecutive pairs of fresh random
+    permutations (so the pairs cover min(N, 2n) families), distinct while
+    distinct pairs remain (N = 2 repeats its one pair)."""
+    masks, npair = [], N * (N - 1) // 2
+    while len(masks) < n:
+        p = rng.permutation(N)
+        for k in range(0, N - 1, 2):
+            m = (1 << int(p[k])) | (1 << int(p[k + 1]))
+            if len(masks) < n and (m not in masks or len(set(masks)) >= npair):
+                masks.append(m)
+    return [0] + masks
+
+
 # ------------------------------------------------------------ numba core
 @njit(cache=True, inline="always")
 def _dem_of(nd, nr):
@@ -201,14 +245,18 @@ def _grid(c):
 
 # ------------------------------------------------------------------ model
 class CirclesBiome:
-    def __init__(self, nty, ntx, BM=8, BT=2, mu=0.3, b=None, families=None):
+    def __init__(self, nty, ntx, BM=8, BT=2, mu=0.3, b=None, families=None, masks=None):
+        """masks: the biome's values as an explicit list of admitted-family
+        bitmasks (bit f = family f; 0 = none, dormant); default every 2^N mask
+        in order, so value v admits family f iff bit f of v is set."""
         fams = default_families() if families is None else families
         self.nty, self.ntx, self.BM, self.BT, self.mu = nty, ntx, BM, BT, float(mu)
         self.nmy, self.nmx = nty * BT, ntx * BT
         self.H, self.W = self.nmy * BM, self.nmx * BM
         self.NF = len(fams)
         self.names = [f[0] for f in fams]
-        self.P = 1 << self.NF
+        self.MASKS = np.arange(1 << self.NF, dtype=np.int64) if masks is None else np.array(masks, np.int64)
+        self.P = len(self.MASKS)
         FAM, ANCH, STAMP = [0], [(-1, -1)], [[]]
         self.n_off = []
         for f, (name, cells, offs) in enumerate(fams):
@@ -238,7 +286,7 @@ class CirclesBiome:
         self.fz = np.array([self.f0, 0.0, m, INF])                       # per-tile -log Z by demand
         self.kt = np.array([[0.0, INF, 0.0, INF],                        # air:  free, dirt-dem, air-dem, conflict
                             [0.0, 0.0, INF, INF]])                       # dirt
-        bits = np.arange(self.P)
+        bits = self.MASKS
         # FAMOK[f, a]: family f (0 = absent) admitted by allow value a
         self.FAMOK = np.ones((self.NF + 1, self.P), bool)
         for f in range(self.NF):
@@ -248,7 +296,7 @@ class CirclesBiome:
         bd = {} if b is None else dict(b)
         self.b = np.array([bd.get(n, self.presence_bonus(n)) for n in self.names])
         self.pres_e = np.concatenate([[0.0], -self.b[self.FAM[1:] - 1]])
-        nadm = np.array([bin(v).count("1") for v in range(self.P)])
+        nadm = np.array([bin(int(v)).count("1") for v in self.MASKS])
         self.bio_u0 = BT * BT * np.log1p(nadm)
         self._canvas()
         self._sym = self._group()
@@ -330,7 +378,7 @@ class CirclesBiome:
         D, P = self.D, self.P
         biome = Channel("biome", self.BM * self.BT, P).add_view("pal", np.arange(P), P)
         for f, n in enumerate(self.names):
-            biome.add_view("allow_" + n, (np.arange(P) >> f) & 1, 2)
+            biome.add_view("allow_" + n, (self.MASKS >> f) & 1, 2)
         obj = Channel("obj", self.BM, D).add_view("self", np.arange(D), D) \
             .add_view("present", (self.FAM > 0).astype(np.int64), 2).add_view("fam", self.FAM, self.NF + 1)
         tile = Channel("tile", 1, 2).add_view("col", np.arange(2), 2)
@@ -529,11 +577,13 @@ class CirclesBiome:
                 fperm[self.FAM[o]] = self.FAM[m[o]]
             if len(set(fperm[1:])) != self.NF:
                 continue
-            bm = np.zeros(self.P, np.int64)
-            for v in range(self.P):
-                for f in range(self.NF):
-                    if (v >> f) & 1:
-                        bm[v] |= 1 << (fperm[f + 1] - 1)
+            bm = np.arange(self.P)
+            if (fperm != np.arange(self.NF + 1)).any():
+                img = [sum(1 << (int(fperm[f + 1]) - 1) for f in range(self.NF) if (int(v) >> f) & 1) for v in self.MASKS]
+                idx = {int(v): k for k, v in enumerate(self.MASKS)}
+                if any(m not in idx for m in img) or len({idx[m] for m in img}) != self.P:
+                    continue                                     # the mask list is not closed under g
+                bm = np.array([idx[m] for m in img], np.int64)
             M = np.eye(2, dtype=np.int64)
             for flag, k in zip(g, "xyt"):
                 if flag:
@@ -631,7 +681,7 @@ class CirclesBiome:
                     img[Y, X] = 0.4 * img[Y, X] + 0.6 * c
             img[i * BM + self.ANCH[o, 0], j * BM + self.ANCH[o, 1]] = 0.5 * c
         yy, xx = np.mgrid[:self.H, :self.W]
-        dorm = (bg == 0)[yy // B, xx // B]
+        dorm = (self.MASKS[bg] == 0)[yy // B, xx // B]
         hatch = dorm & ((yy + xx) % 4 == 0)
         img[dorm] = 0.75 * img[dorm] + 0.25 * np.array([120, 120, 140])
         img[hatch] *= 0.55
