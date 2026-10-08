@@ -773,3 +773,177 @@ def sweep_cap(home, grids, hs, views, fac, tabs, fixed, dormant, active, hb, col
                             g[y, x] = pick
                             g_d[y, x] = lo[pick] + _tgeom(hi[pick] - lo[pick], delta / T)
     return bad
+
+
+# ------------------------------------------- admitted lists (dsl_updates C1, A_p)
+# The parent hard rows (unaries, pairs to other channels) are constant while
+# the parents are, so the values they admit at a site, and their energies
+# there, are computed once (adm_lists) and stored as CSR lists deduplicated by
+# content: aid[y, x] -> list a = aidx[aptr[a]:aptr[a + 1]] (ascending values)
+# with parent energies ae[...].  sweep_adm starts every site from its list:
+# the remaining hard rows (sib) on the list, the cap from what they admit,
+# soft rows on the capped set.  Valid until the parents change.
+
+@njit(cache=True)
+def adm_lists(home, grids, hs, views, fac, tabs, convs, rows_sel, D):
+    """(aid (rows, cols) int32, aptr, aidx int64, ae float64): per-site index
+    into the distinct (value, parent energy) lists of finite energy under the
+    rows in rows_sel.  Dedup by a 64-bit hash, confirmed by comparison."""
+    g = grids[home]
+    R, C = g.shape
+    aid = np.empty((R, C), np.int32)
+    cap = 4 * D + 4
+    aidx = np.empty(cap, np.int64)
+    ae = np.empty(cap)
+    aptr = np.zeros(R * C + 1, np.int64)
+    hsh = np.empty(R * C, np.uint64)
+    cand = np.arange(D)
+    e = np.empty(D)
+    eb = e.view(np.uint64)
+    scratch = np.empty(D)
+    nl = 0
+    P1, P2 = np.uint64(1099511628211), np.uint64(0x9E3779B97F4A7C15)
+    for y in range(R):
+        for x in range(C):
+            for t in range(D):
+                e[t] = 0.0
+            for i in range(rows_sel.shape[0]):
+                f = rows_sel[i]
+                _rows(y, x, home, grids, hs, views, fac, tabs, convs, f, f + 1, cand, D, e, scratch, True)
+            h = np.uint64(14695981039346656037)
+            m = 0
+            for t in range(D):
+                if e[t] < np.inf:
+                    h = (h ^ np.uint64(t)) * P1
+                    h = (h ^ eb[t]) * P2
+                    m += 1
+            found = -1
+            for l in range(nl):
+                if hsh[l] == h and aptr[l + 1] - aptr[l] == m:
+                    j, same = aptr[l], True
+                    for t in range(D):
+                        if e[t] < np.inf:
+                            if aidx[j] != t or ae[j] != e[t]:
+                                same = False
+                                break
+                            j += 1
+                    if same:
+                        found = l
+                        break
+            if found < 0:
+                p = aptr[nl]
+                if p + m > cap:
+                    cap = 2 * (p + m)
+                    a2, e2 = np.empty(cap, np.int64), np.empty(cap)
+                    a2[:p] = aidx[:p]
+                    e2[:p] = ae[:p]
+                    aidx, ae = a2, e2
+                for t in range(D):
+                    if e[t] < np.inf:
+                        aidx[p] = t
+                        ae[p] = e[t]
+                        p += 1
+                aptr[nl + 1] = p
+                hsh[nl] = h
+                found = nl
+                nl += 1
+            aid[y, x] = found
+    return aid, aptr[:nl + 1].copy(), aidx[:aptr[nl]].copy(), ae[:aptr[nl]].copy()
+
+
+@njit(cache=True, inline="always")
+def _site_adm(y, x, home, grids, hs, views, fac, tabs, convs, nhard, sib, aid, aptr, aidx, ae, K, lst, le, cand, out,
+              scratch):
+    """_site_cap over the admitted list of (y, x): the sib hard rows (runs
+    [sib[j, 0], sib[j, 1]) of packed rows) on the list (parent energies ae
+    first), then as _site_cap: K <= 0 every listed
+    value; K > 0 cand[0] = z_p (energy inf if unlisted) and min(K - 1, n) of
+    the n listed values != z_p that sib admits, the same uniform draws as
+    _site_cap over the same ascending order; soft rows on the result."""
+    a = aid[y, x]
+    p0 = aptr[a]
+    m = aptr[a + 1] - p0
+    for i in range(m):
+        lst[i] = aidx[p0 + i]
+        le[i] = ae[p0 + i]
+    for j in range(sib.shape[0]):
+        _rows(y, x, home, grids, hs, views, fac, tabs, convs, sib[j, 0], sib[j, 1], lst, m, le, scratch, True)
+    if K <= 0:
+        for i in range(m):
+            cand[i] = lst[i]
+            out[i] = le[i]
+        _rows(y, x, home, grids, hs, views, fac, tabs, convs, nhard, fac.shape[0], cand, m, out, scratch, nhard > 0)
+        return m
+    z = grids[home][y, x]
+    ez = np.inf
+    n = 0
+    for i in range(m):
+        t = lst[i]
+        if t == z:
+            ez = le[i]
+        elif le[i] < np.inf:
+            n += 1
+            cand[n] = t
+            out[n] = le[i]
+    cand[0] = z
+    out[0] = ez
+    k = min(K - 1, n)
+    for j in range(k):
+        r = j + np.random.randint(0, n - j)
+        c = cand[1 + j]
+        cand[1 + j] = cand[1 + r]
+        cand[1 + r] = c
+        v = out[1 + j]
+        out[1 + j] = out[1 + r]
+        out[1 + r] = v
+    nc = 1 + k
+    _rows(y, x, home, grids, hs, views, fac, tabs, convs, nhard, fac.shape[0], cand, nc, out, scratch, nhard > 0)
+    return nc
+
+
+@njit(cache=True)
+def site_candidates_adm(y, x, home, grids, hs, views, fac, tabs, convs, nhard, sib, aid, aptr, aidx, ae, K, D):
+    """(cand, e): the set sweep_adm draws over at (y, x) and its energies."""
+    cand = np.empty(D, np.int64)
+    out = np.empty(D)
+    nc = _site_adm(y, x, home, grids, hs, views, fac, tabs, convs, nhard, sib, aid, aptr, aidx, ae, K,
+                   np.empty(D, np.int64), np.empty(D), cand, out, np.empty(D))
+    return cand[:nc].copy(), out[:nc].copy()
+
+
+@njit(cache=True)
+def sweep_adm(home, grids, hs, views, fac, tabs, fixed, dormant, active, hb, colours, ncol, T, convs, nhard, sib,
+              aid, aptr, aidx, ae, K, D):
+    """sweep_cap (no certificates) with every site started from its admitted
+    list: the draws of sweep_cap for the same seed (identical when the parent
+    rows' finite entries are 0 or no hard sibling row precedes a parent row;
+    else equal up to the order of the floating-point sum)."""
+    g = grids[home]
+    rows, cols = g.shape
+    lst = np.empty(D, np.int64)
+    le = np.empty(D)
+    cand = np.empty(D, np.int64)
+    e = np.empty(D)
+    scratch = np.empty(D)
+    nby = (rows + hb - 1) // hb
+    nbx = (cols + hb - 1) // hb
+    bad = 0
+    for col in range(ncol):
+        for by in range(nby):
+            for bx in range(nbx):
+                if not active[by, bx]:
+                    continue
+                for y in range(by * hb, min(rows, by * hb + hb)):
+                    for x in range(bx * hb, min(cols, bx * hb + hb)):
+                        if colours[y, x] != col or fixed[y, x] or dormant[y, x]:
+                            continue
+                        nc = _site_adm(y, x, home, grids, hs, views, fac, tabs, convs, nhard, sib, aid, aptr, aidx,
+                                       ae, K, lst, le, cand, e, scratch)
+                        for i in range(nc):
+                            e[i] /= T
+                        pick = _draw(e, nc)
+                        if pick < 0:
+                            bad += 1
+                        else:
+                            g[y, x] = cand[pick]
+    return bad

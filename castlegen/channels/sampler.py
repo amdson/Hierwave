@@ -2,12 +2,20 @@
 channel on the numba kernel (kernel.sweep_cap over core.Model.compile(home,
 hard_first=True)).  Generic: nothing here knows a channel set.
 
-Sampler(model, home, K, hb, seed)
+Sampler(model, home, K, hb, seed, adm=False)
   init()            dormancy (dsl_updates C1): A_p = {t : E_par,p(t) < inf}, E_par the
                     hard rows that read other channels (parents, painted channels) or
                     are unaries; |A_p| = 1 sets z_p and marks p dormant; an hb x hb
                     block of dormant or fixed sites is inactive.  Returns the dormant
                     fraction.  Call again after the parents change.
+                    adm=True: also the admitted lists (kernel.adm_lists): A_p and the parent
+                    energies at p, CSR (adm_ptr, adm_idx, adm_e) deduplicated by content,
+                    adm_id[y, x] the site's list (memory O(sites + #distinct x |A|)); a dormant
+                    site's list has length 1.  sweep() then runs kernel.sweep_adm: the other
+                    hard rows (sib_rows: runs [f0, f1) of packed rows) and the soft rows only over the list, the cap drawn
+                    from it.  Invariant: valid until the parents change; init() again after.
+                    Not for certificate channels (sweep_cap is used); relax and the tempered
+                    kernels always use sweep_cap (their parents are softened).
   candidates(y, x)  C_p: the admissible values (every hard row), or with K the kernel's
                     capped set {z_p} + (K - 1) admissible values != z_p uniformly
                     without replacement.  Gibbs over C_p leaves exp(-E) invariant since
@@ -103,8 +111,9 @@ def generate(levels, S, rng=None, painters=None, relax=None):
 
 
 class Sampler(ChannelSampler):
-    def __init__(self, model, home, K=None, hb=1, seed=0, soft_model=None):
+    def __init__(self, model, home, K=None, hb=1, seed=0, soft_model=None, adm=False):
         self.model, self.home, self.hb = model, home, int(hb)
+        self.adm, self.adm_id = bool(adm), None
         self.name, self.soft_model = home, soft_model
         self.K = int(K) if K else 0
         self.hc = model.chan(home)
@@ -127,13 +136,20 @@ class Sampler(ChannelSampler):
         """Recompile after the model's tables or channel arrays were replaced."""
         self.P = self._pack(self.model)
         self._temper = {}
+        self.adm_id = None
 
     def _seed(self, seed=None):
         kernel.seed(int(self.rng.integers(1 << 30)) if seed is None else int(seed))
 
-    def _run(self, P, tabs, n, T=1.0):
+    def _run(self, P, tabs, n, T=1.0, adm=False):
         bad = 0
         fixed = np.ascontiguousarray(self.hc.fixed)
+        if adm:
+            for _ in range(n):
+                bad = kernel.sweep_adm(P.home, P.grids, P.hs, P.views, P.fac, tabs, fixed, self.dormant, self.active,
+                                       self.hb, P.colours, P.ncol, float(T), P.convs, P.nhard, self.sib_rows,
+                                       self.adm_id, self.adm_ptr, self.adm_idx, self.adm_e, self.K, self.D)
+            return bad
         for _ in range(n):
             bad = kernel.sweep_cap(P.home, P.grids, P.hs, P.views, P.fac, tabs, fixed, self.dormant, self.active,
                                    self.hb, P.colours, P.ncol, P.cert, P.joins, P.delta, float(T), P.convs, P.nhard,
@@ -151,11 +167,27 @@ class Sampler(ChannelSampler):
         P = self.P
         return kernel.admissible(P.home, P.grids, P.hs, P.views, P.fac, P.tabs, P.convs, self.parent_rows(), self.D)
 
+    def adm_lists(self):
+        """(adm_id, adm_ptr, adm_idx, adm_e): kernel.adm_lists under the parent rows."""
+        P = self.P
+        return kernel.adm_lists(P.home, P.grids, P.hs, P.views, P.fac, P.tabs, P.convs, self.parent_rows(), self.D)
+
+    def _use_adm(self):
+        return self.adm and not self.P.cert[4]
+
     def init(self):
         g, fixed, hb = self.hc.grid, self.hc.fixed, self.hb
         P = self.P
-        ok = self.admissible()
-        one, val = ok.sum(axis=2) == 1, ok.argmax(axis=2)
+        if self._use_adm():
+            self.adm_id, self.adm_ptr, self.adm_idx, self.adm_e = self.adm_lists()
+            sib = np.setdiff1d(np.arange(P.nhard), self.parent_rows())
+            cut = np.flatnonzero(np.diff(sib) != 1) + 1               # contiguous runs [f0, f1)
+            self.sib_rows = np.array([(r[0], r[-1] + 1) for r in np.split(sib, cut) if len(r)], np.int64).reshape(-1, 2)
+            ln = np.diff(self.adm_ptr)[self.adm_id]
+            one, val = ln == 1, self.adm_idx[np.minimum(self.adm_ptr[self.adm_id], len(self.adm_idx) - 1)]
+        else:
+            ok = self.admissible()
+            one, val = ok.sum(axis=2) == 1, ok.argmax(axis=2)
         if P.cert[4]:
             one &= P.views[P.cert[0]][val] == 0                  # a value with mass still draws its d
         self.dormant[:] = one & ~fixed
@@ -174,6 +206,11 @@ class Sampler(ChannelSampler):
         P = self.P
         if self.K:
             self._seed()
+        if self._use_adm() and self.adm_id is not None:
+            cand, e = kernel.site_candidates_adm(y, x, P.home, P.grids, P.hs, P.views, P.fac, P.tabs, P.convs,
+                                                 P.nhard, self.sib_rows, self.adm_id, self.adm_ptr, self.adm_idx,
+                                                 self.adm_e, self.K, self.D)
+            return cand if self.K else cand[np.isfinite(e)]
         cand, e = kernel.site_candidates(y, x, P.home, P.grids, P.hs, P.views, P.fac, P.tabs, P.convs, P.nhard,
                                          self.K, self.D)
         return cand if self.K else cand[np.isfinite(e)]
@@ -181,7 +218,7 @@ class Sampler(ChannelSampler):
     def sweep(self, n=1, T=1.0, seed=None):
         """n sweeps; returns the last sweep's count of sites with no finite candidate."""
         self._seed(seed)
-        return self._run(self.P, self.P.tabs, n, T)
+        return self._run(self.P, self.P.tabs, n, T, adm=self._use_adm() and self.adm_id is not None)
 
     def relax(self, n, soft_model=None, seed=None):
         """n sweeps under soft_model's packing of home (same channel objects;

@@ -222,3 +222,92 @@ def test_ais_capped_hard():
     exact = induce.logmeanexp(ws) + np.log(len(ws))
     lz, lw = S.ais_log_z(K=64, M=32, seed=1)
     assert abs(lz - exact) < 4 * induce.ais_se(lw) + 0.05, (lz, exact)
+
+
+# ------------------------------------------------- admitted lists (C1, A_p)
+def _biome_obj(K, seed, adm, fams_seed=5):
+    from castlegen.channels.circles_biome import CirclesBiome, Forward, random_families, random_pair_masks
+    rng = np.random.default_rng(fams_seed)
+    C = CirclesBiome(2, 2, families=random_families(5, rng), masks=random_pair_masks(5, rng))
+    th = C.theta0()
+    th["bio_u"] = -C.bio_u0
+    F = Forward(C, th, seed=1, use_sampler=True)
+    F.build()
+    F.biome.grid[:] = np.random.default_rng(seed).integers(0, C.P, F.biome.grid.shape)
+    F.biome.grid[0, 0] = 0                              # one none block: dormant
+    C.paint_allow(F.biome, F.allow)
+    return C, F, Sampler(F.model, "obj", K=K, hb=C.BT, seed=seed, adm=adm)
+
+
+def test_adm_identity():
+    """sweep_adm = sweep_cap draw for draw: Potts / Circles with parent hard rows, the toy, the biome."""
+    P = Potts(2, 2)
+    pal = Factor.pair(("mid", "col"), ("top", "pal"), (0, 0), np.where(P.PAL.T, 0.0, INF), name="palhard")
+    hdisc = np.zeros((Circles(2, 2).D, 2))
+    hdisc[1:, 0] = INF
+    cdisc = Factor.pair(("mid", "self"), ("slot", "val"), (0, 0), hdisc, name="slothard")
+    builds = [(lambda: potts_model(), ("top", "mid", "tile")), (lambda: potts_model([pal]), ("mid",)),
+              (lambda: circles_model(), ("top", "mid", "tile")), (lambda: circles_model(INF, [cdisc]), ("mid", "tile")),
+              (lambda: toy([[0, 1], [2, 0]]), ("c",))]
+    for build, homes in builds:
+        for home in homes:
+            for K in (None, 2, 4):
+                (m1, c1), (m2, c2) = build(), build()
+                if K and m1.compile(home).cert[4]:
+                    continue
+                S1, S2 = Sampler(m1, home, K=K, seed=3), Sampler(m2, home, K=K, seed=3, adm=True)
+                assert S1.init() == S2.init() and np.array_equal(S1.dormant, S2.dormant)
+                c1, c2 = ((c1,), (c2,)) if hasattr(c1, "grid") else (c1, c2)
+                for a, b in zip(c1, c2):
+                    assert np.array_equal(a.grid, b.grid)
+                S1.sweep(4, seed=11)
+                S2.sweep(4, seed=11)
+                for a, b in zip(c1, c2):
+                    assert np.array_equal(a.grid, b.grid), (home, K, a.name)
+    for K in (None, 8):
+        (_, _, S1), (_, F2, S2) = _biome_obj(K, 4, False), _biome_obj(K, 4, True)
+        S1.init(), S2.init()
+        S1.sweep(10, seed=7), S2.sweep(10, seed=7)
+        assert np.array_equal(S1.hc.grid, S2.hc.grid), K
+        assert len(S2.adm_ptr) - 1 <= 8 and len(S2.sib_rows) > 0
+
+
+def test_adm_lists_and_dormancy():
+    C, F, S = _biome_obj(8, 2, True)
+    frac = S.init()
+    ok = S.admissible()
+    for y in range(ok.shape[0]):
+        for x in range(ok.shape[1]):
+            a = S.adm_id[y, x]
+            assert np.array_equal(S.adm_idx[S.adm_ptr[a]:S.adm_ptr[a + 1]], np.flatnonzero(ok[y, x]))
+            assert S.candidates(y, x)[0] == S.hc.grid[y, x] and ok[y, x][S.candidates(y, x)[1:]].all()
+    ln = np.diff(S.adm_ptr)[S.adm_id]
+    assert frac > 0 and np.array_equal(S.dormant, ln == 1) and np.array_equal(S.dormant, C.dormant_of(F.allow))
+    assert np.unique(S.adm_id).size == len(S.adm_ptr) - 1 <= C.P   # one list per biome value at most
+    g0 = S.hc.grid.copy()
+    S.sweep(20)
+    assert np.array_equal(S.hc.grid[S.dormant], g0[S.dormant]) and not np.array_equal(S.hc.grid, g0)
+    assert ok[np.arange(ok.shape[0])[:, None], np.arange(ok.shape[1])[None, :], S.hc.grid].all()
+
+
+def _biome_monitor(K, adm, seed, n=6000, nb=30):
+    C, F, S = _biome_obj(K, 4, adm)
+    S.init()
+    S.rng = np.random.default_rng(seed)
+    S.sweep(100)
+    rec = np.zeros((n, C.NF + 3))
+    for i in range(n):
+        S.sweep(1)
+        g = S.hc.grid
+        rec[i, :C.NF + 1] = np.bincount(C.FAM[g].ravel(), minlength=C.NF + 1) / g.size
+        rec[i, C.NF + 1:] = (g % 2).mean(), S.energy()[0]
+    b = rec.reshape(nb, -1, rec.shape[1]).mean(axis=1)
+    return b.mean(axis=0), b.std(axis=0, ddof=1) / np.sqrt(nb)
+
+
+def test_adm_long_run_biome():
+    for K in (None, 8):
+        m0, s0 = _biome_monitor(K, False, 21)
+        m1, s1 = _biome_monitor(K, True, 22)
+        z = np.abs(m0 - m1) / np.sqrt(s0 ** 2 + s1 ** 2 + 1e-12)
+        assert (s0[1:] > 0).sum() >= 3 and z.max() < 4.0, (K, m0, m1, z)
