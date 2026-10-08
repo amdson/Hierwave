@@ -295,9 +295,12 @@ double-centre (subtract row and column means).
 \section{The conv potential (coarse-level pair potentials)}
 \label{sec:convpot}
 
-A parametric factor over one channel, kept for coarse levels. Each value has an embedding
-$e : \Dom \to \R^k$ (the rows of a matrix $M \in \R^{D \times k}$, one-hot or learned); offsets
-$d \in \{-1,0,1\}^2$ index the $3 \times 3$ neighbourhood. Then
+A parametric factor over one channel, kept for coarse levels. Each value has a feature vector
+$e : \Dom \to \R^k$, the channel's \emph{feature set}, fixed before fitting: the rows of a free
+matrix $M \in \R^{D \times k}$ (one-hot, or learned like token embeddings), or derived from what
+the value asks of the finer level (the \emph{stamp}: paint $v$ alone in its block's frame and take
+the indicator over footprint cells and paint values). Offsets $d \in \{-1,0,1\}^2$ index the
+$3 \times 3$ neighbourhood. Then
 \begin{equation}
   E(z) = \sum_p \Big[\, a \cdot e(z_p) + \sum_{d \ne 0} e(z_p)^{\!\top} A_d\, e(z_{p+d})
        + v \cdot \softplus\!\Big(\sum_{d} W_d\, e(z_{p+d}) + b\Big)\Big],
@@ -306,9 +309,14 @@ with $a \in \R^k$, $A_d \in \R^{k\times k}$, $W_d \in \R^{m \times k}$, $b, v \i
 neighbours use $e(\mathrm{pad})$ or drop out. The softplus term with $m$ hidden units (the
 \emph{plaquette head}) adds 3- and 4-body interactions. With one-hot $M$ and $m = 0$ this is the
 8-offset pair-table model and the fit (same regression as above) is closed-form ridge; for $m > 0$
-it is fitted by Adam. Candidate cost in the kernel: $9k$ operations (bilinear) $+\, 9km$ (head,
-updated incrementally). On the toys the head added nothing measurable; the bilinear form reached
-the estimator's noise floor.
+it is fitted by Adam. With stamp features and $A_d$ tied to the geometry (entry $(s, s')$ of $A_d$ is
+$g_\delta$ for cell pairs within the stencil offsets $\mathcal{O}$, zero otherwise) the free
+parameters are the stencil $(u, \{g_\delta\})$ and the factor is the paint potential of
+Section~\ref{sec:train} written over coarse values; its materialised tables are exact.
+Candidate cost in the kernel: $9k$ operations (bilinear) $+\, 9km$ (head, updated incrementally),
+or table lookups when materialised. On the toys the head added nothing measurable; the bilinear
+form with one-hot or learned features reached the estimator's noise floor at the top level but
+did not generalise to held-out value pairs at the mid level; stamp features did.
 
 %-----------------------------------------------------------------------------
 \section{Self-play moment matching (retained as a diagnostic)}
