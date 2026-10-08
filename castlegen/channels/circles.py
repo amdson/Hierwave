@@ -303,26 +303,29 @@ class Circles:
                 Factor.unary(("mid", "present"), np.array([0.0, -self.b]), name="pres")]
 
     def learned_factors(self, theta):
+        """The tabular learned factors of theta; a key missing from theta is
+        left out (its role taken by an extra factor, e.g. a convpot)."""
         M, T = ("mid", "self"), ("top", "pal")
-        return [Factor.pair(M, M, (0, 1), theta["mid_h"], name="mid_h"),
-                Factor.pair(M, M, (1, 0), theta["mid_v"], name="mid_v"),
-                Factor.unary(M, theta["mid_u"], name="mid_u"),
-                Factor.pair(T, T, (0, 1), theta["top_h"], name="top_h"),
-                Factor.pair(T, T, (1, 0), theta["top_v"], name="top_v"),
-                Factor.unary(T, theta["top_u"], name="top_u")]
+        mk = dict(mid_h=lambda t: Factor.pair(M, M, (0, 1), t, name="mid_h"),
+                  mid_v=lambda t: Factor.pair(M, M, (1, 0), t, name="mid_v"),
+                  mid_u=lambda t: Factor.unary(M, t, name="mid_u"),
+                  top_h=lambda t: Factor.pair(T, T, (0, 1), t, name="top_h"),
+                  top_v=lambda t: Factor.pair(T, T, (1, 0), t, name="top_v"),
+                  top_u=lambda t: Factor.unary(T, t, name="top_u"))
+        return [f(theta[k]) for k, f in mk.items() if k in theta]
 
     def theta0(self):
         D, P = self.D, self.P
         return dict(mid_h=np.zeros((D, D)), mid_v=np.zeros((D, D)), mid_u=np.zeros(D),
                     top_h=np.zeros((P, P)), top_v=np.zeros((P, P)), top_u=np.zeros(P))
 
-    def model(self, chans, theta=None):
+    def model(self, chans, theta=None, extra=()):
         """All five channels (slot and dem fixed everywhere); designed factors,
-        plus the learned ones when theta is given."""
+        plus the learned ones when theta is given, plus `extra` factors."""
         for c in chans:
             if c.name in ("slot", "dem"):
                 c.fixed = np.ones(c.grid.shape, bool)
-        fac = self.designed_factors() + (self.learned_factors(theta) if theta is not None else [])
+        fac = self.designed_factors() + (self.learned_factors(theta) if theta is not None else []) + list(extra)
         return Model(self.H, self.W, list(chans), fac)
 
     # ---------------------------------------------------------- painters
@@ -580,8 +583,8 @@ class Forward:
     designed + learned factors (the model is rebuilt from self.theta at
     every run)."""
 
-    def __init__(self, C: Circles, theta: dict, seed=0):
-        self.C, self.theta = C, theta
+    def __init__(self, C: Circles, theta: dict, seed=0, extra=()):
+        self.C, self.theta, self.extra = C, theta, list(extra)
         self.chans = C.channels()
         self.top, self.mid, self.tile, self.slot, self.dem = self.chans
         self.model = None
@@ -589,7 +592,7 @@ class Forward:
 
     def run(self, S_T=30, S_M=30, S_F=20, fresh=True):
         C = self.C
-        self.model = C.model(self.chans, self.theta)
+        self.model = C.model(self.chans, self.theta, self.extra)
         if fresh:
             self.top.grid[:] = 0
             self.mid.grid[:] = 0
