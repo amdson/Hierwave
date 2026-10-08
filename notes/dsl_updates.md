@@ -5,6 +5,9 @@ Companion to `reference_math.tex` (the current DSL) and
 why, the math, what it replaces.  Built iteratively; numbers in brackets
 refer to the review notes.
 
+The programmatic shape (channels, writers, locals, kernel, trainer as
+interfaces) is in `dsl_interface.md`; this note is the math.
+
 What does not change: the two models and the identity `Phi_l = F_{l-1}`,
 the sampler (Gumbel-max site draws, colouring, the certificate's joint
 draw), the window estimator with AIS, the cluster expansion, the toys.
