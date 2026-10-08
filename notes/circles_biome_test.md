@@ -314,6 +314,47 @@ Stretch, after 8: objects on a Potts texture (footprint tiles coupled by
 only, judged by the end-to-end monitors against a long oracle chain on a
 periodic world, with `K` as the dial.
 
+## Contracts fixed before the build
+
+- *The one-site window.*  For site `p` of channel `c` at level `l` and
+  candidate `t`: coarse context = the state's values at every other cell
+  of levels `>= l` (no reference value needed, the context is a whole
+  state); fine region `R(p)` = the fine cells any candidate at `p` writes
+  (here the block plus its one-cell spill border, 10 x 10 tiles),
+  dilated by the reach of the fine channel's same-level factors; fine
+  cells outside `R(p)` fixed at the state's own fine values.  `F(t; ctx)`
+  is the free energy of `R(p)` under `z_p = t` with that boundary; only
+  differences across `t` at one site are used.
+- *Candidate features at a site.*  `fit` takes a callback
+  `feats(model, home, y, x, cand) -> (len(cand), nfeat)`: for each
+  candidate the paint-potential feature vector (`paintpot.features`,
+  OFF8) of the local paint with `cand[i]` at `(y, x)`, minus the same
+  with `absent` there, computed over `R(p)` only.  `CirclesBiome`
+  provides it as `stamp_features`.  With `psi` linear the dataset record
+  is `(X: (n_cand, nfeat), e: (n_cand,) designed, pi: (n_cand,))` and the
+  fit is logistic regression on `X`.
+- *Site order during the `K` steps.*  `fit` visits sites in the kernel's
+  own order: colour classes from `Model.compile(home).colours`, raster
+  within a class, so a `K` step is one sweep of a valid `p*` kernel.
+- *The `Targets` protocol* (duck-typed, no shared base class needed):
+  `at(model, home, y, x, cand) -> (len(cand),) float64` summing to 1,
+  computed from the model's current state.
+
+## Work packages
+
+Four packages start at once; A adds and never renames, so the others
+build on today's kernel and merge without conflict.
+
+| package | builds | owns | depends on | gate |
+|---|---|---|---|---|
+| A. Sampler layer | stage 1: `Sampler` wrapping the kernel, candidate cap `K`, block active bit, hard rows first | `castlegen/channels/sampler.py` (new), additions to `kernel.py`, `core.py` | nothing | old circles / Potts / paintpot tests pass through the wrapper; `test_sampler.py` for cap invariance and dormancy on `Potts(1,1)` |
+| B. Model and oracle | stage 2: `CirclesBiome`, painters, `support_factors`, `reference`, `stamp_features`, oracle, render, tests; stamps as data so stage 7 is a parameterisation | `castlegen/channels/circles_biome.py`, `tests/test_circles_biome.py` | current `core.py` only | the tests above; an oracle render with zero conflicts, both families, dormant blocks |
+| C. Trainer | `ExactTargets`, `SampledTargets`, `fit`, `autocorr_clamped` | `castlegen/channels/targets.py` (new), additions to `train.py`, `tests/test_targets.py` | `paintpot.features`, the existing Potts and circles oracles | stage 6 on Potts and `fit` on the old circles with `Oracle.mid_probs` targets: tables match the published S1 |
+| D. AIS targets | `AISTargets` on the one-site window over the child channel's sampler | `castlegen/channels/aistargets.py` (new), `tests/test_aistargets.py` | `induce.ais_log_z`; the `Targets` protocol | equals an exact hook to 1e-9 on the old circles; within the AIS standard error without it |
+
+Integration order: A first; stage 3 (A + B); stages 4-5 (B + C + D);
+stage 7 (A + B); stage 8 (A only, by whoever built A).
+
 ## Results
 
 (none yet)
