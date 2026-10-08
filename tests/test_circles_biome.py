@@ -484,3 +484,91 @@ def test_masks_random_families_run():
     assert s["conflict"] == 0 and s["mask_viol"] == 0 and s["bio_h"].shape == (8, 8)
     assert C.render(O.biome, O.obj, O.tile).shape == (C.H, C.W, 3)
     assert C.group() == [(0, 0, 0)] or (0, 0, 0) in C.group()
+
+
+# ------------------------------------------------------- periodic world
+def _torus_dem(C, og):
+    """Independent painter on the torus: og is the (ny, nx) torus obj grid."""
+    ny, nx = og.shape
+    H, W = ny * C.BM, nx * C.BM
+    nd, nr = np.zeros((H, W), int), np.zeros((H, W), int)
+    for i in range(ny):
+        for j in range(nx):
+            for y, x, s in C.STAMP[og[i, j]]:
+                (nd if s == 1 else nr)[(i * C.BM + y) % H, (j * C.BM + x) % W] += 1
+    return np.where(nd > 0, np.where(nr > 0, 3, 1), np.where(nr > 0, 2, 0))
+
+
+def test_periodic_paint_wraps():
+    C = CirclesBiome(2, 2, periodic=True)
+    assert (C.nty, C.nmy, C.H) == (4, 8, 64) and (C.nty_in, C.ntx_in) == (2, 2)
+    rng = np.random.default_rng(0)
+    biome, obj, tile, allow, dem = C.channels()
+    assert np.array_equal(obj.fixed, C.ghost_mask(obj.grid.shape)) and obj.fixed.sum() == 64 - 16
+    for _ in range(5):
+        obj.grid[:] = rng.integers(C.D, size=obj.grid.shape) * (rng.random(obj.grid.shape) < 0.4)
+        C.sync(obj)
+        C.paint_dem(obj, dem)
+        assert np.array_equal(C.inner(dem), _torus_dem(C, C.inner(obj)))
+        assert np.array_equal(dem.grid, dem.grid[np.ix_(*[(np.arange(64) - 16) % 32 + 16] * 2)])  # ghosts = copies
+    # a disc at the torus top-left slot, centre (2, 2): its ring row and column -1 land on the last torus row and column
+    obj.grid[:] = 0
+    obj.grid[2, 2] = 1
+    C.sync(obj)
+    C.paint_dem(obj, dem)
+    d = C.inner(dem)
+    assert d[-1, 2] == 2 and d[0, 2] == 1 and d[2, -1] == 2 and d[-1, -1] == 0 and d[-1, -2] == 0
+    biome.grid[:] = rng.integers(C.P, size=biome.grid.shape)
+    C.sync(biome)
+    C.paint_allow(biome, allow, (1, 1))
+    C.paint_allow(biome, allow)
+    assert np.array_equal(C.inner(allow), np.repeat(np.repeat(C.inner(biome), 2, 0), 2, 1))
+
+
+def test_periodic_oracle_energy_identity():
+    """Periodic 2 x 2 world: mid_probs against direct torus painting, the
+    tile energy identity, ghosts staying copies, the forward running."""
+    C = CirclesBiome(2, 2, periodic=True)
+    O = Oracle(C, seed=3)
+    O.sweep(4)
+    rng = np.random.default_rng(1)
+    for _ in range(3):
+        O.sweep(1)
+        for c in (O.biome, O.obj, O.tile, O.allow, O.dem):
+            g = c.grid.copy()
+            C.sync(c)
+            assert np.array_equal(g, c.grid), c.name
+        tg = C.inner(O.obj).copy()
+        for i, j in [(2, 2), (5, 5), (2, 5), (rng.integers(2, 6), rng.integers(2, 6))]:
+            e = np.zeros(C.D)
+            a = O.allow.grid[i, j]
+            for o in range(C.D):
+                g = tg.copy()
+                g[i - 2, j - 2] = o
+                dm = _torus_dem(C, g)
+                e[o] = C.fz[dm].sum() + C.pres_e[o] + C.mask_e[o, a]
+            p = np.exp(-(e - e[np.isfinite(e)].min()))
+            assert np.allclose(O.mid_probs(i, j), p / p.sum(), atol=1e-9)
+    s = C.stats(O.biome, O.obj, O.tile)
+    assert s["conflict"] == 0 and s["mask_viol"] == 0 and np.isclose(s["obj_h"].sum(), 1)
+    assert np.array_equal(C.inner(O.dem), _torus_dem(C, C.inner(O.obj)))
+    tot, nviol = O.model.energy("tile")
+    assert nviol == 0 and np.isclose(tot, C.mu * (O.tile.grid == 0).sum())
+    th = C.theta0()
+    F = Forward(C, th, seed=2)
+    s = F.run(4, 4, 2)
+    assert s["conflict"] == 0 and s["mask_viol"] == 0
+    for c in F.chans:
+        g = c.grid.copy()
+        C.sync(c)
+        assert np.array_equal(g, c.grid), c.name
+    assert C.render(F.biome, F.obj, F.tile).shape == (32, 32, 3)
+
+
+def test_stats_region_margin0_is_stats():
+    C = CirclesBiome(2, 3)
+    O = Oracle(C, seed=4)
+    O.sweep(3)
+    s, r = C.stats(O.biome, O.obj, O.tile), C.stats_region(O.biome, O.obj, O.tile, margin=0)
+    for k in s:
+        assert np.allclose(s[k], r[k]), k

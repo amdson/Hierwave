@@ -245,11 +245,22 @@ def _grid(c):
 
 # ------------------------------------------------------------------ model
 class CirclesBiome:
-    def __init__(self, nty, ntx, BM=8, BT=2, mu=0.3, b=None, families=None, masks=None):
+    def __init__(self, nty, ntx, BM=8, BT=2, mu=0.3, b=None, families=None, masks=None, periodic=False):
         """masks: the biome's values as an explicit list of admitted-family
         bitmasks (bit f = family f; 0 = none, dormant); default every 2^N mask
-        in order, so value v admits family f iff bit f of v is set."""
+        in order, so value v admits family f iff bit f of v is set.
+
+        periodic: the world is a torus of nty x ntx top cells (even), stored
+        with a ghost ring one top cell wide: every grid is padded, nty, ntx,
+        nmy, nmx, H, W are the padded sizes, nty_in, ntx_in the torus.  Ghost
+        cells are fixed copies of the opposite interior cells (sync), so the
+        generic kernel, whose off-grid terms vanish, reads the torus at every
+        interior site; rings, the dem paint and stats wrap."""
         fams = default_families() if families is None else families
+        self.periodic, self.pg, self.nty_in, self.ntx_in = bool(periodic), int(bool(periodic)), nty, ntx
+        if periodic:
+            assert nty % 2 == 0 and ntx % 2 == 0 and BT % 2 == 0, "torus colourings need even sizes"
+            nty, ntx = nty + 2, ntx + 2
         self.nty, self.ntx, self.BM, self.BT, self.mu = nty, ntx, BM, BT, float(mu)
         self.nmy, self.nmx = nty * BT, ntx * BT
         self.H, self.W = self.nmy * BM, self.nmx * BM
@@ -373,6 +384,143 @@ class CirclesBiome:
             else:
                 self.CONF8[k] = self.CONF[(-dy, -dx)].T
 
+    # --------------------------------------------------------- periodic
+    def ghost_width(self, shape):
+        """Ghost ring width, in cells, of a padded world grid of this shape (any
+        level); 0 when not periodic or for any other shape."""
+        r = shape[0] // self.nty
+        ok = r in (1, self.BT, self.BT * self.BM) and tuple(shape[:2]) == (self.nty * r, self.ntx * r)
+        return self.pg * r if ok else 0
+
+    def ghost_mask(self, shape):
+        g = self.ghost_width(shape)
+        m = np.zeros(shape, bool)
+        if g:
+            m[:g] = m[-g:] = True
+            m[:, :g] = m[:, -g:] = True
+        return m
+
+    def sync(self, *cs):
+        """Periodic: copy every interior cell onto its ghost copies (channels or grids, any level)."""
+        for c in cs:
+            a = _grid(c)
+            g = self.ghost_width(a.shape)
+            if g:
+                a[:g] = a[-2 * g:-g]
+                a[-g:] = a[g:2 * g]
+                a[:, :g] = a[:, -2 * g:-g]
+                a[:, -g:] = a[:, g:2 * g]
+
+    def inner(self, a):
+        """The torus part of a padded grid (the grid itself when not periodic)."""
+        a = _grid(a)
+        g = self.ghost_width(a.shape)
+        return a[g:a.shape[0] - g, g:a.shape[1] - g]
+
+    def copies(self, i, j):
+        """Positions of the mid grid holding slot (i, j)'s value: itself and its ghost copies."""
+        if not self.periodic:
+            return [(i, j)]
+        g = self.pg * self.BT
+        ny, nx = self.nmy - 2 * g, self.nmx - 2 * g
+        ys = [g + (i - g) % ny + k * ny for k in (-1, 0, 1)]
+        xs = [g + (j - g) % nx + k * nx for k in (-1, 0, 1)]
+        return [(a, b) for a in ys if 0 <= a < self.nmy for b in xs if 0 <= b < self.nmx]
+
+    def pcolours(self, shape):
+        """(colours, ncol) proper on the torus for the grid's level: top (y + x) % 2
+        (4-neighbour pairs), mid 2 x 2 blocks (8-neighbour pairs), tiles one class
+        (no tile-tile factor)."""
+        r = shape[0] // self.nty
+        yy, xx = np.mgrid[:shape[0], :shape[1]]
+        if r == 1:
+            return (yy + xx) % 2, 2
+        if r == self.BT:
+            return 2 * (yy % 2) + xx % 2, 4
+        return np.zeros(shape, np.int64), 1
+
+    @staticmethod
+    def _shift(a, d, wrap):
+        """(b, valid): b[p] = a[p + d], valid where p + d is on the grid (always with wrap)."""
+        if wrap:
+            return np.roll(a, (-d[0], -d[1]), (0, 1)), np.ones(a.shape, bool)
+        H, W = a.shape
+        b, v = np.zeros_like(a), np.zeros(a.shape, bool)
+        dst = (slice(max(0, -d[0]), H - max(0, d[0])), slice(max(0, -d[1]), W - max(0, d[1])))
+        src = (slice(max(0, d[0]), H + min(0, d[0])), slice(max(0, d[1]), W + min(0, d[1])))
+        b[dst] = a[src]
+        v[dst] = True
+        return b, v
+
+    def _stats_sel(self, bg, og, fg, dem, st, sm, sf, wrap):
+        """stats() over selected cells (st top, sm slots, sf tiles; pairs with both
+        ends selected), wrapping around the grids when wrap."""
+        D, P, BM, BT = self.D, self.P, self.BM, self.BT
+
+        def pairs(g, sel, n, offs):
+            out = []
+            for d in offs:
+                b, v = self._shift(g, d, wrap)
+                m = sel & self._shift(sel, d, wrap)[0] & v
+                t = np.zeros((n, n))
+                np.add.at(t, (g[m], b[m]), 1)
+                out.append(t / max(t.sum(), 1))
+            return out
+        oh, ov, od1, od2 = pairs(og, sm, D, OFFS)
+        bh, bv = pairs(bg, st, P, OFFS[:2])
+        bu = np.bincount(bg[st], minlength=P) / max(st.sum(), 1)
+        nc = npair = 0
+        for d in OFFS[:2]:
+            b, v = self._shift(og, d, wrap)
+            m = sm & self._shift(sm, d, wrap)[0] & v & (og > 0) & (b > 0)
+            nc += self.CONTACT[d][og[m], b[m]].sum()
+            npair += m.sum()
+        B = BM * BT
+        H, W = fg.shape
+        yy, xx = np.mgrid[:H, :W]
+        if wrap:
+            band = (xx % B == B - 1) | (xx % B == 0) | (yy % B == B - 1) | (yy % B == 0)
+        else:
+            band = ((xx % B == B - 1) & (xx < W - 1)) | ((xx % B == 0) & (xx > 0)) | \
+                   ((yy % B == B - 1) & (yy < H - 1)) | ((yy % B == 0) & (yy > 0))
+        band &= sf
+        allow = np.repeat(np.repeat(bg, BT, 0), BT, 1)
+        fam = self.FAM[og]
+        s = dict(obj_h=oh, obj_v=ov, obj_d1=od1, obj_d2=od2, obj_u=np.bincount(og[sm], minlength=D) / max(sm.sum(), 1),
+                 bio_h=bh, bio_v=bv, bio_u=bu)
+        for f, n in enumerate(self.names):
+            s["present_" + n] = float((fam[sm] == f + 1).mean())
+        s.update(conflict=float((dem[sf] == CONFLICT).mean()),
+                 contact=float(nc / npair) if npair else 0.0,
+                 bio_hist=bu.copy(),
+                 dormant=float(self.dormant_of(allow)[sm].mean()),
+                 mask_viol=float((~self.FAMOK[fam, allow])[sm].mean()),
+                 edge_air_top=float((fg[band] == AIR).mean()) if band.any() else 0.0)
+        return s
+
+    def _stats_periodic(self, biome, obj, tile):
+        """stats on the torus: the interior, every pair and ring wrapped."""
+        bg, og, fg = self.inner(biome), self.inner(obj), self.inner(tile)
+        dem = self.inner(self.dem_of(_grid(obj)))
+        one = lambda a: np.ones(a.shape, bool)
+        return self._stats_sel(bg, og, fg, dem, one(bg), one(og), one(fg), True)
+
+    def stats_region(self, biome, obj, tile, margin=1, deep=False):
+        """stats over the cells at least `margin` blocks of their own level from
+        the world edge (top cells, slots, tiles margin * BM); deep: slots and
+        tiles inside the selected top cells (margin * BT slots).  Pairs with both
+        ends selected.  Periodic: stats (there is no edge)."""
+        if self.periodic:
+            return self.stats(biome, obj, tile)
+        bg, og, fg = _grid(biome), _grid(obj), _grid(tile)
+        mm = margin * (self.BT if deep else 1)
+
+        def sel(a, m):
+            s = np.zeros(a.shape, bool)
+            s[m:a.shape[0] - m, m:a.shape[1] - m] = True
+            return s
+        return self._stats_sel(bg, og, fg, self.dem_of(og), sel(bg, margin), sel(og, mm), sel(fg, mm * self.BM), False)
+
     # --------------------------------------------------------- channels
     def channels(self):
         D, P = self.D, self.P
@@ -393,6 +541,8 @@ class CirclesBiome:
             c.fixed = np.zeros(c.grid.shape, bool)
         allow.fixed[:] = True
         dem.fixed[:] = True
+        for c in (biome, obj, tile):
+            c.fixed |= self.ghost_mask(c.grid.shape)
         self.paint_allow(biome, allow)
         self.paint_dem(obj, dem)
         return biome, obj, tile, allow, dem
@@ -456,12 +606,15 @@ class CirclesBiome:
         else:
             I, J = region
             ag[I * BT:(I + 1) * BT, J * BT:(J + 1) * BT] = bg[I, J]
+            self.sync(ag)
 
     def paint_dem(self, obj, dem, window=None):
         """Union of the objects' demands; window = (y0, y1, x0, x1) repaints those tiles."""
         og, dg = _grid(obj), _grid(dem)
         y0, y1, x0, x1 = (0, dg.shape[0], 0, dg.shape[1]) if window is None else window
         _paint_dem(og, dg, self.BM, self.SHB, y0, y1, x0, x1)
+        if window is None:
+            self.sync(dg)
 
     def dem_of(self, obj):
         og = _grid(obj)
@@ -512,6 +665,8 @@ class CirclesBiome:
         return out
 
     def stats(self, biome, obj, tile):
+        if self.periodic:
+            return self._stats_periodic(biome, obj, tile)
         D, P, BM, BT = self.D, self.P, self.BM, self.BT
         bg, og, fg = _grid(biome), _grid(obj), _grid(tile)
         oh, ov, od1, od2 = self._pairs(og, D)
@@ -689,6 +844,9 @@ class CirclesBiome:
         top_edge = (yy % B == 0) | (xx % B == 0) | (yy % B == B - 1) | (xx % B == B - 1)
         img[mid_edge] *= 0.8
         img[top_edge] *= 0.5 / np.where(mid_edge[top_edge], 0.8, 1.0)[:, None]
+        g = self.ghost_width(img.shape)
+        if g:
+            img = img[g:-g, g:-g]
         return np.clip(img, 0, 255).astype(np.uint8)
 
 
@@ -726,7 +884,7 @@ class Forward:
         C.paint_allow(self.biome, self.allow)
         dorm = C.dormant_of(self.allow)
         self.obj.grid[dorm] = 0
-        self.obj.fixed[:] = dorm
+        self.obj.fixed[:] = dorm | C.ghost_mask(dorm.shape)
         self.n_dormant = int(dorm.sum())
         return self.n_dormant
 
@@ -747,6 +905,8 @@ class Forward:
             self.biome.grid[:] = 0
             self.obj.grid[:] = 0
             self.tile.grid[:] = 0
+        if C.periodic:
+            return self._run_periodic(S_T, S_M, S_F)
         if self.use_sampler:
             return self._run_sampler(S_T, S_M, S_F)
         if S_T:
@@ -757,6 +917,36 @@ class Forward:
         C.paint_dem(self.obj, self.dem)
         if S_F:
             self.model.sweep("tile", S_F, seed=int(self.rng.integers(1 << 30)))
+        return C.stats(self.biome, self.obj, self.tile)
+
+    def _psweep(self, home, n):
+        """Periodic: n sweeps of `home`, one class of a colouring proper on the
+        torus (C.pcolours) at a time, the ghosts synced after each class, so
+        every update reads current wrapped neighbours (exact Gibbs on the torus)."""
+        from . import kernel
+        C = self.C
+        P = self.model.compile(home)
+        g = self.model.chan(home).grid
+        col, ncol = C.pcolours(g.shape)
+        fx = [np.ascontiguousarray(P.fixed | (col != c)) for c in range(ncol)]
+        kernel.seed(int(self.rng.integers(1 << 30)))
+        for _ in range(n):
+            for c in range(ncol):
+                kernel.sweep(P.home, P.grids, P.hs, P.views, P.fac, P.tabs, fx[c], P.colours, P.ncol, P.cert, P.joins,
+                             P.delta, 1.0, P.convs)
+                C.sync(g)
+
+    def _run_periodic(self, S_T, S_M, S_F):
+        C = self.C
+        assert not self.use_sampler, "periodic runs on the old path"
+        if S_T:
+            self._psweep("biome", S_T)
+        self.init_obj()
+        if S_M:
+            self._psweep("obj", S_M)
+        C.paint_dem(self.obj, self.dem)
+        if S_F:
+            self._psweep("tile", S_F)
         return C.stats(self.biome, self.obj, self.tile)
 
     def _run_sampler(self, S_T, S_M, S_F):
@@ -796,9 +986,11 @@ class Oracle:
         self.chans = C.channels()
         self.biome, self.obj, self.tile, self.allow, self.dem = self.chans
         self.biome.grid[:] = self.rng.integers(C.P, size=self.biome.grid.shape)
+        C.sync(self.biome)
         C.paint_allow(self.biome, self.allow)
         C.paint_dem(self.obj, self.dem)
         _redraw(self.tile.grid, self.dem.grid, self.dem.grid, 0, C.H, 0, C.W, C.mu, self.rng.random(C.H * C.W), False)
+        C.sync(self.tile)
         self.model = C.model(self.chans)
         self._e = np.empty(C.D)
 
@@ -815,6 +1007,7 @@ class Oracle:
     def top_move(self, i, j):
         p = self.top_probs(i, j)
         self.biome.grid[i, j] = int(np.searchsorted(np.cumsum(p), self.rng.random() * p.sum(), side="right"))
+        self.C.sync(self.biome)
         self.C.paint_allow(self.biome, self.allow, (i, j))
 
     # -------------------------------------------------------------- mid
@@ -828,6 +1021,21 @@ class Oracle:
         integrated out (closed form); 0 on inadmissible values."""
         return _softmax(-self.mid_energies(i, j))
 
+    def _mid_move_p(self, i, j, o):
+        """Periodic tail of mid_move: o written to every copy of the slot, dem
+        repainted and changed tiles redrawn around each copy, ghosts synced."""
+        C, BM = self.C, self.C.BM
+        cps = C.copies(i, j)
+        for a, b in cps:
+            self.obj.grid[a, b] = o
+        for a, b in cps:
+            y0, y1, x0, x1 = a * BM - 1, (a + 1) * BM + 1, b * BM - 1, (b + 1) * BM + 1
+            ya, xa = max(y0, 0), max(x0, 0)
+            old = self.dem.grid[ya:y1, xa:x1].copy()
+            C.paint_dem(self.obj, self.dem, (y0, y1, x0, x1))
+            _redraw(self.tile.grid, self.dem.grid, old, ya, y1, xa, x1, C.mu, self.rng.random((BM + 2) ** 2), True)
+        C.sync(self.dem, self.tile)
+
     def mid_move(self, i, j):
         C = self.C
         p = self.mid_probs(i, j)
@@ -836,6 +1044,8 @@ class Oracle:
             o -= 1
         if o == self.obj.grid[i, j]:
             return
+        if C.periodic:
+            return self._mid_move_p(i, j, o)
         self.obj.grid[i, j] = o
         BM = C.BM
         y0, y1, x0, x1 = i * BM - 1, (i + 1) * BM + 1, j * BM - 1, (j + 1) * BM + 1
@@ -847,9 +1057,22 @@ class Oracle:
     # ------------------------------------------------------------ sweeps
     def tile_sweep(self, n=1):
         self.model.sweep("tile", n, seed=int(self.rng.integers(1 << 30)))
+        self.C.sync(self.tile)
 
     def sweep(self, n=1, tile_sweeps=2):
         C = self.C
+        if C.periodic:                                     # interior cells only (ghosts follow by sync)
+            it = np.flatnonzero(~C.ghost_mask(self.biome.grid.shape).ravel())
+            im = np.flatnonzero(~C.ghost_mask(self.obj.grid.shape).ravel())
+            for _ in range(n):
+                for k in self.rng.permutation(it):
+                    self.top_move(k // C.ntx, k % C.ntx)
+                dorm = C.dormant_of(self.allow).ravel()
+                for k in self.rng.permutation(im):
+                    if not dorm[k]:
+                        self.mid_move(k // C.nmx, k % C.nmx)
+                self.tile_sweep(tile_sweeps)
+            return
         for _ in range(n):
             for k in self.rng.permutation(C.nty * C.ntx):
                 self.top_move(k // C.ntx, k % C.ntx)
