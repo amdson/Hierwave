@@ -140,8 +140,9 @@ It is the specification; it is never sampled in production.
 \begin{equation}
   q(z) = \prod_{\ell = L}^{1} q_\ell(z_\ell \mid z_{>\ell}),
 \end{equation}
-where $q_\ell$ is the law of level $\ell$ after $S_\ell$ Gibbs sweeps (Section~\ref{sec:sampler})
-at temperature $T = 1$ under the energy $E_\ell + \Phi_\ell$, started from the \emph{painted
+where $q_\ell$ is the law of level $\ell$ after $S_\ell$ sweeps of a kernel that leaves
+$\exp(-(E_\ell + \Phi_\ell))$ invariant (Gibbs for small domains, candidate-set Gibbs for large
+ones; Section~\ref{sec:sampler}) at temperature $T = 1$, started from the \emph{painted
 initialisation} (a consistent refinement of $z_{>\ell}$ written by the painters), with
 $z_{>\ell}$ clamped. $\Phi_\ell(z_\ell \mid z_{>\ell})$ is the \emph{learned potential} of
 level $\ell$. We call $S_\ell$ sweeps of this kernel the \emph{budgeted kernel}.
@@ -200,6 +201,17 @@ $p$'s dependants, which must stay valid), so
 \end{equation}
 $t$ by Gumbel-max over $\log w_t$, then $d$ from the truncated geometric law on $[a_t, b_t)$.
 Dependants read their other neighbours, hence radius 2.
+
+\paragraph{Large domains.} Enumerating $\Dom_c$ at every site is only for small $D_c$. A channel
+with a large domain (an exemplar coordinate, $D_c$ = the exemplar's cells) draws over a
+\emph{candidate set} $C_p \subset \Dom_c$ instead: the current value, the coherent continuation
+$z_q + (p - q)$ of each neighbour $q$, $K$ random values, and $K_t$ random values consistent
+with the tile under $p$. The draw is the same Gumbel-max restricted to $C_p$. Because $C_p$
+contains the current value and is chosen without reference to $z_p$, the step leaves the
+level's conditional invariant, which is all the chain needs. Cost per site: $|C_p|$ energy
+evaluations, each over the candidate's footprint; $\Phi_\ell$ is then evaluated on the fly on that
+footprint rather than read from tables. Any such invariant kernel may stand in for the Gibbs
+sweep in $q_\ell$ and in the identity of Section~\ref{sec:identity}.
 
 %-----------------------------------------------------------------------------
 \section{The training (combining) algorithm}

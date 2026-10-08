@@ -47,9 +47,15 @@ table channel as a `Local` list for a numba kernel.
 
 ```java
 class TableChannel implements Channel<DenseInbox> { List<Local> locals; }
-                                   // reference_math section 3: colouring, Gumbel-max, certificate joint draw
+                                   // reference_math section 3: enumerate Dom_c, colouring, Gumbel-max,
+                                   //   certificate joint draw.  Small D only.
 class BitTileChannel implements Channel<BitInbox> { }
                                    // castlegen/bitgibbs.c: rows as level planes, bit-sliced adder, integer draw
+class CoordChannel implements Channel<DenseInbox> { Exemplar ex; int K, K_t; }
+                                   // castlegen/channels/coord.py: D = exemplar cells; sweep draws over a
+                                   //   candidate set C_p (current value, neighbours' coherent continuations,
+                                   //   K random, K_t tile-consistent) chosen without reading z_p; Gumbel-max
+                                   //   on C_p.  Phi scored on the fly per candidate footprint.
 ```
 
 ## Inbox
@@ -185,9 +191,11 @@ class Trainer {
   summing rows.
 - Writers go coarse to fine; `sweep` reads the inbox and same-level
   terms, never a coarser channel's `z`.
-- `sweep` is a Gibbs-type kernel under `E_l + Phi_l` at `T = 1`, whatever
-  its implementation, and `energy`, `sweepTempered`, `unaryLogZ` make it
-  usable as AIS's kernel, so training measures the kernel that ships.
+- `sweep` is any kernel that leaves `exp(-(E_l + Phi_l))` invariant at
+  `T = 1`: full enumeration, bit-sliced enumeration, or a candidate-set
+  draw whose set contains the current value and is chosen without reading
+  it.  `energy`, `sweepTempered`, `unaryLogZ` make it usable as AIS's
+  kernel, so training measures the kernel that ships.
 - `Potential.features` depends on `fieldAt` only, so `Phi` is defined
   through the writes (U4), and the same `Phi` fits any inbox type.
 

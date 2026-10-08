@@ -9,8 +9,10 @@ The programmatic shape (channels, writers, locals, kernel, trainer as
 interfaces) is in `dsl_interface.md`; this note is the math.
 
 What does not change: the two models and the identity `Phi_l = F_{l-1}`,
-the sampler (Gumbel-max site draws, colouring, the certificate's joint
-draw), the window estimator with AIS, the cluster expansion, the toys.
+the sampler (Gumbel-max site draws over the domain or over a candidate
+set, colouring, the certificate's joint draw), the window estimator with
+AIS, the cluster expansion, the toys.  Each channel keeps its own
+sampler; the only requirement is a kernel invariant for `E_l + Phi_l`.
 The updates are to how levels communicate and what the learned potential
 takes as input.
 
