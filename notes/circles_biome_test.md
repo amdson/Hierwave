@@ -267,7 +267,9 @@ previous gate passes.
    other, wall time, and `autocorr_clamped("obj", "biome")`.  Gate: both
    within 0.05 of the reference on held-out pairs; this decides Q1 (stay
    with derived features if so) and the circles half of Q4 (which
-   estimator is cheaper for the same error).
+   estimator is cheaper for the same error).  (b) is the production
+   route; (a) exists here only because collapsed moves are closed form,
+   and its job is to measure what the recursion costs.
 5. **The top level.**  Install the mid bias; fit `bio_*` by (a)
    `fit_conditional` with oracle top moves and (b) `fit_windows` with AIS
    on the `obj` channel (the recursion: AIS runs the mid sampler with its

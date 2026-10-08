@@ -121,24 +121,31 @@ one option, not the design.
 per-site candidate energies up to a constant, i.e. log ratios of the fine
 partition function between candidates; neither needs `Z` itself.
 
-- *Pseudo-likelihood on joint samples* (preferred where available).
-  Sample the bidirectional model `p*` offline, fine and coarse together;
+- *Window free energies* (`reference_math` section 4): the general
+  estimator, and the one the bottom-up recursion is built on.  `F` per
+  window by AIS on the fine channel's own sampler with its installed
+  potential, over the fine region of a small coarse window with halo;
+  ridge or Adam on `x(W) . theta = y(W)`.  It never samples `p*`
+  globally: each estimate is one level, one window, the shipping kernel
+  at the shipping budget, so its cost is bounded by construction and its
+  floor is the AIS standard error.  The price is the recursion: error in
+  the potential installed below enters the free energies above, which
+  is also the point (`F` as the budgeted kernel realises it).  It fails
+  only where generation fails: a fine kernel that does not mix with the
+  coarse values clamped, which the autocorrelation criterion of C1 flags.
+- *Pseudo-likelihood on joint samples*: only where joint samples of
+  `p*` are free, and never by building a global sampler of `p*`, which is
+  the problem the hierarchy exists to avoid.  Free: a latent that is a
+  deterministic view of the level below (block the fine samples); a toy
+  with closed-form collapsed moves (circles); an annotated corpus.  Then
   train the conditional by cross-entropy: softmax over the sampler's
   candidate set, logits `= -(E_c(t) + Delta_p(t))` with the designed
   energy as a fixed offset so only `F` is learned.  Counting a table per
-  context is the tabular case.  No windows, no AIS, no partition
-  function: the fine level is integrated out by having been sampled.
-  Joint samples are free when the latent is a deterministic view of the
-  level below (block the fine samples); for a free latent with a
-  footprint they need collapsed moves (latent and footprint together),
-  which is the cost.
-- *Window free energies* (`reference_math` section 4).  `F` per window
-  by AIS on the fine channel's own sampler, ridge or Adam on
-  `x(W) . theta = y(W)`.  Needs no joint sampling; pays a partition
-  function estimate per window; fits `F` as the budgeted kernel realises
-  it.  The route for free latents.
-- Where both apply (Potts: the mid level is a view of the tiles under
-  hard honour) they cross-check each other.
+  context is the tabular case.  No windows, no AIS, no recursion: the
+  marginal of `p*` over levels `>= l` has the right one-site
+  conditionals exactly, so one sample set serves every level.
+- The choice is per channel.  Where both apply (Potts; circles) they
+  cross-check each other, and that is what the test uses them for.
 
 *Adaptive features.*  Grow the feature set or stencil where the residual
 (or the consistency violation) is significant and nowhere else, matching
@@ -250,9 +257,11 @@ enumerating combinations of writers.  Kept here for then.
 
 - Q1. Per channel: learned, derived, or mixed features?  Start derived
   and small, grow adaptively (C2); decide on circles + Potts first.
-- Q4. Joint samples for free latents: collapsed moves on a periodic test
-  world, or windows + AIS only.  Decide on circles (objects with
-  offsets) by comparing the two estimators' tables.
+- Q4. For a free latent with a footprint the production estimator is
+  windows + AIS; joint samples exist only on toys with collapsed moves.
+  What remains open is how much the recursion costs against the
+  joint-sample fit where both exist: circles, then objects on a Potts
+  texture (`circles_biome_test.md`, stretch).
 - Q2. The feature of an exemplar coordinate: its window's statement
   (the masked exemplar patch) is a stamp by construction; is that the
   whole feature or does it need learned dimensions for texture?

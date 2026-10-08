@@ -183,15 +183,14 @@ class Trainer {
 # approximated as  support_l (computed)  +  sum_p psi_theta(z_p, z_{N(p)})  (fitted).
 # The sampler only needs Delta_p(t) = Phi_l(z with z_p = t) - Phi_l(z) over its candidate set C_p.
 
-train(model, jointSampler or null, nSamples, nWindows):
-    samples = jointSampler ? jointSampler.draw(nSamples) : null
-        # one offline run of p*, every level, full states; reused by every level below.
-        # Collapsed moves for a free latent (Q4); block the fine samples for a latent that is a view.
+train(model, nWindows, nSamples):
     for l = 2 .. L:                                   # bottom up: estimator B needs Phi_{l-1} installed
         for c in channels(l) with a learned potential:
             S = support(c)                            # hard rows derived from the stamps / honourability
-            theta = samples ? fitConditional(model, c, samples)
-                            : fitWindows(model, c, nWindows)
+            theta = c.jointSamplesFree()              # a view of the level below, an annotated corpus, a toy
+                    ? fitConditional(model, c, c.jointSampler().draw(nSamples))   # estimator A, the cross-check
+                    : fitWindows(model, c, nWindows)                             # estimator B, the general case
+                    # never: build a global sampler of p* to get joint samples
             c.locals += S
             c.biases += install(theta, c)
             diagnostics(c)                            # consistency violation (A) or residual (B),
@@ -242,11 +241,16 @@ generate(model):
             c.relax(rng, p_l)
 ```
 
-- Estimator A needs no recursion: the marginal of `p*` over levels
-  `>= l` has one-site conditionals `exp(-(E_l + F_{l-1}))` exactly, so
-  one sample set serves every level, in any order.  The bottom-up order
-  is for estimator B, whose `F_{l-1}` is computed by sampling level
-  `l-1` under its installed approximation.
+- Estimator B is the general one: one level, one window, the shipping
+  kernel; it never samples `p*` globally, and its only failure mode is
+  a fine kernel that does not mix with the coarse values clamped, which
+  the C1 criterion flags.  The bottom-up order is for B, whose
+  `F_{l-1}` is computed by sampling level `l-1` under its installed
+  approximation.
+- Estimator A needs no recursion (the marginal of `p*` over levels
+  `>= l` has one-site conditionals `exp(-(E_l + F_{l-1})` exactly) but
+  needs joint samples of `p*`, which exist only where they are free.
+  It is the cross-check, chosen per channel.
 - Both deliver per-site candidate energies up to a constant; neither
   computes a partition function of level `l`.
 - The support is never in the fit: hard rows from the stamps go into
