@@ -18,9 +18,10 @@ one energy per candidate value per cell, starting at zero.  Coarser
 channels *write* into it additively.  The kernel at cell `p` scores
 candidate `t` by
 
-    e_p(t) = B_p(t) + (same-level pair terms at p with z_p = t)
+    e_p(t) = B_p(t) + C_q(n_{-p} + alpha(t)) + (same-level pair terms at p with z_p = t)
 
-and never reads a coarser channel directly.  `+inf` entries in the field
+(block writes `C_q` defined below) and never reads a coarser channel
+directly.  `+inf` entries in the field
 are hard.
 
 **Why.**  A parent read at a fixed offset is already a write: cell `q` of
@@ -34,9 +35,17 @@ can take the field as input (U4).
 
     for q in Lambda_b, p with q_b(p, delta) = q:   B_p(.) += T[alpha(.), beta(z_b(q))]
 
-A count factor is not a write (it reads the block sum of the finer
-channel); it stays a factor homed on the finer side, evaluated in the
-kernel as today.
+A count factor `(a alpha, b beta)` is also a write, of a function rather
+than a vector: cell `q` of `b` writes the row it selects,
+
+    C_q(n) = T[beta(z_b(q)), n],   n in {0, ..., |block(q)|},
+
+into its block, and the kernel at `p in block(q)` scores `t` by
+`C_q(n_{-p} + alpha(t))` with `n_{-p}` the sum of `alpha` over the other
+cells of the block (a maintained per-block counter).  The parent writes;
+the siblings' values the kernel reads are a same-level interaction (U2
+rule 3), so the top-down convention holds for every factor.  Two write
+types, then: a *cell write* `B_p(.)` and a *block write* `C_q(.)`.
 
 **Example (circles).**  An object's disc demands dirt, `(kappa, 0)` on
 `(air, dirt)`; its ring demands air, `(0, kappa)`.  A tile in one disc and
@@ -137,9 +146,7 @@ indicator penalty (`channels_system.tex`).
 
 ## Open questions
 
-- Q1 [3]. Count factors read the finer level's block sum.  Keep as the one
-  upward read inside a level's energy, or express support/count rules as
-  the certificate does?
+- Q1 [3]. Resolved: count factors are block writes (U1).
 - Q2 [6]. Same-level writes between two *sampled* channels: allowed (then
   both refresh on change, cost `D` per neighbour update) or only from
   designed and painted channels?
