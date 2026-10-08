@@ -8,6 +8,11 @@ Factor: a table over views.
            pad_a: the same for a when the factor is read from b's side
     count  E[vb(z_b[q]), sum_{p' in block(q)} va(z_a[p'])], b coarser than a
     unary  E[va(z_a[p])]
+    convpot  a learned 3 x 3 energy over value embeddings E[va(z)] of one
+           channel (notes/convpot_test.md, "Definition"; numpy reference
+           in convref.py): per site a . e_p + sum_{d != 0} e_p^T A_d e_{p+d}
+           + v . softplus(sum_d W_d e_{p+d} + b); off-grid neighbours read
+           E[pad] (pad >= 0) or nothing.  Same-level only.
 Hard entries are inf.  A factor is homed on its a side, which is the finer
 (or equal) level: top-down only, a coarser channel never reads a finer one.
 Certificate: the one computed factor (the tree rule of channels.tex, 14):
@@ -28,7 +33,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 INF_E = np.inf
-PAIR, COUNT, UNARY, BPAIR, BCOUNT = 0, 1, 2, 3, 4
+PAIR, COUNT, UNARY, BPAIR, BCOUNT, CONVPOT = 0, 1, 2, 3, 4, 5
 
 
 # ------------------------------------------------------------------ kinds
@@ -96,6 +101,7 @@ class Factor:
     pad_b: int = -1
     pad_a: int = -1
     name: str = ""
+    conv: dict = None             # convpot: {"E": (Va, k), "a": (k,), "A": (9, k, k), "W": (9, k, m), "b", "v": (m,)}
 
     @staticmethod
     def pair(a, b, off, table, pad_b=-1, pad_a=-1, name=""):
@@ -108,6 +114,29 @@ class Factor:
     @staticmethod
     def unary(a, table, name=""):
         return Factor(UNARY, a, None, (0, 0), np.asarray(table, np.float64), name=name)
+
+    @staticmethod
+    def convpot(a, E, a_vec, A, W, b, v, pad=-1, name=""):
+        """Conv potential on channel/view a (notes/convpot_test.md).  E (Va, k)
+        indexed by the view value; A (9, k, k) (centre ignored), W (9, k, m),
+        b, v (m,), m = 0 allowed (no head).  Offsets row-major over (dy, dx)
+        in (-1, 0, 1)^2, index 4 the centre.  pad: the view value read off
+        the grid (-1: off-grid neighbours contribute nothing)."""
+        E = np.ascontiguousarray(E, np.float64)
+        k = E.shape[1]
+        W = np.ascontiguousarray(W, np.float64)
+        m = W.shape[2] if W.ndim == 3 else 0          # m = 0: no head (W may be given as an empty array)
+        conv = dict(E=E, a=np.ascontiguousarray(a_vec, np.float64).reshape(k),
+                    A=np.ascontiguousarray(A, np.float64), W=W.reshape(9, k, m),
+                    b=np.ascontiguousarray(b, np.float64).reshape(m),
+                    v=np.ascontiguousarray(v, np.float64).reshape(m))
+        return Factor(CONVPOT, a, None, (0, 0), None, -1, int(pad), name, conv)
+
+    def conv_flat(self):
+        """The packed convpot vector [a | A | W | b | v | E] (core.Packed)."""
+        c = self.conv
+        return np.ascontiguousarray(np.concatenate([c["a"].ravel(), c["A"].ravel(), c["W"].ravel(),
+                                                    c["b"].ravel(), c["v"].ravel(), c["E"].ravel()]))
 
 
 @dataclass
@@ -137,6 +166,11 @@ class Packed:
                 home cell's block of tab[aview(z_s), bview(home cell)]
       4 below-count  bchan, aview, bview as for 3: tab[bview(home cell),
                 block sum of aview over bchan]
+      5 convpot (5, home, aview, -1, k, m, pad, ci): convs[ci] is one flat
+                C-contiguous float64 vector [a (k) | A (9 k k) | W (9 k m) |
+                b (m) | v (m) | E (Va k)] (Factor.conv_flat), unpacked by
+                kernel._conv_unpack; m = 0 is the bilinear model.  Only
+                convpots homed on the home channel are packed.
     Tables of kinds 3 and 4 are the factor's own (not transposed).
     src[f]: index into model.factors of row f; transposed[f]: row f reads
     the transpose of that factor's table (a reflected same-level pair)."""
@@ -155,6 +189,7 @@ class Packed:
     radius: int
     src: np.ndarray = None        # (F,) int64
     transposed: np.ndarray = None  # (F,) bool
+    convs: tuple = None           # flat float64 convpot vectors (kind 5); (zeros(1),) when none
 
 
 # ------------------------------------------------------------------ model
@@ -183,6 +218,15 @@ class Model:
             if f.kind == UNARY:
                 assert f.table.shape == (a.nvals(f.a[1]),), f.name
                 continue
+            if f.kind == CONVPOT:
+                c = f.conv
+                V, k = c["E"].shape
+                m = c["W"].shape[2]
+                assert V == a.nvals(f.a[1]), (f.name, c["E"].shape, a.nvals(f.a[1]))
+                assert c["a"].shape == (k,) and c["A"].shape == (9, k, k), f.name
+                assert c["W"].shape == (9, k, m) and c["b"].shape == (m,) and c["v"].shape == (m,), f.name
+                assert -1 <= f.pad_a < V, f.name
+                continue
             b = self.chan(f.b[0])
             assert f.b[1] in b.views, f"{f.name}: {f.b}"
             assert a.h <= b.h, f"{f.name}: a factor is homed on the finer side"
@@ -207,7 +251,7 @@ class Model:
             for v, arr in c.views.items():
                 vidx[c.name, v] = len(views)
                 views.append(np.ascontiguousarray(arr, np.int64))
-        rows, tabs, src, transp = [], [], [], []
+        rows, tabs, src, transp, convs = [], [], [], [], []
         radius = 0
         fi = 0
 
@@ -219,6 +263,8 @@ class Model:
 
         for fi, f in enumerate(self.factors):
             if f.a[0] != home:
+                if f.kind == CONVPOT:
+                    continue                                  # same-level only
                 if f.kind == PAIR and f.b[0] == home and self.chan(f.a[0]).h == hc.h:
                     # read from b's side: a sits at p - off
                     add(PAIR, cidx[f.a[0]], vidx[f.b], vidx[f.a], -f.off[0], -f.off[1], f.pad_a, f.table.T, True)
@@ -230,6 +276,13 @@ class Model:
                 continue
             if f.kind == UNARY:
                 add(UNARY, -1, vidx[f.a], -1, 0, 0, -1, f.table[:, None])
+            elif f.kind == CONVPOT:
+                rows.append([CONVPOT, cidx[home], vidx[f.a], -1, f.conv["E"].shape[1], f.conv["W"].shape[2],
+                             f.pad_a, len(convs)])
+                convs.append(f.conv_flat())
+                src.append(fi)
+                transp.append(False)
+                radius = max(radius, 2)
             elif f.kind == PAIR:
                 add(PAIR, cidx[f.b[0]], vidx[f.a], vidx[f.b], f.off[0], f.off[1], f.pad_b, f.table)
                 if f.b[0] == home:
@@ -268,7 +321,8 @@ class Model:
                       np.array([c.h for c in self.channels], np.int64), tuple(views), fac,
                       tuple(tabs) if tabs else (np.zeros((1, 1)),), np.ascontiguousarray(hc.fixed),
                       np.ascontiguousarray(colours, np.int64), ncol, cert, np.ascontiguousarray(joins),
-                      float(delta), radius, np.array(src, np.int64), np.array(transp, np.bool_))
+                      float(delta), radius, np.array(src, np.int64), np.array(transp, np.bool_),
+                      tuple(convs) if convs else (np.zeros(1),))
 
     # ---------------------------------------------------------- sampling
     def sweep(self, home: str, n: int, seed: int = 0, T: float = 1.0, below: bool = False):
@@ -284,7 +338,7 @@ class Model:
         bad = 0
         for _ in range(n):
             bad = kernel.sweep(P.home, P.grids, P.hs, P.views, P.fac, P.tabs, P.fixed, P.colours, P.ncol,
-                               P.cert, P.joins, P.delta, T)
+                               P.cert, P.joins, P.delta, T, P.convs)
         return bad
 
     def energy(self, home: str):
@@ -292,7 +346,7 @@ class Model:
         state, each pair once, finite part summed and inf entries counted."""
         from . import kernel
         P = self.compile(home)
-        return kernel.total_energy(P.home, P.grids, P.hs, P.views, P.fac, P.tabs, P.cert, P.joins, P.delta)
+        return kernel.total_energy(P.home, P.grids, P.hs, P.views, P.fac, P.tabs, P.cert, P.joins, P.delta, P.convs)
 
     def site_energies(self, home: str, y: int, x: int, below: bool = False):
         """(D,) conditional energies of site (y, x) of `home` over its domain
@@ -300,14 +354,17 @@ class Model:
         from . import kernel
         P = self.compile(home, below)
         D = self.chan(home).D
-        return kernel.site_energies(y, x, P.home, P.grids, P.hs, P.views, P.fac, P.tabs, D)
+        return kernel.site_energies(y, x, P.home, P.grids, P.hs, P.views, P.fac, P.tabs, D, P.convs)
 
     def describe(self, home: str) -> str:
         P = self.compile(home)
-        names = ["pair", "count", "unary", "bpair", "bcount"]
+        names = ["pair", "count", "unary", "bpair", "bcount", "conv"]
         lines = [f"{home}: {P.fac.shape[0]} factor rows, radius {P.radius}, {P.ncol} colours"
                  + (", certificate" if P.cert[4] else "")]
         for r in P.fac:
+            if r[0] == CONVPOT:
+                lines.append(f"  conv  av={r[2]} k={r[4]} m={r[5]} pad={r[6]} vec{P.convs[r[7]].shape}")
+                continue
             lines.append(f"  {names[r[0]]:5s} b={r[1]:2d} av={r[2]} bv={r[3]} off=({r[4]},{r[5]}) pad={r[6]} "
                          f"table{P.tabs[r[7]].shape}")
         return "\n".join(lines)

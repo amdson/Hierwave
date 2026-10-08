@@ -72,14 +72,14 @@ def counts(model, names):
 
 # ------------------------------------------------------------- site probs
 @njit(cache=True)
-def _all_energies(home, grids, hs, views, fac, tabs, D):
+def _all_energies(home, grids, hs, views, fac, tabs, D, convs):
     g = grids[home]
     rows, cols = g.shape
     out = np.empty((rows, cols, D))
     e = np.empty(D)
     for y in range(rows):
         for x in range(cols):
-            _energies(y, x, home, grids, hs, views, fac, tabs, e)
+            _energies(y, x, home, grids, hs, views, fac, tabs, e, convs)
             out[y, x] = e
     return out
 
@@ -90,7 +90,7 @@ def site_probs(model, home, T=1.0, below=True):
     candidate) get a one-hot on their current value."""
     P = model.compile(home, below)
     hc = model.chan(home)
-    e = _all_energies(P.home, P.grids, P.hs, P.views, P.fac, P.tabs, hc.D) / T
+    e = _all_energies(P.home, P.grids, P.hs, P.views, P.fac, P.tabs, hc.D, P.convs) / T
     m = e.min(axis=2, keepdims=True)
     dead = ~np.isfinite(m[..., 0])
     w = np.exp(-(e - np.where(np.isfinite(m), m, 0.0)))

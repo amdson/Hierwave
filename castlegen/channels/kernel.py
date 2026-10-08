@@ -29,8 +29,155 @@ def seed(s):
     np.random.seed(s)
 
 
+# ------------------------------------------------------------- convpot (kind 5)
+# A convpot row is (5, home, aview, -1, k, m, pad, ci); convs[ci] is one flat
+# float64 vector [a (k) | A (9 k k) | W (9 k m) | b (m) | v (m) | E (V k)]
+# (core.Packed).  Offsets d row-major over (dy, dx) in (-1, 0, 1)^2, 4 = centre.
+
 @njit(cache=True, inline="always")
-def _energies(y, x, home, grids, hs, views, fac, tabs, out):
+def _softplus(x):
+    if x > 0.0:
+        return x + np.log1p(np.exp(-x))
+    return np.log1p(np.exp(x))
+
+
+@njit(cache=True)
+def _conv_unpack(cv, k, m):
+    o = 0
+    a = cv[o:o + k]
+    o += k
+    A = cv[o:o + 9 * k * k].reshape((9, k, k))
+    o += 9 * k * k
+    W = cv[o:o + 9 * k * m].reshape((9, k, m))
+    o += 9 * k * m
+    b = cv[o:o + m]
+    o += m
+    v = cv[o:o + m]
+    o += m
+    E = cv[o:].reshape(((cv.shape[0] - o) // k, k))
+    return a, A, W, b, v, E
+
+
+@njit(cache=True)
+def _conv_energies(y, x, g, av, cv, k, m, pad, out):
+    """out[t] += the convpot terms that involve site p = (y, x) with z_p = t."""
+    rows, cols = g.shape
+    a, A, W, b, v, E = _conv_unpack(cv, k, m)
+    V = E.shape[0]
+    # bilinear: e_t . gv, gv = sum_d [A_d e(p+d) + (p+d on grid) A_{-d}^T e(p+d)]
+    gv = a.copy()
+    for d in range(9):
+        if d == 4:
+            continue
+        ny, nx = y + d // 3 - 1, x + d % 3 - 1
+        on = 0 <= ny < rows and 0 <= nx < cols
+        if on:
+            en = E[av[g[ny, nx]]]
+        elif pad >= 0:
+            en = E[pad]
+        else:
+            continue
+        Ad = A[d]
+        Ar = A[8 - d]
+        for i in range(k):
+            s = 0.0
+            for j in range(k):
+                s += Ad[i, j] * en[j]
+            gv[i] += s
+        if on:
+            for j in range(k):
+                ej = en[j]
+                for i in range(k):
+                    gv[i] += Ar[j, i] * ej
+    ev = np.zeros(V)
+    for u in range(V):
+        s = 0.0
+        for i in range(k):
+            s += E[u, i] * gv[i]
+        ev[u] = s
+    # head: every q = p - d on the grid, h_q = rest_q + W_d^T e_t
+    if m > 0:
+        rest = np.empty(m)
+        hu = np.empty(m)
+        for d in range(9):
+            qy, qx = y - (d // 3 - 1), x - (d % 3 - 1)
+            if qy < 0 or qy >= rows or qx < 0 or qx >= cols:
+                continue
+            for j in range(m):
+                rest[j] = b[j]
+            for d2 in range(9):
+                if d2 == d:
+                    continue
+                ny, nx = qy + d2 // 3 - 1, qx + d2 % 3 - 1
+                if 0 <= ny < rows and 0 <= nx < cols:
+                    en = E[av[g[ny, nx]]]
+                elif pad >= 0:
+                    en = E[pad]
+                else:
+                    continue
+                Wd = W[d2]
+                for i in range(k):
+                    ei = en[i]
+                    for j in range(m):
+                        rest[j] += Wd[i, j] * ei
+            Wd = W[d]
+            for u in range(V):
+                for j in range(m):
+                    hu[j] = rest[j]
+                for i in range(k):
+                    ei = E[u, i]
+                    for j in range(m):
+                        hu[j] += Wd[i, j] * ei
+                s = 0.0
+                for j in range(m):
+                    s += v[j] * _softplus(hu[j])
+                ev[u] += s
+    for t in range(out.shape[0]):
+        out[t] += ev[av[t]]
+
+
+@njit(cache=True)
+def _conv_total(g, av, cv, k, m, pad):
+    """sum_p [U + B + H] of one convpot over the grid g (the definition)."""
+    rows, cols = g.shape
+    a, A, W, b, v, E = _conv_unpack(cv, k, m)
+    total = 0.0
+    h = np.empty(m)
+    for y in range(rows):
+        for x in range(cols):
+            ep = E[av[g[y, x]]]
+            for i in range(k):
+                total += a[i] * ep[i]
+            for j in range(m):
+                h[j] = b[j]
+            for d in range(9):
+                ny, nx = y + d // 3 - 1, x + d % 3 - 1
+                if 0 <= ny < rows and 0 <= nx < cols:
+                    en = E[av[g[ny, nx]]]
+                elif pad >= 0:
+                    en = E[pad]
+                else:
+                    continue
+                if d != 4:
+                    Ad = A[d]
+                    for i in range(k):
+                        s = 0.0
+                        for j in range(k):
+                            s += Ad[i, j] * en[j]
+                        total += ep[i] * s
+                if m > 0:
+                    Wd = W[d]
+                    for i in range(k):
+                        ei = en[i]
+                        for j in range(m):
+                            h[j] += Wd[i, j] * ei
+            for j in range(m):
+                total += v[j] * _softplus(h[j])
+    return total
+
+
+@njit(cache=True, inline="always")
+def _energies(y, x, home, grids, hs, views, fac, tabs, out, convs=None):
     D = out.shape[0]
     for t in range(D):
         out[t] = 0.0
@@ -39,6 +186,10 @@ def _energies(y, x, home, grids, hs, views, fac, tabs, out):
     for f in range(fac.shape[0]):
         kind = fac[f, 0]
         av = views[fac[f, 2]]
+        if kind == 5:                                           # convpot (skipped without convs)
+            if convs is not None:
+                _conv_energies(y, x, g_home, av, convs[fac[f, 7]], fac[f, 4], fac[f, 5], fac[f, 6], out)
+            continue
         tab = tabs[fac[f, 7]]
         if kind == 2:
             for t in range(D):
@@ -94,9 +245,9 @@ def _energies(y, x, home, grids, hs, views, fac, tabs, out):
 
 
 @njit(cache=True)
-def site_energies(y, x, home, grids, hs, views, fac, tabs, D):
+def site_energies(y, x, home, grids, hs, views, fac, tabs, D, convs=None):
     out = np.empty(D)
-    _energies(y, x, home, grids, hs, views, fac, tabs, out)
+    _energies(y, x, home, grids, hs, views, fac, tabs, out, convs)
     return out
 
 
@@ -306,12 +457,12 @@ def site_weights(y, x, e, g, g_d, mass, trunk, joins, Dmax, delta, T, w, lo, hi,
 
 
 @njit(cache=True)
-def sweep(home, grids, hs, views, fac, tabs, fixed, colours, ncol, cert, joins, delta, T):
+def sweep(home, grids, hs, views, fac, tabs, fixed, colours, ncol, cert, joins, delta, T, convs=None):
     g = grids[home]
     rows, cols = g.shape
     D = 0
     if fac.shape[0] > 0:
-        D = views[fac[0, 3 if fac[0, 0] >= 3 else 2]].shape[0]   # the home view's domain
+        D = views[fac[0, 3 if fac[0, 0] == 3 or fac[0, 0] == 4 else 2]].shape[0]   # the home view's domain
     has_cert = cert[4] == 1
     if has_cert:
         D = views[cert[0]].shape[0]
@@ -327,7 +478,7 @@ def sweep(home, grids, hs, views, fac, tabs, fixed, colours, ncol, cert, joins, 
             for x in range(cols):
                 if colours[y, x] != col or fixed[y, x]:
                     continue
-                _energies(y, x, home, grids, hs, views, fac, tabs, e)
+                _energies(y, x, home, grids, hs, views, fac, tabs, e, convs)
                 if not has_cert:
                     for t in range(D):
                         e[t] /= T
@@ -349,21 +500,27 @@ def sweep(home, grids, hs, views, fac, tabs, fixed, colours, ncol, cert, joins, 
 
 
 @njit(cache=True)
-def total_energy(home, grids, hs, views, fac, tabs, cert, joins, delta):
+def total_energy(home, grids, hs, views, fac, tabs, cert, joins, delta, convs=None):
     """(finite energy, inf count): the home-side rows at the current state
     (below rows skipped: they belong to the finer channel), each pair once (reflected rows, those with a negative offset in the home
-    channel, skipped), counts once per block, plus the certificate."""
+    channel, skipped), counts once per block, convpots as defined (each
+    site's U + 8 bilinear terms + head; skipped without convs), plus the
+    certificate."""
     g = grids[home]
     rows, cols = g.shape
     total = 0.0
     nviol = 0
     hc = hs[home]
+    if convs is not None:
+        for f in range(fac.shape[0]):
+            if fac[f, 0] == 5:
+                total += _conv_total(g, views[fac[f, 2]], convs[fac[f, 7]], fac[f, 4], fac[f, 5], fac[f, 6])
     for y in range(rows):
         for x in range(cols):
             t = g[y, x]
             for f in range(fac.shape[0]):
                 kind = fac[f, 0]
-                if kind >= 3:                                   # counted on the fine side
+                if kind >= 3:                                   # counted on the fine side / convpot
                     continue
                 av = views[fac[f, 2]]
                 tab = tabs[fac[f, 7]]
