@@ -27,46 +27,65 @@ Learned potentials live only on coarse channels: `F_0 = 0`, so the tile
 level's energy is entirely designed and the tile sampler never sees a
 learned term.  The bias from learning enters small-domain samplers only.
 
-### C2. Learned potentials are conv potentials over per-value features
+### C2. Learned potentials bias the sampler additively over the candidates it exposes
 
-For a coarse channel `c`, `Phi_c` is the conv potential of
-`reference_math` section 5 with the value embedding made explicit:
+For a coarse channel `c`, `Phi_c` is a sum of local learned terms,
 
-    Phi_c(z_c) = sum_p [ a . e(z_p) + sum_{d != 0} e(z_p)^T A_d e(z_{p+d}) + head ]
+    Phi_c(z_c) = sum_p psi_theta(z_p, z_{N(p)}),
 
-where `e : Dom_c -> R^k` is the channel's **feature set**: a vector per
-value, fixed for the channel, from which every interaction is computed.
-`e` and the structure of `A_d` are the two choices; the rest (windows,
-`y(W)`, AIS, ridge or Adam, recursion upward) is the existing estimator.
+with `N(p)` a declared neighbourhood.  The general per-site form is a
+value feature against a context encoding,
 
-- *Learned features* (token embeddings): `e` the rows of a free `(D, k)`
-  matrix, `A_d` free, fitted jointly by Adam on windows.  Generalises to
-  unseen value pairs only as far as the embedding extrapolates; at the
-  circles mid level (`D = 17`) it did not (`convpot_test.md`).
-- *Derived features*: `e(v)` built programmatically from what `v`
-  requests of the finer level, so unseen values have features before any
-  pair is seen.  Example, the **stamp**: paint `v` alone in its block's
-  frame; `e(v)` is the indicator over (footprint cell, paint value).  Tie
-  `A_d` to the geometry, `e(v)^T A_d e(v') = sum over cell pairs within
-  the stencil of g_delta(paint_v(s), paint_{v'}(s'))`, and the free
-  parameters are a stencil `(u, {g_delta})` of a few dozen numbers.  This
-  is the paint potential of section 4 written over coarse values; it was
-  exact on held-out pairs.  Higher-order merges (three stamps on one
-  cell) are omitted at this order and show up in the fit residual.
-- Mixed: derived features with a free `A_d`, or derived plus a few
-  learned dimensions, when the residual says the stencil is too rigid.
+    psi_theta(z_p, ctx) = e(z_p) . h_theta(ctx),
 
-Evaluation is a coarse-level operation and never reads the fine grid at
-sampling time.  Small `D`: materialise `u_c(v)`, `g_{c,d}(v, v')` over all
-values and the coarse adjacencies once (exact for a bilinear form) and run
-them as ordinary rows.  Large `D`: compute `e(t)^T A_d e(z_{p+d})` on
-demand for each candidate, cost `k` per neighbour (or the footprint for a
-stamp).  The feature set is a property of the channel (`features(v)` in
-the interface).
+which is what any network that outputs energies over a set of values
+looks like at its last layer; `h_theta` may be anything, and **nothing
+below relies on it being linear**.
 
-Colouring of `c` follows the interaction's reach: with features that
-spill into neighbouring blocks and an 8-neighbour stencil, diagonal
-blocks interact, so four colours `(x mod 2, y mod 2)`.
+*How it enters sampling.*  The channel's sampler, at site `p`, is
+drawing over a candidate set `C_p` (all of `Dom_c`, or the subset of C1).
+It hands `C_p` to the potential and receives an additive energy vector
+
+    Delta_p(t) = Phi_c(z with z_p = t) - Phi_c(z),   t in C_p,
+
+which it adds to the designed energies before the draw.  The contract is
+that `Delta_p` is a difference of the one joint `Phi_c`: it includes the
+terms `psi` of every neighbour `q` whose context contains `p`, not only
+`p`'s own term.  Own-term-only energies (`e(t) . h(ctx_p)` alone) are a
+dependency network with no joint, and are not allowed: they break the
+identity and make the result sweep-order dependent.
+
+*Ways to meet the contract* (the potential's choice, invisible to the
+sampler):
+
+- *Materialised*: when `psi` decomposes into unary and pair terms and
+  `D_c` is small, precompute `u_c(v)`, `g_{c,d}(v, v')` once and look
+  them up.  Zero learned-model calls at sampling time.
+- *One pass*: compute `h_theta(ctx_p)` once per site visit, then one dot
+  product per candidate.  Meets the contract exactly only when `h` is
+  linear in the neighbours' features (the bilinear form), because then
+  the neighbours' terms fold into the dot product.
+- *Batched delta*: for each candidate, re-evaluate the `|N(p)| + 1` terms
+  that touch `p`, as one batch over `C_p`.  Exact for any `psi`; cost
+  `|C_p| x (|N(p)| + 1)` local evaluations, done at the coarse level.
+
+*Feature set.*  `e : Dom_c -> R^k` is a property of the channel, fixed
+before fitting: learned (token embeddings), derived from what `v` asks
+of the finer level, or mixed.  Example of a derived set, the **stamp**:
+paint `v` alone in its block's frame and take the indicator over
+(footprint cell, paint value).  With `h` linear and the pair matrix tied
+to the stencil geometry this is the paint potential of
+`reference_math` section 4 over coarse values, exact on held-out pairs;
+one-hot and learned features were not (`convpot_test.md`).  The stamp is
+one option, not the design.
+
+*Training.*  Unchanged: windows, `y(W)`, AIS on the fine channel's own
+sampler; `theta` by ridge when `Phi` is linear in it, Adam otherwise.
+Recursion upward is unchanged.  Colouring of `c` follows `N(p)` plus the
+reach of the features.
+
+*Not on the tile level.*  `F_0 = 0`; the tile sampler never sees a
+learned term.
 
 ### C3. Documentation
 
