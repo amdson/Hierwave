@@ -51,9 +51,12 @@ never updates.
 conversely $\mathrm{block}(q) = \{p \in \Lambda_a : q_b(p, 0) = q\}$ is the set of $a$-cells
 inside the $b$-cell $q$.
 
-\paragraph{Factors.} Each factor is a table $T$ in energy units (nats), with $+\infty$ for hard
-rules, indexed by views of one or two channels. Writing $a$ for the finer (or only) channel and
-$b$ for the other, the three kinds are
+\paragraph{Factors.} A factor is anything that assigns each candidate value at a cell a local
+energy. Three kinds exist: tables (this paragraph), the conv potential (Section~\ref{sec:convpot}),
+and the certificate (below), whose energy is computed by a procedure. Tables are the fast path
+(a candidate's energy is a lookup) and are also what training produces. A table factor is a table
+$T$ in energy units (nats), with $+\infty$ for hard rules, indexed by views of one or two
+channels. Writing $a$ for the finer (or only) channel and $b$ for the other, the three kinds are
 \begin{align}
   \text{pair:}\quad & E^{\mathrm{pair}}_{a\alpha, b\beta, \delta}(z) = \sum_{p \in \Lambda_a}
     T\big[\alpha(z_a(p)),\ \beta^{\mathrm{pad}}(z_b(q_b(p,\delta)))\big], \\
@@ -61,8 +64,11 @@ $b$ for the other, the three kinds are
     T\Big[\beta(z_b(q)),\ \textstyle\sum_{p \in \mathrm{block}(q)} \alpha(z_a(p))\Big], \qquad h_a < h_b, \\
   \text{unary:}\quad & E^{\mathrm{un}}_{a\alpha}(z) = \sum_{p \in \Lambda_a} T\big[\alpha(z_a(p))\big].
 \end{align}
-A pair factor with $b = a$ and $\delta \ne 0$ is a same-level neighbour term; with $h_b > h_a$ it
-is a parent read. $\beta^{\mathrm{pad}}$ returns the factor's pad value when $q_b(p, \delta)$ is off
+A pair factor is one offset $\delta$ applied at every cell of $a$, i.e.\ a translation-invariant
+term with a position-free table; a neighbourhood is a set of such factors, one per offset, and
+the largest $|\delta|$ among a channel's factors sets its sampler's radius. With $b = a$ and
+$\delta \ne 0$ it is a same-level neighbour term; with $h_b > h_a$ it is a parent read (the
+parent cell, or a parent cell $\delta$ away). $\beta^{\mathrm{pad}}$ returns the factor's pad value when $q_b(p, \delta)$ is off
 the grid, and the term is dropped when the pad is $-1$. A factor is \emph{homed} on its finer side
 $a$. The sampler of a channel reads only the factors homed on it, plus the reflections of
 same-level pairs (transposed table, negated offset), so during generation a coarse channel never
@@ -73,7 +79,7 @@ a view of a coarser one, i.e.\ a pair factor whose table penalises $\alpha(z_a(p
 \beta(z_b(q_b(p,0)))$: hard ($+\infty$) for guarantees, soft (a cost $\kappa$ per violated cell)
 otherwise. A coarse value is \emph{honourable} if some finer completion has finite energy.
 
-\paragraph{Certificate.} The one computed factor; it enforces connectivity or support. It lives
+\paragraph{Certificate.} The factor that enforces connectivity or support. It lives
 on a tile channel with three views, $m = \mathrm{mass}$ ($0$: not part of the structure),
 $\tau = \mathrm{trunk}$ ($1$: a root of the structure), and \emph{join bits}
 $J_d(t, t') \in \{0,1\}$ saying whether tile value $t$ joins value $t'$ across side
@@ -101,9 +107,12 @@ outside the blocks of a region that the painter writes from values inside it.
 
 % [NOTE:  it made more sense to make it an operation done to the tiles by a communication channel. for instance tiles would expose an energy biasing vector, and higher latents would be able to add to that mask. adopt the bias field as the DSL's communication primitive, treat painted alphabets as its compression, and let the learned potential take the field as input. ]
 
-\paragraph{Promotion.} For a view $\alpha$ of a channel $u$ with many values, add a channel $w$
-at the same level with $\Dom_w = \mathrm{range}(\alpha)$, move the factors that read $\alpha(z_u)$
-to read $w$, and add the cell-wise factor
+\paragraph{Promotion.} A hard factor on a view $\alpha$ of a channel $u$ with many values (an
+exemplar coordinate, say) rejects most of $u$'s candidates and can leave no candidate at all;
+promotion moves the hard factor onto a small channel that is updated exactly, and lets $u$ pay
+only a soft cost for disagreeing with it. Add a channel $w$ at the same level with
+$\Dom_w = \mathrm{range}(\alpha)$, move the factors that read $\alpha(z_u)$ to read $w$, and add
+the cell-wise factor
 \begin{equation}
   E^{\mathrm{cell}}(w_p, u_p) = \mathrm{cost}\big(w_p, \alpha(u_p)\big),
 \end{equation}
@@ -269,6 +278,7 @@ double-centre (subtract row and column means).
 
 %-----------------------------------------------------------------------------
 \section{The conv potential (coarse-level pair potentials)}
+\label{sec:convpot}
 
 A parametric factor over one channel, kept for coarse levels. Each value has an embedding
 $e : \Dom \to \R^k$ (the rows of a matrix $M \in \R^{D \times k}$, one-hot or learned); offsets
