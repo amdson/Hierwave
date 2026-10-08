@@ -145,3 +145,81 @@ def embed_patch(P: Circles, level, k, seed=0):
     F = patch_features(P, level)
     G = np.random.default_rng(seed).standard_normal((F.shape[1], k)) / np.sqrt(F.shape[1])
     return F @ G
+
+
+# ------------------------------------------- paint-potential hooks (notes/paintpot_test.md)
+# Painted regions for castlegen.channels.paintpot.  Every region holds the
+# window, its halo blocks and the painter's spill; background = the
+# painter's reference (mid: absent, dem free; top: corner `ref`).
+def _dem_crop(P: Circles, mg, ny, nx):
+    """dem of the mid grid mg (absent outer ring included by the caller),
+    cropped to the blocks [1, ny + 1) x [1, nx + 1) plus a one-tile ring."""
+    BM = P.BM
+    d = np.zeros((mg.shape[0] * BM, mg.shape[1] * BM), np.int32)
+    _paint_dem(np.ascontiguousarray(mg, dtype=np.int32), d, BM, P.OY, P.OX, P.SH, P.R1, 0, d.shape[0], 0,
+               d.shape[1])
+    return np.ascontiguousarray(d[BM - 1:BM + ny * BM + 1, BM - 1:BM + nx * BM + 1])
+
+
+def paint_region_mid(P: Circles, zW, halo=None):
+    """dem over the window + one-block halo + one-tile spill ring:
+    ((wy + 2) BM + 2, (wx + 2) BM + 2).  halo: (wy + 2, wx + 2) mid values
+    whose ring is used (interior ignored); None = absent.  Outside the halo
+    every block is absent."""
+    zW = np.asarray(zW, np.int32)
+    wy, wx = zW.shape
+    mg = np.zeros((wy + 4, wx + 4), np.int32)
+    if halo is not None:
+        mg[1:-1, 1:-1] = halo
+    mg[2:-2, 2:-2] = zW
+    return _dem_crop(P, mg, wy + 2, wx + 2)
+
+
+def mid_window_F(P: Circles, zW, halo=None):
+    """Exact F of the region of paint_region_mid: sum of fz[dem] (tiles are
+    independent given dem; tiles outside the region do not depend on zW)."""
+    return float(P.fz[paint_region_mid(P, zW, halo)].sum())
+
+
+_CANVAS = 5          # coarse canvas for single / pair paints: centre (2, 2), every d with |d| <= 1 fits with spill
+
+
+def paint_single_mid(P: Circles, v):
+    mg = np.zeros((_CANVAS, _CANVAS), np.int32)
+    mg[2, 2] = v
+    return _dem_crop(P, np.pad(mg, 1), _CANVAS, _CANVAS)
+
+
+def paint_pair_mid(P: Circles, v, vp, d):
+    mg = np.zeros((_CANVAS, _CANVAS), np.int32)
+    mg[2, 2] = v
+    mg[2 + d[0], 2 + d[1]] = vp
+    return _dem_crop(P, np.pad(mg, 1), _CANVAS, _CANVAS)
+
+
+def _slot_of(P: Circles, tg):
+    return P.SLOTPAT[np.asarray(tg)].transpose(0, 2, 1, 3).reshape(tg.shape[0] * P.BT, tg.shape[1] * P.BT)
+
+
+def paint_region_top(P: Circles, zW, halo=None, ref=0):
+    """slot at mid resolution over the window + its ring of halo top cells:
+    ((wy + 2) BT, (wx + 2) BT).  halo: (wy + 2, wx + 2) top values whose
+    ring is used; None = the reference corner.  slot has no spill."""
+    zW = np.asarray(zW, np.int32)
+    wy, wx = zW.shape
+    tg = np.full((wy + 2, wx + 2), ref, np.int32) if halo is None else np.array(halo, np.int32)
+    tg[1:-1, 1:-1] = zW
+    return _slot_of(P, tg)
+
+
+def paint_single_top(P: Circles, v, ref=0):
+    tg = np.full((_CANVAS, _CANVAS), ref, np.int32)
+    tg[2, 2] = v
+    return _slot_of(P, tg)
+
+
+def paint_pair_top(P: Circles, v, vp, d, ref=0):
+    tg = np.full((_CANVAS, _CANVAS), ref, np.int32)
+    tg[2, 2] = v
+    tg[2 + d[0], 2 + d[1]] = vp
+    return _slot_of(P, tg)
