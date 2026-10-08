@@ -1,0 +1,259 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{dsfont}
+\usepackage{array}
+
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\1}{\mathds{1}}
+\newcommand{\Dom}{\mathcal{D}}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\pstar}{p^{*}}
+\DeclareMathOperator{\softplus}{softplus}
+\DeclareMathOperator{\logmeanexp}{logmeanexp}
+
+\title{Hierwave: the mathematics}
+\author{Companion to \code{notes/reference.md} (October 2026)}
+\date{}
+
+\begin{document}
+\sloppy
+\maketitle
+
+\noindent The models, the sampler, and the training algorithm, as equations.
+Definitions only; the arguments are in \code{channels.tex} and the
+per-experiment notes. Section numbers follow \code{reference.md}.
+
+%-----------------------------------------------------------------------------
+\section{Objects}
+
+\paragraph{Channels and views.} A channel $c$ at block size $h_c \in \{1, 2, 4, \dots\}$
+holds $z_c : \Lambda_c \to \Dom_c = \{0, \dots, D_c - 1\}$ on the grid
+$\Lambda_c = \{0, \dots, H/h_c - 1\} \times \{0, \dots, W/h_c - 1\}$. A view is a map
+$\alpha : \Dom_c \to \{0, \dots, V_\alpha - 1\}$. A \emph{fixed} mask $\phi_c \subseteq \Lambda_c$
+marks cells the sampler never updates.
+
+\paragraph{Parent cell.} For $p \in \Lambda_a$ and a coarser-or-equal channel $b$ ($h_a \le h_b$),
+\begin{equation}
+  q_b(p, \delta) = \left\lfloor \frac{p\, h_a}{h_b} \right\rfloor + \delta, \qquad \delta \in \Z^2 .
+\end{equation}
+
+\paragraph{Factors.} Each factor is a table $E$ in energy units with $+\infty$ for hard rules.
+\begin{align}
+  \text{pair:}\quad & E^{\mathrm{pair}}_{a\alpha, b\beta, \delta}(z) = \sum_{p \in \Lambda_a}
+    T\big[\alpha(z_a(p)),\ \beta^{\mathrm{pad}}(z_b(q_b(p,\delta)))\big], \\
+  \text{count:}\quad & E^{\mathrm{count}}_{a\alpha, b\beta}(z) = \sum_{q \in \Lambda_b}
+    T\Big[\beta(z_b(q)),\ \textstyle\sum_{p \in \mathrm{block}(q)} \alpha(z_a(p))\Big], \qquad h_a < h_b, \\
+  \text{unary:}\quad & E^{\mathrm{un}}_{a\alpha}(z) = \sum_{p \in \Lambda_a} T\big[\alpha(z_a(p))\big],
+\end{align}
+where $\beta^{\mathrm{pad}}$ returns the pad value when $q$ is off the grid, and the term is dropped
+when the pad is $-1$. A factor is \emph{homed} on its finer side $a$; the sampler of a channel
+reads only factors homed on it and reflections of same-level pairs (transposed table,
+negated offset). Top-down: no coarse channel reads a finer one during generation.
+
+\paragraph{Certificate.} On a tile channel with views $m = \mathrm{mass}$, $\tau = \mathrm{trunk}$,
+join bits $J_d(t, t') \in \{0,1\}$ for the four sides $d$, and a distance channel
+$d_p \in \{0, \dots, D_{\max}, \mathrm{INF}\}$, cell $p$ is valid iff
+\begin{equation}
+  \big(m_p = 0 \wedge d_p = \mathrm{INF}\big) \ \vee\
+  \big(\tau_p = 1 \wedge d_p = 0\big) \ \vee\
+  \Big(d_p < \mathrm{INF} \wedge \exists\, q \sim_d p:\ J_d(t_p, t_q) \wedge m_q \ge m_p \wedge d_q < d_p\Big),
+\end{equation}
+with energy $+\infty$ on an invalid cell and $\delta\, d_p$ otherwise. With $\code{tree}$,
+exactly one neighbour satisfies the witness clause (the parent) and every other joined
+neighbour is a child ($m_q \le m_p$, $d_q > d_p$).
+
+\paragraph{Painted channels.} A painter $\pi_c : \Dom_c^{\Lambda_c} \to \Dom_w^{\Lambda_w}$,
+$h_w < h_c$, writes a fine channel $w$ deterministically from $z_c$ (fixed everywhere). Honour
+factors read $w$ by position-free pair tables; position dependence lives in $\pi_c$.
+
+\paragraph{Promotion.} For a view $\alpha$ of a large channel $u$, add a channel $w$ with
+$\Dom_w = \mathrm{range}(\alpha)$, move the factors that read $\alpha(z_u)$ to read $w$, and add
+\begin{equation}
+  E^{\mathrm{cell}}(w_p, u_p) = \mathrm{cost}\big(w_p, \alpha(u_p)\big),
+\end{equation}
+with $\mathrm{cost}$ either $\nu\,\1[w \ne \alpha(u)]$ (a tempering device), $-\log \hat p(w \mid u)$
+from a corpus, or the free energy of Section~\ref{sec:identity}. Marginalising $w$ recovers
+the original model with its hard factors softened by exactly $\mathrm{cost}$.
+
+%-----------------------------------------------------------------------------
+\section{The two models}
+\label{sec:identity}
+
+Levels $h_{\mathrm{top}} > \dots > 1$; $z_h$ the channels at level $h$; $z_{>h}$ the coarser ones;
+$E_h(z_h \mid z_{>h})$ the sum of the factors homed on level $h$.
+
+\paragraph{Bidirectional (the ideal).}
+\begin{equation}
+  \pstar(z) = \frac{1}{Z}\exp\Big(-\sum_h E_h(z_h \mid z_{>h})\Big).
+\end{equation}
+
+\paragraph{Forward (the chain).}
+\begin{equation}
+  q(z) = \prod_{h} q_h(z_h \mid z_{>h}), \qquad
+  q_h = \text{$S_h$ Gibbs sweeps at $T=1$ under } E_h + \Phi_h \text{ from the painted initialisation},
+\end{equation}
+with $\Phi_h(z_h \mid z_{>h})$ the \emph{learned potential} of level $h$.
+
+\paragraph{The identity.} Define recursively, from the bottom,
+\begin{equation}
+  F_{h}(z_{>h}) \;=\; -\log \sum_{z_h} \exp\!\Big(-E_h(z_h \mid z_{>h}) - F_{h/2}(z_h, z_{>h})\Big),
+  \qquad F_{1/2} \equiv 0 .
+\end{equation}
+Then $\pstar(z_{\ge h}) \propto \exp\big(-\sum_{h' \ge h} E_{h'} - F_{h/2}(z_{\ge h})\big)$, and the chain
+with equilibrated kernels reproduces $\pstar$ exactly iff
+\begin{equation}
+  \Phi_h = F_{h/2} \quad \text{for every level } h .
+\end{equation}
+The learned potential of a level is the free energy the levels below induce on it. With the
+budgeted kernel in place of exact sampling in the definition of $F$, the identity holds for
+the chain \emph{as it runs} (the free energy as that kernel realises it at that budget).
+
+\paragraph{Cluster expansion.} $F_{h/2}$ is approximated by local terms over the cells of level $h$,
+\begin{equation}
+  F_{h/2}(z_h) \approx \sum_{p} f_1(z_p) + \sum_{\langle p, q\rangle} f_2(z_p, z_q) + \cdots ,
+\end{equation}
+exact in the limit where the fine correlation length is below the block size; the residual of
+the fit (Section~\ref{sec:train}) measures the omitted orders.
+
+\paragraph{Support and finite part.} The support of $\Phi_h$ ($+\infty$ where no completion exists)
+comes from honourability checks, not from the fit; only the finite part is learned.
+
+%-----------------------------------------------------------------------------
+\section{The sampler}
+
+At a non-fixed site $p$ of the channel being swept, with candidate energies
+$e_p(t) = \sum_{\text{rows}} E(\cdot)$ evaluated with $z_p = t$ and everything else fixed,
+\begin{equation}
+  t \sim \frac{\exp(-e_p(t)/T)}{\sum_{t'} \exp(-e_p(t')/T)}
+  \quad\text{drawn as}\quad
+  \arg\max_{t:\, e_p(t) < \infty} \big[-e_p(t)/T + G_t\big],\ G_t \sim \mathrm{Gumbel}(0,1),
+\end{equation}
+sites visited colour by colour ($(x+y) \bmod 2$ at radius 1, $(x + 2y) \bmod 5$ at radius 2).
+With a certificate the draw is joint in $(t, d)$: for each $t$ the valid $d$ form an interval
+$[a_t, b_t)$ (above the smallest witness $d$, below the smallest $d$ of a dependant), so
+\begin{equation}
+  w_t = \exp(-e_p(t)/T) \sum_{d = a_t}^{b_t - 1} e^{-\delta d / T}
+      = \exp(-e_p(t)/T)\, e^{-\delta a_t/T}\, \frac{1 - e^{-\delta (b_t - a_t)/T}}{1 - e^{-\delta/T}},
+\end{equation}
+$t$ by Gumbel-max over $\log w_t$, then $d$ from the truncated geometric law on $[a_t, b_t)$.
+
+%-----------------------------------------------------------------------------
+\section{The training (combining) algorithm}
+\label{sec:train}
+
+Fix a coarse channel $c$ with reference value $r$, the corrected levels below it (their
+$E + \Phi$), and its painter $\pi$.
+
+\paragraph{Windows.} A window $W \subset \Lambda_c$ (e.g.\ $3 \times 3$) with halo $\partial W$
+(the one-cell ring). Draw $z_W$ from a proposal (uniform, later cut from forward samples),
+$z_{\partial W}$ likewise, exterior at $r$. Let $z^{r}_W \equiv r$ on $W$ with the same halo.
+The fine region $R(W)$ is the blocks of $W \cup \partial W$ plus the painters' spill.
+
+\paragraph{Free energy per window.}
+\begin{equation}
+  F(z_W \mid z_{\partial W}) = -\log \sum_{z_{R(W)}} \exp\big(-E_{\mathrm{fine}}(z_{R(W)} \mid z_W, z_{\partial W})\big),
+  \qquad
+  y(W) = F(z_W \mid z_{\partial W}) - F(z^{r}_W \mid z_{\partial W}).
+\end{equation}
+Estimators: exact hooks (transfer matrix; per-cell products when the fine cells are independent
+given the paint), or annealed importance sampling with the fine kernel. Split
+$E_{\mathrm{fine}} = E_{\mathrm{un}} + E_{\mathrm{rest}}$ (unaries of the fine channel vs.\ everything
+else, with $+\infty \to L$ in $E_{\mathrm{rest}}$), $\beta_0 = 10^{-3} < \beta_1 < \dots < \beta_K = 1$,
+\begin{align}
+  \log Z_0 &= \sum_{s \in R(W)} \log \sum_{t} e^{-E_{\mathrm{un}, s}(t)}, \\
+  x_0 &\sim p_0 \propto e^{-E_{\mathrm{un}}}, \qquad
+  x_k \sim \text{one Gibbs sweep of } p_{\beta_k} \propto e^{-E_{\mathrm{un}} - \beta_k E_{\mathrm{rest}}} \text{ from } x_{k-1}, \\
+  \log w &= -\sum_{k=0}^{K-1} (\beta_{k+1} - \beta_k)\, E_{\mathrm{rest}}(x_k), \qquad
+  \widehat{\log Z} = \log Z_0 + \logmeanexp_{m = 1..M}\, \log w^{(m)}, \quad \hat F = -\widehat{\log Z}.
+\end{align}
+$\hat F$ is biased upward at small $K$; $K = 256$, $M = 4$--$8$ was adequate on the toys.
+
+\paragraph{Paint potential.} Over the painted channel(s) at fine resolution with values
+$\{0, \dots, V-1\}$ and the four independent offsets $\mathcal{O}_8 = \{(0,1), (1,0), (1,1), (1,-1)\}$,
+\begin{equation}
+  F_\theta(\pi) = \sum_{t} u\big(\pi_t\big) + \sum_{\delta \in \mathcal{O}_8} \sum_{t} g_\delta\big(\pi_t, \pi_{t+\delta}\big),
+  \qquad \theta = (u, \{g_\delta\}),
+\end{equation}
+off-grid partners dropped. $F_\theta$ is linear in $\theta$ through the count features
+$\Phi(\pi) \in \R^{V + |\mathcal{O}_8| V^2}$. Regression with the halo painted:
+\begin{equation}
+  x(W) = \Phi\big(\pi(z_W, z_{\partial W})\big) - \Phi\big(\pi(z^{r}_W, z_{\partial W})\big), \qquad
+  \hat\theta = \arg\min_\theta \sum_W \big(x(W)\!\cdot\!\theta - y(W)\big)^2 + \lambda \|\theta\|^2 .
+\end{equation}
+The halo's own terms cancel in $x$ and $y$; the window--halo cross terms are features. The
+relative residual $\sqrt{\sum (x\cdot\hat\theta - y)^2 / \sum y^2}$ measures what is not local in
+the painted map at this order (and the AIS noise floor).
+
+\paragraph{Materialisation.} For the forward kernel's tables over $\Dom_c$, with $\pi(\cdot)$ on a
+background of $r$,
+\begin{align}
+  u_c(v) &= F_{\hat\theta}\big(\pi(v)\big) - F_{\hat\theta}\big(\pi(r)\big), \\
+  g_{c,d}(v, v') &= F_{\hat\theta}\big(\pi(v \text{ at } p,\ v' \text{ at } p + d)\big) - u_c(v) - u_c(v') - F_{\hat\theta}\big(\pi(r)\big),
+\end{align}
+for the coarse adjacencies $d$ (east, south, diagonals). Exact for a linear $F_\theta$. For large
+$D$, evaluate $F_{\hat\theta}$ on the candidate's painted footprint at sampling time instead.
+Upward recursion: the next coarser channel uses $c$ with $E_c + \Phi_c$ as its fine level,
+$p_0$ = the unaries of $c$ (designed and learned).
+
+\paragraph{Gauge.} Only $y$ is observed, so $u$ and $\{g_\delta\}$ are identified up to the
+transformations that leave every window sum invariant; materialised coarse tables are
+invariant and are what is used. When comparing coarse tables, fix the reference gauge
+($g_c(r, \cdot) = g_c(\cdot, r) = 0$) or double-centre.
+
+%-----------------------------------------------------------------------------
+\section{The conv potential (coarse-level pair potentials)}
+
+For a channel with value embedding $e : \Dom \to \R^k$ (rows of $E \in \R^{V \times k}$),
+offsets $d \in \{-1,0,1\}^2$,
+\begin{equation}
+  E(z) = \sum_p \Big[\, a \cdot e(z_p) + \sum_{d \ne 0} e(z_p)^{\!\top} A_d\, e(z_{p+d})
+       + v \cdot \softplus\!\Big(\sum_{d} W_d\, e(z_{p+d}) + b\Big)\Big],
+\end{equation}
+$A_d \in \R^{k\times k}$, $W_d \in \R^{k \times m}$, $b, v \in \R^m$; off-grid neighbours use
+$e(\mathrm{pad})$ or drop out. With one-hot $E$ and $m = 0$ this is the 8-offset pair-table model
+and the fit is closed-form ridge; $m > 0$ (the plaquette head) adds 3- and 4-body terms, fitted
+by Adam. Candidate cost in the kernel: $9k$ (bilinear) $+\, 9km$ (head, incremental). On the toys
+the head added nothing measurable; the bilinear form reached the estimator's noise floor.
+
+%-----------------------------------------------------------------------------
+\section{Self-play moment matching (retained as a diagnostic)}
+
+For learned tables with sufficient statistics $N_k(z)$ (counts of table entries), a forward
+sample $z \sim q$, and a one-site kernel that leaves $\pstar$ invariant,
+\begin{equation}
+  \Delta_k(z) = \sum_{p} \sum_{t} \pstar(z_p = t \mid z_{-p})\,\big[N_k(z \text{ with } z_p = t) - N_k(z)\big],
+  \qquad
+  \theta_k \leftarrow \theta_k - \eta\,\mathbb{E}_{q}[\Delta_k] ,
+\end{equation}
+the Rao-Blackwellised one-step correction; CD-$K$ replaces the bracket by
+$N_k(z_K) - N_k(z) + \Delta_k(z_K)$ after $K$ sweeps of the $\pstar$ kernel. Fixed point:
+$q$ invariant under the kernel on the features. Under hard honour the coarse conditional is a
+point mass and $\Delta \equiv 0$ (frozen sites), which is why the free-energy route replaced it.
+
+%-----------------------------------------------------------------------------
+\section{The toys' exact quantities}
+
+\paragraph{Circles} (tiles independent given the paint). Per tile with demand $\pi_t$, field $\mu$ on
+air, honour $\kappa$ per violation:
+\begin{equation}
+  Z_{\mathrm{free}} = 1 + e^{-\mu},\quad
+  Z_{\mathrm{dirt}} = 1 + e^{-\mu-\kappa},\quad
+  Z_{\mathrm{air}} = e^{-\mu} + e^{-\kappa},\quad
+  Z_{\mathrm{conflict}} = e^{-\kappa} + e^{-\mu-\kappa},
+\end{equation}
+$F(\text{objects}) = -\sum_t \log Z_{\pi_t}$, hence a conflict tile costs
+$-\log Z_{\mathrm{conflict}} + \log Z_{\mathrm{dirt}} + \log Z_{\mathrm{air}} - \log Z_{\mathrm{free}}$
+and a shared ring tile gains $\log Z_{\mathrm{air}} - \log Z_{\mathrm{free}}$. The induced mid
+potential is exactly a unary paint potential ($g_\delta \equiv 0$); the presence bonus
+$b = F_{\mathrm{obj}} - \log(\#\text{offsets})$ makes an isolated block 50/50.
+
+\paragraph{Potts} ($q$ colours, cyclic distance $d$, tile coupling $J$, honour $\kappa$, palettes with
+$\lambda$). At $\kappa \to \infty$ the induced block coupling is $g(m, m') = B\,J\,d(m, m')$ per
+shared edge of length $B$; the mid level is a $q$-state clock model with coupling $BJ$,
+ordered for $J \gtrsim 0.2$ at $B = 4$, $q = 4$. Block free energies by a column transfer
+matrix over $q^{B}$ states.
+
+\end{document}
