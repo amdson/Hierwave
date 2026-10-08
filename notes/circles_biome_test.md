@@ -355,6 +355,27 @@ build on today's kernel and merge without conflict.
 Integration order: A first; stage 3 (A + B); stages 4-5 (B + C + D);
 stage 7 (A + B); stage 8 (A only, by whoever built A).
 
+## Corrections after the build
+
+- *Symmetry.*  The default bar offsets (`ry` 2..5, `rx` 1..4) are not
+  mirror-symmetric inside the block, so `p*`'s exact symmetry group for
+  the default families is the identity only; `group()` finds the valid
+  elements for any family set, and the test uses a symmetric bar range.
+- *The biome marginal is not uniform.*  `bio_u0` cancels only the
+  zeroth-order induced unary; shared-ring attraction and cheaper edge
+  objects push `p*` to about discs 0.52, both 0.39, bars 0.08, none 0.01
+  (confirmed by exact enumeration on `CirclesBiome(1,1)`).  So dormant
+  blocks are rare at the default dials; raise `bio_u0[none]`'s
+  competitors or lower `b_disc` when the dormancy path needs exercising.
+- *Support tables.*  Four canonical offsets suffice (`Model.compile`
+  adds the reflections); the diagonal tables are zero for the defaults
+  since rings spill sideways only.
+- *`stamp_features` paints a 12 x 12 window*, two tiles beyond the
+  block, so the OFF8 pairs across the edge of `R(p)` match the
+  full-grid difference exactly.
+- The designed biome unary is `bio_u0`; `bio_u` is the learned one.
+  `Forward` adds the support factors by default.
+
 ## Results
 
 (none yet)
