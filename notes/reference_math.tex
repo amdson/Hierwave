@@ -178,9 +178,12 @@ is learned.
 \section{The sampler}
 \label{sec:sampler}
 
-A sweep of a channel visits every non-fixed site $p$ once. At $p$, with everything else fixed,
-the candidate energy $e_p(t)$ is the sum of the factors homed on the channel that involve $p$,
-evaluated with $z_p = t$. The site draws its exact conditional,
+A sweep of a channel at level $\ell$ visits every non-fixed site $p$ once. At $p$, with
+everything else fixed, the candidate energy $e_p(t)$ is the sum of the factors homed on the
+channel that involve $p$, evaluated with $z_p = t$: the designed terms of $E_\ell$ (reading
+level $\ell$ and coarser) and the tables of $\Phi_\ell$, which is a same-level potential and
+enters as ordinary unary and pair rows. Factors homed on finer levels are never read; $\Phi_\ell$
+stands in for them. The site draws its exact conditional,
 \begin{equation}
   t \sim \frac{\exp(-e_p(t)/T)}{\sum_{t'} \exp(-e_p(t')/T)}
   \quad\text{as}\quad

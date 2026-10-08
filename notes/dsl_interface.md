@@ -160,9 +160,12 @@ class Window {                     // z_W, z_halo, ref outside; the fine region 
 class Trainer {
   Potential fit(Model m, Channel c, int ref, FreeEnergy F, Proposal p,
                 int nWindows, double lambda);           // ridge on x(W) . theta = y(W)
-  List<Writer> materialise(Potential phi, Channel c, int ref);
-                                   // u_c, g_{c,d} as tables into c's own inbox / same-level
-                                   //   factors, or an on-the-fly term scoring Writer.delta
+  SameLevelTerms materialise(Potential phi, Channel c, int ref);
+                                   // Phi_l for c's own sampler: u_c (unary) and g_{c,d} (pair)
+                                   //   tables over Dom_c, installed as same-level factors of c
+                                   //   next to its designed ones; or, when D_c is large, an
+                                   //   on-the-fly term that scores candidate t at p by
+                                   //   phi.energy(footprint of Writer.delta(p, t))
 }
 ```
 
