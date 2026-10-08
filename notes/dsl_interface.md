@@ -29,7 +29,9 @@ interface Channel {
   Features features();             // e : Dom_c -> R^k, null for a channel with no learned potential
   List<Bias> biases();             // Phi_c as additive energies over a candidate set; empty on tiles
 
-  void init(Rng rng);              // painted initialisation: a consistent refinement of the level above
+  void init(Rng rng);              // painted initialisation: a consistent refinement of the level above;
+                                   //   then dormancy (C1): a site whose parents admit one value is fixed at it,
+                                   //   and a block with every site fixed is skipped as a unit by sweep
   void sweep(Rng rng);             // one sweep of the channel's own kernel at T = 1 under E_l + Phi_l,
                                    //   reading levels >= l only.  Any kernel invariant for exp(-(E_l + Phi_l)).
                                    //   At site p with candidate set C_p (Dom_c or a subset) the kernel does
@@ -51,7 +53,8 @@ class BitTileChannel implements Channel { }
 class CoordChannel   implements Channel { Exemplar ex; int K, K_t; }
                                    // castlegen/channels/coord.py: candidate set (current value,
                                    //   neighbours' coherent continuations, K random, K_t
-                                   //   tile-consistent) chosen without reading z_p; Gumbel-max on it.
+                                   //   tile-consistent) chosen without reading z_p, proposals drawn
+                                   //   from the values the parents admit; Gumbel-max on it.
 ```
 
 Same-level factors are constructor arguments of the implementation (a
@@ -71,6 +74,8 @@ class PairRow     implements Local { Channel b; View a, bv; int[] off; double[][
 class CountRow    implements Local { }
 class UnaryRow    implements Local { }
 class Certificate implements Local { double[] weights(...); int drawD(int t, Rng rng); }
+class FormulaRow  implements Local { Footprints f; }   // designed latent-level rule computed from the two
+                                                       //   values' footprints (distance, overlap); C4
 ```
 
 ## Bias (C2): the learned potential as the sampler sees it

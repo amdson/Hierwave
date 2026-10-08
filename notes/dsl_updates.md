@@ -27,6 +27,26 @@ Learned potentials live only on coarse channels: `F_0 = 0`, so the tile
 level's energy is entirely designed and the tile sampler never sees a
 learned term.  The bias from learning enters small-domain samplers only.
 
+*Candidates from the allowed set.*  A candidate-set sampler proposes from
+the values the parents' writes admit at the site, not from `Dom_c`, so
+forbidden values cost nothing.  The cap `K` on the set makes the work
+per site constant whatever the size of the domain.
+
+*Dormancy (the no-op).*  When the parents' writes into a block admit
+exactly one value, the channel's cells in that block are fixed at it
+before the level is sampled; the sweep skips them.  Decided once per
+block when the level's inputs are assembled (the chain is top-down, the
+parents are final), one bit per (channel, block).  It costs nothing
+elsewhere: the admitted value is the reference `r`, whose energy is zero
+in the reference gauge; a dormant block has one configuration, so its
+free energy is zero and the parent's `Phi` needs no term for it; for a
+certificate, `r` has mass 0 and `d = INF`, valid with no witness, so an
+active neighbour sees a dead end and no bookkeeping runs on the dormant
+side; windows exclude dormant blocks from the fine region.  The sampler
+needs one generic rule (a single admissible candidate means fixed) and a
+block-level fast path (an active bit per block tested before the block's
+cells; for the bit-sliced sampler, before its planes).
+
 ### C2. Learned potentials bias the sampler additively over the candidates it exposes
 
 For a coarse channel `c`, `Phi_c` is a sum of local learned terms,
@@ -97,6 +117,58 @@ motivated.  To do: drop *honour* as a category (a hard parent factor),
 state the direction rule once (a channel reads levels `>= l` only; finer
 levels reach it through `Phi_l`).
 
+### C4. Constraints among latents
+
+A constraint between latents that leaves no fine-level signature (two
+discs that merely overlap when both only request "fill") is not induced
+and is never learned.  It is a designed factor at the latents' own level,
+computed by a formula over the two values' footprints (`FormulaRow` in
+the interface: distance, overlap, containment), generic across types.
+An effect that the fine level induces but non-locally (support or
+connectivity threading between two latents through tiles neither writes)
+is invisible to any local feature of the writes; the fit residual is its
+only trace.  The remedy is the same principle one level up: a coarse
+certificate (support or connectivity at block resolution), so the
+constraint is designed where it is local.  Neither is a learning problem.
+
+### C5. Scaling the library
+
+Hundreds of latent types (trees, houses, castles, mountains) is the
+large-domain case of C1 with the hierarchy supplying the sparsity.  No
+rule per type pair.
+
+- *Families, one level up.*  A biome / role channel at a coarse level
+  writes a hard mask over **families** into the latent channels below:
+  a designed pair table biome x family, a few dozen entries.  "Trees
+  never in a desert" is one entry.  The same write makes the tree
+  channel dormant there (C1).
+- *Each type on the level matching its footprint.*  One slot channel per
+  level (8-blocks: trees; 32: houses; 128: mountains), value =
+  (family, variant), family a view.  A 128-block has one mountain slot
+  and never considers trees; most slots are `r`, which is always a
+  finite candidate.  Kind / variant as a promotion when the variant
+  space is large: exact draw on the small kind channel, candidate-set on
+  the variant.
+- *Constant work per block.*  Candidates from the allowed families,
+  capped at `K` (C1).  Work per site is `K x (designed rows + bias)`
+  regardless of the library size.
+- *Interactions never enumerated.*  Types interact through the children
+  they both write to; the learned potential scores that from their
+  features (C2), so no tree x house parameter exists.  Rules with no
+  fine signature are formula factors (C4).  The context encoder sees the
+  parent's mask, so `Phi` is biome-conditioned without a model per biome.
+  Parameters scale with the feature dimension, not the type count.
+- *Adding a type.*  A schematic (its stamp or other derived features), a
+  family, a level.  Zero new learned parameters with derived features;
+  one initialised row with learned ones, which is the case for mixed
+  features: derived to start, learned dimensions where the residual asks.
+- *Types without a fixed footprint* (rivers, roads) are not slot values:
+  each is a channel with a certificate, dormant wherever its family is
+  masked out, paying only on the corridor the biome level allows.
+- *Biome composition from examples* is a count factor (biome value x
+  family counts in its blocks) fitted from a corpus; the DSL has the
+  factor, the estimator has not been run on it.
+
 ## Deferred: the bias field
 
 Considered and set aside until several channel sets write into one tile
@@ -127,7 +199,6 @@ enumerating combinations of writers.  Kept here for then.
 - Q2. The feature of an exemplar coordinate: its window's statement
   (the masked exemplar patch) is a stamp by construction; is that the
   whole feature or does it need learned dimensions for texture?
-- Q3. Constraints among latents with no fine-level signature (two discs
-  that merely overlap) are designed coarse factors, computed by a
-  formula, not learned.  Induced but non-local effects (support between
-  two objects) need a coarse certificate.  Neither is in the DSL yet.
+- Q3. The first real library (C5): which level each type sits on, and
+  whether the biome x family table stays small once roles are counted
+  from a corpus.
