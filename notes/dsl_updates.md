@@ -36,12 +36,26 @@ fixed sweep budget `S_l` is enough, and it is measured per channel set.
 *Post-relaxation.*  After the `S_l` honoured sweeps, `p` sweeps with the
 parent constraint loosened (soft honour, or none) repair local scales
 where `Phi` above was inaccurate, at the cost of drifting from the coarse
-sample.  A knob per level, default 0.
+sample.  A knob per level, default 0.  Measured (`circles_biome_test`
+stage 3): harmless once the finite part is in, destructive before it,
+because a loosened constraint weaker than the unary gap between values
+(ten nats between two families' presence costs) is simply overridden.
+Rule: never relax with a constraint softer than the unary gap, and only
+after the unaries are learned.
 
 *Candidates from the allowed set.*  A candidate-set sampler proposes from
 the values the parents' writes admit at the site, not from `Dom_c`, so
 forbidden values cost nothing.  The cap `K` on the set makes the work
-per site constant whatever the size of the domain.
+per site constant whatever the size of the domain.  As built (stage 7b):
+the parent hard rows are evaluated once per level at `init`, into one
+deduplicated admitted list per distinct parent context (a few lists per
+world, each the size of what one mask admits); same-level hard rows and
+the cap run on the list only.  Per-site work is then flat in the library
+size (1.5-1.8 us at `K = 8` from 5 to 20 families, where the full pass
+rose to 3.4); what still grows with `D` is the memory of the `D x D`
+support and pair tables, a cache effect, to be removed by deriving the
+support from footprint overlap per family pair rather than tabulating
+it per value pair.
 
 *Dormancy (the no-op).*  When the parents' writes into a block admit
 exactly one value, the channel's cells in that block are fixed at it
@@ -134,9 +148,25 @@ tiles up, with the level below already installed.  At level `l`:
    `p*`: one level, one window, the shipping kernel at the shipping
    budget, so the cost is bounded by construction and the floor is the
    AIS standard error.  Evaluating only the capped set is consistent.
+   **The target must integrate out everything the sampler draws after
+   the site**: every finer level, including the site's own children.  A
+   one-site conditional of `p*` that reads a finer level (`p*(T | mid)`,
+   `p*(T | slots)`, the frozen-site S1f) is the wrong target: it is
+   nearly one-hot on the current value, the fit returns `q`'s own
+   conditional, and the result is the "leak" of `potts_test.md` (stage
+   6b: the same contexts give 0.22 of the oracle's top contrast with the
+   frozen target and 0.96-1.00 with the collapsed one).  AIS over the
+   child sampler is collapsed by construction; an exact hook must be
+   too.  Inside the AIS, rows that read only parents go into `p_0` at
+   full strength and are never annealed; annealing a parent row (`inf`
+   replaced by `L`) was biased by 0.5-1 nat at 175x the cost.  The
+   child's own window is its written cells; neighbours are a fixed
+   boundary through the annealed rows.
 3. *Move the context toward `p*`.*  Having computed `pi_p`, draw from
    it.  One sweep of this is one `p*`-invariant step on `q`'s sample at
    no extra cost; `K` sweeps give contexts `K` steps closer to `p*`.
+   Measured: with collapsed targets `K` buys nothing (stages 5, 6b);
+   the leak it was meant to close was a target error.  Default 0.
 4. *Update `q`.*  Fit `theta` by cross-entropy of `pi_p` against the
    learned conditional `softmax(-(E_l(t) + Delta_p(t; theta)))` over
    `C_p`, with the designed energy a fixed offset so only `F` is
@@ -172,7 +202,17 @@ what the test uses them for.
 under level `l-1`'s installed approximation, so error below enters the
 targets above.  That is also the point: `F` as the budgeted kernel
 realises it.  Training fails only where generation fails: a fine kernel
-that does not mix with the coarse values clamped (C1).
+that does not mix with the coarse values clamped (C1).  Measured: on
+circles the recursion costs nothing visible (the top fit through AIS
+over the mid sampler equals the exact collapsed hook within eval
+noise); on Potts at kappa 1 the top reaches 0.85 of the oracle's
+contrast and the rest is attributed to the learned mid tables below.
+
+*Training worlds are periodic.*  Production worlds have no edge.  An
+edge in a toy world makes edge objects cheaper (clipped rings), biases
+the position-free potentials fitted on edge-and-interior contexts, and
+leaks into interior statistics; restricting the evaluation to the
+interior does not recover the gate, a torus does (stage 5b).
 
 *Adaptive features.*  Grow the feature set or stencil where the residual
 (or the consistency violation) is significant and nowhere else, matching
@@ -182,12 +222,21 @@ changes at distance `r`, is why starting small is safe.
 
 *Baseline and a design rule.*  The support of `Phi` (forbids from
 overlapping hard writes, honourability) is computed, never learned.
-Run first with the finite part zero plus `p` relaxed sweeps per level
-(post-relaxation: honour loosened, the fine level repairs local scales).
-The residual against the oracle splits into what relaxation repaired
-(local) and what it did not (what `Phi` must carry).  Rule: make every
-constraint you cannot afford to get wrong hard, so it lives in the
-support; the finite part carries preferences only.
+The baseline is support plus the zeroth-order unaries: the free-energy
+cost of each value in isolation (an object's 18-28 nats; `-log` of the
+number of admitted configurations for a mask), which is computed from
+the stamps, not learned.  With the finite part at zero the forward
+fills every admitted slot and the biome level collapses onto the value
+with the fewest children, so "support only" measures nothing (stage 3).
+With the unaries in, the residual against the oracle is what the pair
+terms must carry (shared-ring attraction: occupancy 0.40 vs 0.73,
+contact 0.20 vs 0.34).  Rule: make every constraint you cannot afford
+to get wrong hard, so it lives in the support; the finite part carries
+preferences only.  Measured outcome (stages 4-5b): with stamp features
+and collapsed targets the pair terms are exact on held-out pairs and on
+a family never seen in training, conflicts are zero everywhere, and the
+end-to-end forward is within eval noise of the oracle on a periodic
+world.
 
 Recursion upward is unchanged.  Colouring of `c` follows `N(p)` plus the
 reach of the features.
@@ -284,10 +333,17 @@ enumerating combinations of writers.  Kept here for then.
 
 - Q1. Per channel: learned, derived, or mixed features?  Start derived
   and small, grow adaptively (C2); decide on circles + Potts first.
-- Q4. What the recursion and the AIS targets cost against exact
-  targets, and how much `K` buys: measured where exact targets exist
-  (circles, Potts), then on objects over a Potts texture
-  (`circles_biome_test.md`, stretch), where they do not.
+- Q4. Measured where exact targets exist: AIS targets equal the exact
+  hook within noise, the recursion costs nothing on circles and 0.15 of
+  the top contrast on Potts at kappa 1, `K` buys nothing.  Still open on
+  objects over a Potts texture (`circles_biome_test.md`, stretch), where
+  no exact target exists.
+- Q5. Support memory: the `D x D` tables per offset (13 MB at 321
+  values) are the remaining cost that grows with the library; derive
+  the support from footprint overlap per family pair instead.
+- Q6. The bit tile sampler behind the `ChannelSampler` protocol, a
+  tempered kernel for coordinate channels (so AIS can run over them),
+  and certificates with a cap (stage 8).
 - Q2. The feature of an exemplar coordinate: its window's statement
   (the masked exemplar patch) is a stamp by construction; is that the
   whole feature or does it need learned dimensions for texture?

@@ -31,8 +31,11 @@ interface Channel {
   List<Bias> biases();             // Phi_c as additive energies over a candidate set; empty on tiles
 
   void init(Rng rng);              // painted initialisation: a consistent refinement of the level above;
-                                   //   then dormancy (C1): a site whose parents admit one value is fixed at it,
-                                   //   and a block with every site fixed is skipped as a unit by sweep
+                                   //   then the admitted list (C1): the parent hard rows evaluated once into
+                                   //   one list per distinct parent context, which candidates() and sweep()
+                                   //   draw from; dormancy = a list of length one, fixed, and a block with
+                                   //   every site fixed is skipped as a unit by sweep.  Valid until the
+                                   //   parents change.
   void relax(Rng rng, int p);      // post-relaxation: p sweeps with the parent constraint loosened (C1)
   void sweep(Rng rng);             // one sweep of the channel's own kernel at T = 1 under E_l + Phi_l,
                                    //   reading levels >= l only.  Any kernel invariant for exp(-(E_l + Phi_l)).
@@ -258,6 +261,12 @@ generate(model):
   kernel at the shipping budget.  Nothing samples `p*` globally.  The
   bottom-up order is because `F_{l-1}` is computed under level `l-1`'s
   installed approximation.
+- A target integrates out everything the sampler draws after the site,
+  including the site's own children.  `AISTargets` does by construction;
+  an `ExactTargets` hook must be collapsed too.  A one-site conditional
+  of `p*` that reads a finer level is the frozen-site target and
+  reproduces the leak (C2, stage 6b).  Parent rows sit in the AIS's
+  `p_0` and are never annealed.
 - A target is a fixed number once the level below is installed, so the
   dataset aggregates across iterations; there is no negative phase and
   nothing goes stale.  `K` moves the contexts from `q` toward `p*` at
