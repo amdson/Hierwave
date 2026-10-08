@@ -32,6 +32,7 @@ interface Channel {
   void init(Rng rng);              // painted initialisation: a consistent refinement of the level above;
                                    //   then dormancy (C1): a site whose parents admit one value is fixed at it,
                                    //   and a block with every site fixed is skipped as a unit by sweep
+  void relax(Rng rng, int p);      // post-relaxation: p sweeps with the parent constraint loosened (C1)
   void sweep(Rng rng);             // one sweep of the channel's own kernel at T = 1 under E_l + Phi_l,
                                    //   reading levels >= l only.  Any kernel invariant for exp(-(E_l + Phi_l)).
                                    //   At site p with candidate set C_p (Dom_c or a subset) the kernel does
@@ -85,9 +86,10 @@ interface Bias {                   // Phi_c = sum_p psi_theta(z_p, z_{N(p)})
   int reach();                     // of N(p) plus the features' spill; joins the colouring
   void add(Channel c, int y, int x, int[] cand, double[] e);
                                    // e[i] += Phi_c(z with z_p = cand[i]) - Phi_c(z)  for every i.
-                                   //   CONTRACT: a difference of the one joint Phi_c, i.e. including the
-                                   //   psi terms of every neighbour q with p in N(q).  Own-term-only
-                                   //   energies are a dependency network and do not meet it.
+                                   //   Up to a per-site constant.  Form (i): a difference of the one joint
+                                   //   Phi_c, including the psi terms of every neighbour q with p in N(q).
+                                   //   Form (ii): a directly learned conditional at p, with the pair
+                                   //   consistency check reported (C2).
   void onChange(Channel c, int y, int x, int from, int to);   // cached context, if any
 }
 
@@ -154,9 +156,16 @@ class Window {                     // z_W, z_halo, ref outside; the fine region 
   Window(Channel c, Shape shape, int ref, Proposal p, Rng rng);
 }
 
+interface JointSampler { Sample next(); }   // p* offline: block fine samples (latent = view), or collapsed moves
+
 class Trainer {
-  Params fit(Model m, Channel c, int ref, FreeEnergy F, Proposal p, int nWindows, double lambda);
+  Params fitWindows(Model m, Channel c, int ref, FreeEnergy F, Proposal p, int nWindows, double lambda);
                                    // ridge when Phi is linear in theta, Adam otherwise, on x(W) . theta = y(W)
+  Params fitConditional(Model m, Channel c, JointSampler js, int nSamples);
+                                   // pseudo-likelihood: cross-entropy of the sampled value over the sampler's
+                                   //   candidate set, logits = -(E_c + Delta); designed energy a fixed offset.
+                                   //   Reports the pair consistency violation and the fine kernel's
+                                   //   autocorrelation with the coarse level clamped.
   Bias install(Params theta, Channel c);
                                    // MaterialisedBias when psi is pairwise and D_c small; OnePassBias when
                                    //   h is linear; BatchedDeltaBias otherwise.  Added to c.biases().
@@ -178,9 +187,11 @@ class Trainer {
 - `sweep` reads levels `>= l` only and leaves `exp(-(E_l + Phi_l))`
   invariant; `energy`, `sweepTempered`, `unaryLogZ` make it AIS's kernel,
   so training measures the kernel that ships.
-- A `Bias` returns differences of one joint `Phi_c` over the candidate
-  set it is handed, so the draw is Gibbs on `E_l + Phi_l` whatever the
-  sampler's candidate set and whatever the bias's internals.
+- A `Bias` returns candidate energies up to a per-site constant over the
+  set it is handed, so the draw is the learned conditional of `E_l + Phi_l`
+  whatever the sampler's candidate set and whatever the bias's internals;
+  the joint-difference form makes that conditional exact, the direct form
+  exact up to the reported consistency violation.
 - `Phi_c` is evaluated at `c`'s level and never reads the fine grid at
   sampling time.
 - A feature set is fixed before fitting; what is fitted is `psi`'s

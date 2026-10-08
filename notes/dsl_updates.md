@@ -27,6 +27,16 @@ Learned potentials live only on coarse channels: `F_0 = 0`, so the tile
 level's energy is entirely designed and the tile sampler never sees a
 learned term.  The bias from learning enters small-domain samplers only.
 
+*The criterion for a latent.*  With the coarse level clamped, the fine
+kernel's autocorrelation time should be close to one; if it is not, the
+latent is badly defined (Brandt and Ron).  This is the test that the
+fixed sweep budget `S_l` is enough, and it is measured per channel set.
+
+*Post-relaxation.*  After the `S_l` honoured sweeps, `p` sweeps with the
+parent constraint loosened (soft honour, or none) repair local scales
+where `Phi` above was inaccurate, at the cost of drifting from the coarse
+sample.  A knob per level, default 0.
+
 *Candidates from the allowed set.*  A candidate-set sampler proposes from
 the values the parents' writes admit at the site, not from `Dom_c`, so
 forbidden values cost nothing.  The cap `K` on the set makes the work
@@ -68,26 +78,33 @@ It hands `C_p` to the potential and receives an additive energy vector
 
     Delta_p(t) = Phi_c(z with z_p = t) - Phi_c(z),   t in C_p,
 
-which it adds to the designed energies before the draw.  The contract is
-that `Delta_p` is a difference of the one joint `Phi_c`: it includes the
-terms `psi` of every neighbour `q` whose context contains `p`, not only
-`p`'s own term.  Own-term-only energies (`e(t) . h(ctx_p)` alone) are a
-dependency network with no joint, and are not allowed: they break the
-identity and make the result sweep-order dependent.
+which it adds to the designed energies before the draw.  The sampler
+normalises over `C_p` itself, so `Delta_p` is needed only up to a per-site
+constant.
 
-*Ways to meet the contract* (the potential's choice, invisible to the
-sampler):
+*Two admissible forms.*  (i) A difference of one joint `Phi_c`, including
+the `psi` terms of every neighbour `q` whose context contains `p`; exact
+by construction.  (ii) A directly learned conditional: energies over
+`C_p` predicted from the context at `p` alone.  This is what Brandt and
+Ron's P+ tables are (`reading.md`); it need not be the conditional of
+any joint, and the pair consistency condition (for neighbouring sites
+`p, q` and values `t, t'`: the product of one-site odds around the square
+`(t,t') -> (t',t') -> (t',t) -> (t,t)` must close) is reported as a fit
+diagnostic.  Because the training targets come from one consistent
+distribution the violation is bounded by model error.  Prefer (i) where
+it is cheap; (ii) is the general case and the one trained by
+pseudo-likelihood below.
+
+*Ways to compute it* (the potential's choice, invisible to the sampler):
 
 - *Materialised*: when `psi` decomposes into unary and pair terms and
   `D_c` is small, precompute `u_c(v)`, `g_{c,d}(v, v')` once and look
   them up.  Zero learned-model calls at sampling time.
-- *One pass*: compute `h_theta(ctx_p)` once per site visit, then one dot
-  product per candidate.  Meets the contract exactly only when `h` is
-  linear in the neighbours' features (the bilinear form), because then
-  the neighbours' terms fold into the dot product.
-- *Batched delta*: for each candidate, re-evaluate the `|N(p)| + 1` terms
-  that touch `p`, as one batch over `C_p`.  Exact for any `psi`; cost
-  `|C_p| x (|N(p)| + 1)` local evaluations, done at the coarse level.
+- *One pass*: `h_theta(ctx_p)` once per site visit, one dot product per
+  candidate.  A joint difference only when `h` is linear in the
+  neighbours' features; otherwise it is form (ii).
+- *Batched delta*: re-evaluate the `|N(p)| + 1` terms touching `p` for
+  each candidate, one batch over `C_p`.  Form (i) for any `psi`.
 
 *Feature set.*  `e : Dom_c -> R^k` is a property of the channel, fixed
 before fitting: learned (token embeddings), derived from what `v` asks
@@ -99,8 +116,44 @@ to the stencil geometry this is the paint potential of
 one-hot and learned features were not (`convpot_test.md`).  The stamp is
 one option, not the design.
 
-*Training.*  Unchanged: windows, `y(W)`, AIS on the fine channel's own
-sampler; `theta` by ridge when `Phi` is linear in it, Adam otherwise.
+*Training: two estimators for the same object.*  Both deliver the
+per-site candidate energies up to a constant, i.e. log ratios of the fine
+partition function between candidates; neither needs `Z` itself.
+
+- *Pseudo-likelihood on joint samples* (preferred where available).
+  Sample the bidirectional model `p*` offline, fine and coarse together;
+  train the conditional by cross-entropy: softmax over the sampler's
+  candidate set, logits `= -(E_c(t) + Delta_p(t))` with the designed
+  energy as a fixed offset so only `F` is learned.  Counting a table per
+  context is the tabular case.  No windows, no AIS, no partition
+  function: the fine level is integrated out by having been sampled.
+  Joint samples are free when the latent is a deterministic view of the
+  level below (block the fine samples); for a free latent with a
+  footprint they need collapsed moves (latent and footprint together),
+  which is the cost.
+- *Window free energies* (`reference_math` section 4).  `F` per window
+  by AIS on the fine channel's own sampler, ridge or Adam on
+  `x(W) . theta = y(W)`.  Needs no joint sampling; pays a partition
+  function estimate per window; fits `F` as the budgeted kernel realises
+  it.  The route for free latents.
+- Where both apply (Potts: the mid level is a view of the tiles under
+  hard honour) they cross-check each other.
+
+*Adaptive features.*  Grow the feature set or stencil where the residual
+(or the consistency violation) is significant and nowhere else, matching
+truncation error to statistical error (Brandt and Ron's neighbourhood
+tree).  Near-locality, the conditional changing by `O(exp(-c r))` under
+changes at distance `r`, is why starting small is safe.
+
+*Baseline and a design rule.*  The support of `Phi` (forbids from
+overlapping hard writes, honourability) is computed, never learned.
+Run first with the finite part zero plus `p` relaxed sweeps per level
+(post-relaxation: honour loosened, the fine level repairs local scales).
+The residual against the oracle splits into what relaxation repaired
+(local) and what it did not (what `Phi` must carry).  Rule: make every
+constraint you cannot afford to get wrong hard, so it lives in the
+support; the finite part carries preferences only.
+
 Recursion upward is unchanged.  Colouring of `c` follows `N(p)` plus the
 reach of the features.
 
@@ -194,8 +247,11 @@ enumerating combinations of writers.  Kept here for then.
 
 ## Open
 
-- Q1. Per channel: learned, derived, or mixed features?  Decide on
-  circles + Potts first, where the exact `Phi` is known, then roots.
+- Q1. Per channel: learned, derived, or mixed features?  Start derived
+  and small, grow adaptively (C2); decide on circles + Potts first.
+- Q4. Joint samples for free latents: collapsed moves on a periodic test
+  world, or windows + AIS only.  Decide on circles (objects with
+  offsets) by comparing the two estimators' tables.
 - Q2. The feature of an exemplar coordinate: its window's statement
   (the masked exemplar patch) is a stamp by construction; is that the
   whole feature or does it need learned dimensions for texture?
