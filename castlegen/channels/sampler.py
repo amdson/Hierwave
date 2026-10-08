@@ -25,7 +25,16 @@ Sampler(model, home, K, hb, seed)
 
 Seeding: each call seeds the numba RNG from self.rng (or from `seed` when
 given, as Model.sweep does), so a Sampler is reproducible whatever ran
-before it."""
+before it.
+
+Certificates (K = None only): dormancy keeps a site active when its one
+admitted value has mass > 0 (its d still has to be drawn); a dormant site
+holds a mass-0 value with d = INF, valid with no witness, so active
+neighbours see a dead end (dsl_updates C1).
+
+ChannelSampler is the protocol every channel's sampler meets (Sampler here,
+coord.CoordSampler for exemplar coordinates); generate() is the schedule of
+dsl_interface.md over it, with no per-model cases."""
 import numpy as np
 
 from . import kernel
@@ -33,9 +42,70 @@ from .core import PAIR, UNARY
 from .induce import betas_of, logmeanexp
 
 
-class Sampler:
-    def __init__(self, model, home, K=None, hb=1, seed=0):
+class ChannelSampler:
+    """The sampler a channel owns (dsl_interface.md, Channel).  Required:
+      name                    the home channel
+      init() -> float         dormancy where the parents admit one value; the dormant fraction
+      sweep(n, T, seed)       n sweeps of the channel's own kernel; returns the no-candidate count
+      energy()                (finite total, inf count) of the terms the kernel samples
+      candidates(y, x)        the set the kernel draws over at (y, x)
+    Optional (NotImplementedError where the kernel cannot): relax(n, ..., seed),
+    sweep_tempered(beta, n, ...), unary_logZ(), energy_rest()."""
+    name = ""
+
+    def init(self):
+        return 0.0
+
+    def sweep(self, n=1, T=1.0, seed=None):
+        raise NotImplementedError
+
+    def energy(self):
+        raise NotImplementedError
+
+    def candidates(self, y, x):
+        raise NotImplementedError
+
+    def relax(self, n, *a, seed=None, **kw):
+        raise NotImplementedError(f"{type(self).__name__}: no relaxation")
+
+    def sweep_tempered(self, beta, n=1, *a, **kw):
+        raise NotImplementedError(f"{type(self).__name__}: no tempered kernel")
+
+    def unary_logZ(self, *a, **kw):
+        raise NotImplementedError(f"{type(self).__name__}: no unary log Z")
+
+    def energy_rest(self, *a, **kw):
+        raise NotImplementedError(f"{type(self).__name__}: no E_rest")
+
+
+def generate(levels, S, rng=None, painters=None, relax=None):
+    """The forward chain of dsl_interface.md: for each level (coarsest first),
+    painters[l]() (paints level l's inputs from the levels above: designed
+    channels, refinements; None to skip), then for each sampler init(),
+    S[l] sweeps, relax[l] relaxation sweeps.  S[l] is an int (one seed per
+    call from rng, or the sampler's own rng when rng is None) or a list of
+    (n, seed) chunks (replays a script that reseeds between reports).
+    Returns the dormant fraction of every sampler, per level."""
+    out = []
+    for l, level in enumerate(levels):
+        if painters is not None and painters[l] is not None:
+            painters[l]()
+        fr = []
+        for c in level:
+            fr.append(c.init())
+            chunks = S[l] if not np.isscalar(S[l]) else [(int(S[l]), None if rng is None else int(rng.integers(1 << 30)))]
+            for n, sd in chunks:
+                c.sweep(n, seed=sd)
+            if relax is not None and relax[l]:
+                c.relax(relax[l], seed=None if rng is None else int(rng.integers(1 << 30)))
+        out.append(fr)
+    return out
+
+
+class Sampler(ChannelSampler):
+    def __init__(self, model, home, K=None, hb=1, seed=0, soft_model=None):
         self.model, self.home, self.hb = model, home, int(hb)
+        self.name, self.soft_model = home, soft_model
         self.K = int(K) if K else 0
         self.hc = model.chan(home)
         self.D = self.hc.D
@@ -83,9 +153,15 @@ class Sampler:
 
     def init(self):
         g, fixed, hb = self.hc.grid, self.hc.fixed, self.hb
+        P = self.P
         ok = self.admissible()
-        self.dormant[:] = (ok.sum(axis=2) == 1) & ~fixed
-        g[self.dormant] = ok.argmax(axis=2)[self.dormant]
+        one, val = ok.sum(axis=2) == 1, ok.argmax(axis=2)
+        if P.cert[4]:
+            one &= P.views[P.cert[0]][val] == 0                  # a value with mass still draws its d
+        self.dormant[:] = one & ~fixed
+        g[self.dormant] = val[self.dormant]
+        if P.cert[4]:
+            P.grids[P.cert[2]][self.dormant] = P.cert[3] + 1      # d = INF: valid with no witness
         off = self.dormant | fixed
         rows, cols = g.shape
         for by in range(self.active.shape[0]):
@@ -107,8 +183,11 @@ class Sampler:
         self._seed(seed)
         return self._run(self.P, self.P.tabs, n, T)
 
-    def relax(self, n, soft_model, seed=None):
-        """n sweeps under soft_model's packing of home (same channel objects)."""
+    def relax(self, n, soft_model=None, seed=None):
+        """n sweeps under soft_model's packing of home (same channel objects;
+        None: the one given to the constructor)."""
+        soft_model = self.soft_model if soft_model is None else soft_model
+        assert soft_model is not None, "relax: no soft model"
         P = self._soft.get(id(soft_model))
         if P is None:
             P = self._soft[id(soft_model)] = self._pack(soft_model)

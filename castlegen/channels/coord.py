@@ -38,6 +38,7 @@ from numba import njit
 from .core import Certificate, Channel, Factor, Kinds
 from . import roots as R
 from . import kernel as KN
+from .sampler import ChannelSampler
 
 FREE, EARTH = 0, 1                                             # alpha codes; a tile kind k is 2 + k
 INF = np.inf
@@ -738,3 +739,101 @@ class Coarse:
             uref[orphan] = -1
         self.pruned = int(orphan.sum())
         return uref
+
+
+# ------------------------------------------------- the Sampler interface (sampler.ChannelSampler)
+@njit(cache=True)
+def _candidates(y, x, U, g, alpha, by_alpha, by_start, K, Kt, r):
+    """The set sweep / joint_sweep build at (y, x), the same construction
+    and RNG draws: current value, each neighbour's coherent continuation,
+    K random, Kt with alpha equal to the tile at p, then r (joint, r >= 0)."""
+    H, W = U.shape
+    my, mx = alpha.shape
+    cand = np.empty(2 + 4 + K + Kt, np.int64)
+    n = 0
+    cand[n] = U[y, x]; n += 1
+    for d in range(4):
+        dy, dx = ((-1, 0), (0, 1), (1, 0), (0, -1))[d]
+        qy, qx = y + dy, x + dx
+        if 0 <= qy < H and 0 <= qx < W:
+            uq = U[qy, qx]
+            cy, cx = uq // mx - dy, uq % mx - dx
+            if 0 <= cy < my and 0 <= cx < mx:
+                cand[n] = cy * mx + cx; n += 1
+    for k in range(K):
+        cand[n] = np.random.randint(my * mx); n += 1
+    t = g[y, x]
+    a0, a1 = by_start[t], by_start[t + 1]
+    for k in range(Kt):
+        if a1 > a0:
+            cand[n] = by_alpha[a0 + np.random.randint(a1 - a0)]; n += 1
+    if r >= 0:
+        cand[n] = r; n += 1
+    return cand[:n].copy()
+
+
+@njit(cache=True)
+def _coord_energy(U, T, alpha, rootv, lam, w, nu, Rr):
+    """(own-kernel energy, coherence alone): sum_p of sweep's site energy at
+    u_p with the coherence pairs counted once (each pair enters two sites)."""
+    H, W = U.shape
+    my, mx = alpha.shape
+    e, coh = 0.0, 0.0
+    for y in range(H):
+        for x in range(W):
+            c = U[y, x]
+            e += _energy(c, y, x, U, T, alpha, rootv, my, mx, H, W, lam, w, nu, Rr)
+            coh += _energy_u(c, y, x, U, alpha, my, mx, H, W, lam)
+    return e - coh / 2, coh / 2
+
+
+class CoordSampler(ChannelSampler):
+    """sampler.ChannelSampler over CoordKernel; same draws as the existing
+    driver for the same seed.  joint=None: the coordinate kernel `sweep`
+    (tiles held; patch and coupling from the kernel's own lam, w, nu).
+    joint=(model, coup): `sweep_joint`, (u, t, d) per site, the tile
+    channel's factors from `model` (compiled without the coupling) plus
+    coup[t, alpha(u)]; `uref` (-1: none) honoured at `mu`, set by the
+    painter that refines the level above.  Coordinate channels have no
+    hard parent rows (the parent's refinement is soft honour), so init()
+    is a no-op returning 0.  No relaxation and no tempered kernel."""
+
+    def __init__(self, ck: CoordKernel, joint=None, mu=0.0, seed=0):
+        self.ck, self.joint, self.mu = ck, joint, float(mu)
+        self.name = ck.u.name
+        self.uref = np.full(ck.u.grid.shape, -1, np.int64)
+        self.rng = np.random.default_rng(seed)
+
+    def _seed(self, seed):
+        return int(self.rng.integers(1 << 30)) if seed is None else int(seed)
+
+    def sweep(self, n=1, T=1.0, seed=None):
+        s = self._seed(seed)
+        if self.joint is None:
+            assert T == 1.0, "the coordinate kernel has no temperature"
+            self.ck.sweep(n, s)
+            return 0
+        model, coup = self.joint
+        return self.ck.sweep_joint(model, coup, n, s, T, uref=self.uref, mu=self.mu)
+
+    def candidates(self, y, x):
+        """Coordinate candidates at (y, x) (random members drawn from self.rng).
+        Joint: each is paired with every tile of finite weight."""
+        ck = self.ck
+        seed(self._seed(None))
+        r = int(self.uref[y, x]) if self.joint is not None else -1
+        return _candidates(y, x, ck.u.grid, ck.tile.grid, ck.alpha, ck.by_alpha, ck.by_start, ck.K, ck.Kt, r)
+
+    def energy(self):
+        """(finite total, inf count).  Own kernel: coherence + patch + nu
+        coupling.  Joint: the tile model's energy + coherence + coup[t,
+        alpha(u)] + mu per cell off uref."""
+        ck = self.ck
+        U, a = ck.u.grid, ck.alpha.ravel()
+        if self.joint is None:
+            return _coord_energy(U, ck.tile.grid, ck.alpha, ck.rootv, ck.lam, ck.w, ck.nu, ck.radius)[0], 0
+        model, coup = self.joint
+        e, nv = model.energy(ck.tile.name)
+        coh = _coord_energy(U, ck.tile.grid, ck.alpha, ck.rootv, ck.lam, 0.0, 0.0, 0)[1]
+        hon = self.mu * int(((self.uref >= 0) & (U != self.uref)).sum())
+        return e + coh + float(np.asarray(coup)[ck.tile.grid, a[U]].sum()) + hon, nv
