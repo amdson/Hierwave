@@ -108,3 +108,40 @@ def reference_halos(C: Circles, theta, n, wy=2, wx=2, ref=0, sweeps=30, seed=0):
         m.sweep("mid", sweeps, seed=int(rng.integers(1 << 30)))
         out.append(mid.grid[BT - 1:BT - 1 + wy * BT + 2, BT - 1:BT - 1 + wx * BT + 2].copy())
     return out
+
+
+# ------------------------------------------------- convpot embeddings (notes/convpot_test.md)
+def embed_identity(D, k, seed=0):
+    """(D, k) Gaussian rows, one per value: the random table-row baseline
+    (cannot generalise across values)."""
+    return np.random.default_rng(seed).standard_normal((D, k))
+
+
+def patch_features(P: Circles, level):
+    """(D, F) painted-view features before projection.
+    mid: each value's demand map on its block plus the one-tile ring
+         ((BM + 2)^2 tiles, channels dirt / air, flattened; absent = zeros);
+    top: each corner's BT x BT slot pattern, flattened."""
+    if level == "top":
+        return P.SLOTPAT.reshape(P.P, -1).astype(float)
+    assert level == "mid", level
+    BM = P.BM
+    out = np.zeros((P.D, 2, BM + 2, BM + 2))
+    for v in range(P.D):
+        mg = np.zeros((3, 3), np.int32)
+        mg[1, 1] = v
+        d = np.zeros((3 * BM, 3 * BM), np.int32)
+        _paint_dem(mg, d, BM, P.OY, P.OX, P.SH, P.R1, 0, d.shape[0], 0, d.shape[1])
+        d = d[BM - 1:2 * BM + 1, BM - 1:2 * BM + 1]
+        out[v, 0] = d == 1                                           # dirt (disc)
+        out[v, 1] = d == 2                                           # air (ring)
+    return out.reshape(P.D, -1)
+
+
+def embed_patch(P: Circles, level, k, seed=0):
+    """(D, k) painted-view embedding: patch_features projected by a fixed
+    Gaussian matrix (entries N(0, 1 / F)).  The reference value's row is
+    whatever the projection gives it (zero for absent, whose map is empty)."""
+    F = patch_features(P, level)
+    G = np.random.default_rng(seed).standard_normal((F.shape[1], k)) / np.sqrt(F.shape[1])
+    return F @ G
