@@ -34,6 +34,8 @@ paint-potential features of a candidate, contract of the note), admissible,
 stats, exact reference, symmetrise (the dihedral elements that map the
 family stamp set to itself), render, Forward (generic kernel, dormancy) and
 Oracle (exact collapsed moves)."""
+import time
+
 import numpy as np
 from numba import njit
 
@@ -347,8 +349,15 @@ class CirclesBiome:
         self.paint_dem(obj, dem)
         return biome, obj, tile, allow, dem
 
-    def designed_factors(self):
-        return [Factor.pair(("obj", "fam"), ("allow", "val"), (0, 0), self.mask_t, name="mask"),
+    def soft_mask_factor(self, lam=3.0):
+        """The mask with lam in place of INF (post-relaxation: honour loosened)."""
+        return Factor.pair(("obj", "fam"), ("allow", "val"), (0, 0), np.where(self.FAMOK, 0.0, float(lam)), name="mask")
+
+    def designed_factors(self, soft_mask=None):
+        """soft_mask = lam: the mask softened (soft_mask_factor) instead of hard."""
+        mask = Factor.pair(("obj", "fam"), ("allow", "val"), (0, 0), self.mask_t, name="mask") \
+            if soft_mask is None else self.soft_mask_factor(soft_mask)
+        return [mask,
                 Factor.unary(("obj", "self"), self.pres_e, name="pres"),
                 Factor.pair(("tile", "col"), ("dem", "val"), (0, 0), self.kt, name="honour"),
                 Factor.unary(("tile", "col"), np.array([self.mu, 0.0]), name="mu"),
@@ -379,13 +388,14 @@ class CirclesBiome:
         th.update(obj_u=np.zeros(D), bio_h=np.zeros((P, P)), bio_v=np.zeros((P, P)), bio_u=np.zeros(P))
         return th
 
-    def model(self, chans, theta=None, extra=()):
-        """All five channels (allow, dem fixed everywhere); designed factors,
-        the learned ones when theta is given, plus `extra`."""
+    def model(self, chans, theta=None, extra=(), soft_mask=None):
+        """All five channels (allow, dem fixed everywhere); designed factors
+        (mask softened to lam = soft_mask when given), the learned ones when
+        theta is given, plus `extra`."""
         for c in chans:
             if c.name in ("allow", "dem"):
                 c.fixed = np.ones(c.grid.shape, bool)
-        fac = self.designed_factors() + (self.learned_factors(theta) if theta is not None else []) + list(extra)
+        fac = self.designed_factors(soft_mask) + (self.learned_factors(theta) if theta is not None else []) + list(extra)
         return Model(self.H, self.W, list(chans), fac)
 
     # ---------------------------------------------------------- painters
@@ -478,6 +488,7 @@ class CirclesBiome:
                  contact=float(nc / npair) if npair else 0.0,
                  bio_hist=bu.copy(),
                  dormant=float(self.dormant_of(allow).mean()),
+                 mask_viol=float((~self.FAMOK[fam, allow]).mean()),
                  edge_air_top=float((fg[band] == AIR).mean()) if band.any() else 0.0)
         return s
 
@@ -634,9 +645,18 @@ class CirclesBiome:
 # ------------------------------------------------------- forward model
 class Forward:
     """Biome sweeps, paint allow, obj init (dormancy) + sweeps, paint dem, tile
-    sweeps, on the generic kernel with designed + learned (+ support) factors."""
+    sweeps, on the generic kernel with designed + learned (+ support) factors.
 
-    def __init__(self, C: CirclesBiome, theta: dict, seed=0, extra=(), support=True):
+    use_sampler: the chain on sampler.Sampler, one per channel (biome, obj with
+    hb = BT so a dormant top block is skipped whole, tile): obj init() fixes
+    the slots whose hard parent rows admit absent alone (dormant fraction in
+    self.dormant_frac), S_M sweeps with the candidate cap K, then p_relax
+    sweeps under the same channels with the mask softened to lam (relax; the
+    support stays hard, dormant slots stay fixed).  K = None, hb = 1 draws
+    exactly what the old path draws.  Wall times per stage in self.times."""
+
+    def __init__(self, C: CirclesBiome, theta: dict, seed=0, extra=(), support=True, use_sampler=False, K=None,
+                 p_relax=0, lam=3.0, hb=None):
         self.C, self.theta = C, theta
         self.extra = list(extra) + (C.support_factors() if support else [])
         self.chans = C.channels()
@@ -644,6 +664,10 @@ class Forward:
         self.model = None
         self.n_dormant = 0
         self.rng = np.random.default_rng(seed)
+        self.use_sampler, self.K, self.p_relax, self.lam = use_sampler, K, int(p_relax), lam
+        self.hb = C.BT if hb is None else hb
+        self.dormant_frac = 0.0
+        self.times = {}
 
     def init_obj(self):
         """Paint allow; a slot whose allow admits no family is set to absent and
@@ -656,13 +680,25 @@ class Forward:
         self.n_dormant = int(dorm.sum())
         return self.n_dormant
 
-    def run(self, S_T=30, S_M=30, S_F=20, fresh=True):
+    def build(self):
+        """Model (and samplers) at the current theta."""
+        from .sampler import Sampler
         C = self.C
         self.model = C.model(self.chans, self.theta, self.extra)
+        if self.use_sampler:
+            self.soft = C.model(self.chans, self.theta, self.extra, soft_mask=self.lam) if self.p_relax else None
+            self.S = dict(biome=Sampler(self.model, "biome"), obj=Sampler(self.model, "obj", K=self.K, hb=self.hb),
+                          tile=Sampler(self.model, "tile"))
+
+    def run(self, S_T=30, S_M=30, S_F=20, fresh=True):
+        C = self.C
+        self.build()
         if fresh:
             self.biome.grid[:] = 0
             self.obj.grid[:] = 0
             self.tile.grid[:] = 0
+        if self.use_sampler:
+            return self._run_sampler(S_T, S_M, S_F)
         if S_T:
             self.model.sweep("biome", S_T, seed=int(self.rng.integers(1 << 30)))
         self.init_obj()
@@ -671,6 +707,30 @@ class Forward:
         C.paint_dem(self.obj, self.dem)
         if S_F:
             self.model.sweep("tile", S_F, seed=int(self.rng.integers(1 << 30)))
+        return C.stats(self.biome, self.obj, self.tile)
+
+    def _run_sampler(self, S_T, S_M, S_F):
+        C, S, tm = self.C, self.S, time.perf_counter
+        t0 = tm()
+        if S_T:
+            S["biome"].sweep(S_T, seed=int(self.rng.integers(1 << 30)))
+        C.paint_allow(self.biome, self.allow)
+        self.obj.fixed[:] = False
+        t1 = tm()
+        self.dormant_frac = S["obj"].init()
+        self.n_dormant = int(S["obj"].dormant.sum())
+        t1b = tm()
+        if S_M:
+            S["obj"].sweep(S_M, seed=int(self.rng.integers(1 << 30)))
+        t2 = tm()
+        if self.p_relax:
+            S["obj"].relax(self.p_relax, self.soft, seed=int(self.rng.integers(1 << 30)))
+        t3 = tm()
+        C.paint_dem(self.obj, self.dem)
+        if S_F:
+            S["tile"].sweep(S_F, seed=int(self.rng.integers(1 << 30)))
+        t4 = tm()
+        self.times = dict(biome=t1 - t0, obj_init=t1b - t1, obj=t2 - t1b, relax=t3 - t2, tile=t4 - t3)
         return C.stats(self.biome, self.obj, self.tile)
 
 

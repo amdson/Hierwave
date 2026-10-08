@@ -378,4 +378,200 @@ stage 7 (A + B); stage 8 (A only, by whoever built A).
 
 ## Results
 
-(none yet)
+### Stage 3: support-only baseline
+
+Script `notes/experiments/circles_biome.py` with `STAGE=3` (results
+`images/cbio_stage3.json`, log `images/cbio_stage3_log.txt`), 88 s single
+core.  Renders `images/cbio_base_oracle.png`, `cbio_base_p0.png` (theta0, p
+= 0), `cbio_base_p2.png` (theta0, p = 2), `cbio_base_dormant.png` (dormancy
+dial: oracle left, forward `+bu+ou` right; none blocks hatched).
+
+Config: `CirclesBiome(6, 6)` (12 x 12 slots, 96 x 96 tiles), default dials
+(mu 0.3, `b` = 24.94 / 15.33 = `F_fam - log 16` with `F_disc` 27.71,
+`F_bar` 18.10, `bio_u0` = 0 / 2.77 / 2.77 / 4.39).  Oracle 50 + 400 sweeps
+(3.5 s; `symmetrise` is the identity for the default families).  Forward
+`Forward(use_sampler=True)`: biome Sampler, obj Sampler with `hb = BT`
+(init: dormancy from the hard `mask` row), `S_M` sweeps at cap `K`, then `p`
+sweeps of `relax` under the same channels with the mask at `lam = 3`
+(`soft_mask_factor`; support stays hard, dormant slots stay fixed), tile
+Sampler.  `S_T = S_M = 30`, `S_F = 20`, designed + support.  RUNS 64, eval
+noise = L1 between two independent 64-run evaluations (seeds 555 / 556;
+the K = None and K = 8 rows share seeds, so their biome samples are
+identical).  Three settings of the learned tables, each at (p, K) = (0,
+None), (0, 8), (2, None):
+
+- `theta0`: as specified, no finite part at all.
+- `+bu`: plus the zeroth-order top unary `reference(centred=False)["bio_u"]`
+  (= `-bio_u0` exactly: the biome prior becomes uniform).
+- `+bu+ou`: plus the induced mid unary `obj_u = F(o) - F(absent)`
+  (interior closed form, `reference()["obj_u"] - pres_e`: an isolated
+  allowed slot 50/50).
+
+The two extra settings were added because the designed dials are offsets
+of induced unaries (`pres` cancels `F_fam`, `bio_u0` cancels the
+zeroth-order slot entropy), so with theta0 the unaries dominate everything
+else; `+bu+ou` is the baseline the stage was meant to measure (the pair
+part of `Phi` missing, nothing else).
+
+New monitors: `pd_allowed` / `pb_allowed` = present per family among the
+slots whose biome admits it ("in isolation", computed in the script);
+`mask_viol` = slots whose family the biome forbids (non-zero only under
+relaxation; added to `CirclesBiome.stats`).
+
+**Monitors, default dial** (`edge_air_top` held out):
+
+| | present_disc | present_bar | pd_allowed | pb_allowed | conflict | contact | bio_hist (none/discs/bars/both) | dormant | mask_viol | edge_air_top |
+|---|---|---|---|---|---|---|---|---|---|---|
+| oracle | 0.671 | 0.158 | 0.729 | 0.349 | 0 | 0.344 | .011/.534/.069/.386 | 0.011 | 0 | 0.541 |
+| theta0 p0 K=None | 0.069 | 0.054 | 1.000 | 0.815 | 0 | 0.214 | .877/.056/.054/.012 | 0.877 | 0 | 0.440 |
+| theta0 p0 K=8 | 0.069 | 0.054 | 1.000 | 0.815 | 0 | 0.209 | .877/.056/.054/.012 | 0.877 | 0 | 0.439 |
+| theta0 p2 K=None | 0.129 | 0.000 | 1.000 | 0.003 | 0 | 0.344 | .871/.060/.055/.014 | 0.871 | 0.055 | 0.450 |
+| +bu p0 K=None | 0.474 | 0.258 | 1.000 | 0.527 | 0 | 0.259 | .268/.242/.258/.232 | 0.268 | 0 | 0.524 |
+| +bu p0 K=8 | 0.474 | 0.258 | 1.000 | 0.527 | 0 | 0.247 | .268/.242/.258/.232 | 0.268 | 0 | 0.528 |
+| +bu p2 K=None | 0.760 | 0.001 | 1.000 | 0.001 | 0 | 0.351 | .239/.246/.265/.250 | 0.239 | 0.265 | 0.548 |
+| +bu+ou p0 K=None | 0.187 | 0.214 | 0.396 | 0.437 | 0 | 0.207 | .268/.242/.258/.232 | 0.268 | 0 | 0.477 |
+| +bu+ou p0 K=8 | 0.188 | 0.213 | 0.395 | 0.435 | 0 | 0.189 | .268/.242/.258/.232 | 0.268 | 0 | 0.478 |
+| +bu+ou p2 K=None | 0.199 | 0.220 | 0.388 | 0.415 | 0 | 0.201 | .239/.246/.265/.250 | 0.239 | 0.013 | 0.479 |
+
+Monitor eval noise (|difference| of the two evaluations) is 0.000-0.018
+on present, 0.001-0.04 on contact, 0.02-0.04 (L1) on bio_hist, < 0.004 on
+edge_air_top.  A single |difference| understates the spread: a 256-run
+check of `+bu+ou` gives contact 0.202 +- 0.003 (K None) and 0.203 +- 0.004
+(K 8) at S_M 30, 0.198 / 0.205 at S_M 100 (so the 0.207 / 0.189 pair above
+is a 2-sigma draw, and 30 sweeps are mixed).
+
+**L1 to the oracle on the fitted features, default dial:**
+
+| | obj_h | obj_v | obj_d1 | obj_d2 | obj_u | bio_h | bio_v | bio_u |
+|---|---|---|---|---|---|---|---|---|
+| theta0 p0 K=None | 1.611 | 1.601 | 1.575 | 1.579 | 1.413 | 1.919 | 1.924 | 1.732 |
+| theta0 p0 K=8 | 1.608 | 1.600 | 1.574 | 1.573 | 1.413 | 1.919 | 1.924 | 1.732 |
+| theta0 p2 K=None | 1.558 | 1.573 | 1.530 | 1.531 | 1.401 | 1.917 | 1.915 | 1.720 |
+| +bu p0 K=None | 0.881 | 0.867 | 0.710 | 0.726 | 0.523 | 1.247 | 1.184 | 0.892 |
+| +bu p0 K=8 | 0.892 | 0.887 | 0.729 | 0.733 | 0.533 | 1.247 | 1.184 | 0.892 |
+| +bu p2 K=None | 0.968 | 0.987 | 0.825 | 0.818 | 0.518 | 1.211 | 1.146 | 0.848 |
+| +bu+ou p0 K=None | 1.213 | 1.206 | 1.170 | 1.179 | 0.997 | 1.247 | 1.184 | 0.892 |
+| +bu+ou p0 K=8 | 1.229 | 1.200 | 1.174 | 1.177 | 0.999 | 1.247 | 1.184 | 0.892 |
+| +bu+ou p2 K=None | 1.189 | 1.179 | 1.139 | 1.143 | 0.971 | 1.211 | 1.146 | 0.848 |
+| eval noise theta0 p0 K=None | 0.109 | 0.121 | 0.112 | 0.111 | 0.033 | 0.025 | 0.040 | 0.019 |
+| eval noise theta0 p0 K=8 | 0.105 | 0.113 | 0.110 | 0.098 | 0.029 | 0.025 | 0.040 | 0.019 |
+| eval noise theta0 p2 K=None | 0.091 | 0.088 | 0.091 | 0.095 | 0.030 | 0.060 | 0.060 | 0.029 |
+| eval noise +bu p0 K=None | 0.318 | 0.333 | 0.354 | 0.378 | 0.063 | 0.095 | 0.080 | 0.037 |
+| eval noise +bu p0 K=8 | 0.345 | 0.349 | 0.367 | 0.360 | 0.084 | 0.095 | 0.080 | 0.037 |
+| eval noise +bu p2 K=None | 0.203 | 0.198 | 0.217 | 0.210 | 0.053 | 0.110 | 0.080 | 0.034 |
+| eval noise +bu+ou p0 K=None | 0.231 | 0.233 | 0.250 | 0.235 | 0.047 | 0.095 | 0.080 | 0.037 |
+| eval noise +bu+ou p0 K=8 | 0.246 | 0.245 | 0.252 | 0.245 | 0.059 | 0.095 | 0.080 | 0.037 |
+| eval noise +bu+ou p2 K=None | 0.243 | 0.238 | 0.265 | 0.253 | 0.053 | 0.110 | 0.080 | 0.034 |
+
+**Timings** (ms per forward run, mean of 64; obj = the `S_M` capped sweeps,
+init = `Sampler.init`; us = obj sweep time per active slot per sweep):
+
+| | wall | biome | obj init | obj | relax | tile | us / active site |
+|---|---|---|---|---|---|---|---|
+| theta0 p0 K=None | 39.4 | 0.53 | 0.10 | 1.00 | 0 | 36.9 | 1.89 |
+| theta0 p0 K=8 | 41.3 | 0.57 | 0.10 | 0.79 | 0 | 38.8 | 1.49 |
+| theta0 p2 K=None | 41.5 | 0.58 | 0.12 | 1.12 | 0.25 | 38.5 | 2.02 |
+| +bu p0 K=None | 46.4 | 0.70 | 0.11 | 6.38 | 0 | 37.9 | 2.02 |
+| +bu p0 K=8 | 37.4 | 0.51 | 0.08 | 3.20 | 0 | 32.9 | 1.01 |
+| +bu+ou p0 K=None | 39.5 | 0.50 | 0.08 | 4.91 | 0 | 33.3 | 1.55 |
+| +bu+ou p0 K=8 | 40.3 | 0.55 | 0.10 | 3.33 | 0 | 35.3 | 1.05 |
+| +bu+ou p2 K=None | 43.8 | 0.55 | 0.11 | 5.49 | 0.60 | 36.1 | 1.67 |
+
+The tile level is 85-95% of a forward run (9216 tiles x 20 sweeps, ~0.19
+us per tile update).  Per obj site, the cap K = 8 costs 1.0-1.5 us against
+1.6-2.0 us at K = None (D = 33): about 1.6-1.9x, not 33 / 8, presumably
+because the hard rows are still read for every value to find the
+admissible set the cap draws from.
+
+**Dormancy.**  Dial: `bio_u0 + 2.5` nats on every non-none value (the
+suggested setting; the oracle's none fraction is steep in this dial and
+its biome autocorrelation long there: 0.11-0.13 at +2.0, 0.21-0.62 at +2.5
+over 400-sweep chains).  Oracle 100 + 800 sweeps: bio_hist .238 / .399 /
+.070 / .293.  Forward at p = 0:
+
+| | dormant | present_disc | present_bar | pd_allowed | pb_allowed | conflict | contact | obj ms | us / active site |
+|---|---|---|---|---|---|---|---|---|---|
+| oracle | 0.238 | 0.493 | 0.132 | 0.712 | 0.366 | 0 | 0.343 | | |
+| theta0 K=None | 0.989 | 0.004 | 0.007 | 1.000 | 0.929 | 0 | 0.067 | 0.24 | 5.1 |
+| theta0 K=8 | 0.989 | 0.004 | 0.007 | 1.000 | 0.929 | 0 | 0.039 | 0.24 | 5.1 |
+| +bu K=None | 0.790 | 0.144 | 0.066 | 1.000 | 0.477 | 0 | 0.254 | 1.63 | 1.80 |
+| +bu K=8 | 0.790 | 0.144 | 0.066 | 1.000 | 0.477 | 0 | 0.262 | 1.05 | 1.16 |
+| +bu+ou K=None | 0.790 | 0.057 | 0.060 | 0.391 | 0.432 | 0 | 0.187 | 1.63 | 1.80 |
+| +bu+ou K=8 | 0.790 | 0.057 | 0.054 | 0.408 | 0.396 | 0 | 0.204 | 1.02 | 1.13 |
+
+(L1 on the fitted features: theta0 1.49-1.52 obj pairs / 1.79 bio_h, +bu
+0.96-1.03 / 1.21, +bu+ou 1.17-1.20 / 1.21, eval noise 0.02-0.16; the K = 8
+rows within 0.01 of K = None.)  The theta0 rows' 5 us per active site is
+the fixed per-sweep cost spread over 1% active slots, not a per-site cost.
+The clean measurement is a probe with the biome set by hand (non-none
+values uniform, theta0, 20 repeats of init + 30 obj sweeps):
+
+| K | none fraction | active | init ms | 30 sweeps ms | us / active site |
+|---|---|---|---|---|---|
+| None | 0 | 1.00 | 0.12 | 8.41 | 1.95 |
+| None | 0.25 | 0.75 | 0.12 | 6.05 | 1.87 |
+| None | 0.5 | 0.50 | 0.08 | 3.75 | 1.74 |
+| None | 0.75 | 0.25 | 0.08 | 1.91 | 1.76 |
+| None | 1 | 0 | 0.07 | 0.15 | |
+| 8 | 0 | 1.00 | 0.07 | 4.32 | 1.00 |
+| 8 | 0.25 | 0.75 | 0.08 | 3.33 | 1.03 |
+| 8 | 0.5 | 0.50 | 0.07 | 2.23 | 1.03 |
+| 8 | 0.75 | 0.25 | 0.07 | 1.17 | 1.08 |
+| 8 | 1 | 0 | 0.07 | 0.14 | |
+
+The obj time is linear in the active fraction; a fully dormant world costs
+0.14 ms for 30 sweeps (the block loop and seeding, 2-3% of a fully active
+one) plus a 0.07 ms init.  No conflict in any run; dormant slots stay at 0
+through the sweeps and the relaxation (`tests/test_circles_biome.py`).
+
+### What the numbers show (stage 3)
+
+(a) *The support works, and is the only thing that is right.*  Conflict
+is 0 in every run of every setting, relaxed or not, capped or not; the
+dormant slots stay absent.  Everything else is off by far more than eval
+noise, at both levels.
+
+(b) *What the finite part must carry.*  The default dials put two large
+unaries into the induced part, so with theta0 the forward is dominated by
+them, not by the missing pairs:
+- the mid unary `F_fam` (27.7 / 18.1 nats), against which `pres` (-24.9 /
+  -15.3) was set: without it every admitted slot is filled (pd_allowed 1.00
+  against 0.73, pb_allowed 0.81 against 0.35: bars stop only at the support
+  and at the larger disc bonus in "both" blocks).  "present right in isolation" holds only once `obj_u =
+  F(o)` is in (`+bu+ou`: 0.40 / 0.44, under the isolated 0.5 because the
+  support crowds neighbours).
+- the top unary: theta0 gives none 0.88, not uniform (`bio_u0` 2.8-4.4
+  nats with nothing cancelling it).  With the zeroth-order unary the
+  histogram is uniform (.27 / .24 / .26 / .23) against the oracle's .011 /
+  .534 / .069 / .386: L1 0.89 on bio_u, 1.2 on bio_h / bio_v (noise
+  0.04-0.1) is what the beyond-zeroth-order top terms (shared-ring
+  attraction across block edges, mask x support) must carry.
+- with both unaries in, the mid residual is the shared-ring attraction:
+  disc occupancy 0.40 against 0.73 (+0.33 to carry), bars 0.44 against 0.35
+  (-0.09, presumably crowded out by discs in "both" blocks), contact 0.20
+  against 0.34, edge_air_top 0.477 against 0.541; obj pair L1 1.2 against
+  noise 0.25.  The `+bu` setting is closer in obj L1 (0.71-0.88) only
+  because "fill every slot" happens to be nearer the oracle's dense disc
+  packing than 50/50 is.
+
+(c) *Post-relaxation changes little, as expected, once the unaries are
+right.*  `+bu+ou` at p = 2: every monitor moves by <= 0.02, L1s within
+eval noise, mask_viol 0.013.  Tiles are independent given the objects, so
+there is nothing local for the relaxed obj sweeps to repair.  Without the
+mid unary it is destructive: the soft mask (lam 3) is outweighed by the
+9.6-nat difference between `b_disc` and `b_bar`, so bar-only blocks fill
+with discs (pb_allowed 0.81 -> 0.003, mask_viol 0.05 at theta0, 0.26 at
++bu).  Relaxation is only as good as the unaries under it: `lam` must
+exceed the largest designed-unary gap the finite part is meant to cancel,
+or the relaxation must run after the unaries are learned.
+
+(d) *Cap invariance.*  K = 8 against K = None: the fitted-feature L1s
+agree within 0.02 (noise 0.1-0.35) in every setting, present and
+pd/pb_allowed within 0.002-0.04, contact within 0.02 (2 sigma at 64 runs;
+a 256-run check gives 0.202 +- 0.003 against 0.203 +- 0.004).  The biome
+level is identical by construction (shared seeds, the cap is on obj only).
+
+(e) *Dormancy costs nothing.*  The obj time is linear in the active
+fraction, a fully dormant world costs 2-3% of a fully active one for its
+block loop, and `init` is 0.07 ms.  The obj level is 1-15% of a forward
+run; tiles dominate.

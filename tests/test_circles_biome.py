@@ -355,3 +355,75 @@ def test_oracle_exact_on_one_block():
         pd += (C.FAM[O.obj.grid] == 1).mean()
     assert np.abs(cnt / n - pb / pb.sum()).max() < 0.03, (cnt / n, pb / pb.sum())
     assert abs(pd / n - num / pb.sum()) < 0.03
+
+
+# ------------------------------------------------- Forward on the Sampler
+def _theta_vary(C):
+    th = C.theta0()
+    th["bio_u"] = -C.bio_u0                                  # biomes uniform: every family and dormancy occur
+    return th
+
+
+def test_forward_sampler_matches_old():
+    """K = None, hb = 1: the Sampler path draws exactly what the old path draws;
+    hb = BT (block order) and K = 8: the same monitors within noise."""
+    C = CirclesBiome(2, 2)
+    th = _theta_vary(C)
+    old, new = Forward(C, th, seed=3), Forward(C, th, seed=3, use_sampler=True, hb=1)
+    for _ in range(5):
+        s0, s1 = old.run(5, 5, 5), new.run(5, 5, 5)
+        for a, b in zip(old.chans, new.chans):
+            assert np.array_equal(a.grid, b.grid), a.name
+        assert new.n_dormant == old.n_dormant and new.dormant_frac == s1["dormant"]
+    keys = ["present_disc", "present_bar", "contact", "dormant", "edge_air_top"]
+    n = 300
+    res = {}
+    for name, F in (("old", Forward(C, th, seed=1)), ("hb", Forward(C, th, seed=2, use_sampler=True)),
+                    ("K8", Forward(C, th, seed=4, use_sampler=True, K=8))):
+        x = np.array([[F.run(4, 6, 2)[k] for k in keys] for _ in range(n)])
+        res[name] = x.mean(0), x.std(0, ddof=1) / np.sqrt(n)
+        assert x[:, keys.index("dormant")].max() <= 1
+    for name in ("hb", "K8"):
+        z = np.abs(res[name][0] - res["old"][0]) / np.sqrt(res[name][1] ** 2 + res["old"][1] ** 2 + 1e-12)
+        assert z.max() < 4.0, (name, dict(zip(keys, z)))
+
+
+def test_forward_sampler_dormancy():
+    C = CirclesBiome(2, 2)
+    F = Forward(C, C.theta0(), seed=0, use_sampler=True, K=8)
+    F.build()
+    F.biome.grid[:] = np.array([[0, 3], [1, 2]])
+    F.obj.grid[:] = 5                                      # junk under the none block too
+    C.paint_allow(F.biome, F.allow)
+    S = F.S["obj"]
+    assert S.init() == 0.25 and (F.obj.grid[:2, :2] == 0).all() and S.dormant[:2, :2].all()
+    assert not S.dormant[2:].any() and not S.dormant[:, 2:].any()
+    assert np.array_equal(S.active, [[False, True], [True, True]])
+    S.sweep(10, seed=1)
+    assert (F.obj.grid[:2, :2] == 0).all()
+    assert (C.FAM[F.obj.grid[2:, :2]] != 2).all() and (C.FAM[F.obj.grid[2:, 2:]] != 1).all()   # mask
+    F.biome.grid[:] = 0                                    # fully dormant: the sweep is a no-op
+    C.paint_allow(F.biome, F.allow)
+    assert S.init() == 1.0 and not S.active.any()
+    e0 = S.energy()
+    S.sweep(5, seed=2)
+    assert (F.obj.grid == 0).all() and S.energy() == e0
+    s = F.run(S_T=0, S_M=2, S_F=2, fresh=False)
+    assert s["dormant"] == 1.0 == F.dormant_frac and F.n_dormant == C.nmy * C.nmx
+
+
+def test_forward_sampler_relax():
+    """p = 3 relaxed sweeps with the mask at lam = 3: support kept (no conflict
+    ever), dormant slots kept at absent, mask violations possible but rare."""
+    C = CirclesBiome(2, 2)
+    th = _theta_vary(C)
+    F = Forward(C, th, seed=5, use_sampler=True, p_relax=3)
+    mv = []
+    for _ in range(40):
+        s = F.run(3, 3, 2)
+        assert s["conflict"] == 0
+        assert (F.obj.grid[F.S["obj"].dormant] == 0).all()
+        assert np.array_equal(F.dem.grid, C.dem_of(F.obj.grid))
+        mv.append(s["mask_viol"])
+    assert F.soft is not None and np.isfinite(F.soft.factors[0].table).all()
+    assert 0 <= np.mean(mv) < 0.2
