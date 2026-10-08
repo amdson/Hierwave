@@ -6,7 +6,8 @@ other.  Pseudocode, Java-ish.  Comments give the symbol from
 `reference_math.tex` each method implements.  Storage, incremental
 updates, quantisation and site order live behind these interfaces and
 are not part of the math.  The factor language (pair, count, unary,
-painted channels, certificate) is the current one.
+painted channels, certificate) is the current one.  The build order is
+in `circles_biome_test.md`.
 
 Two decisions shape it.  **A channel samples itself**: the sampler is a
 method of the channel, so the tile channel runs the bit-sliced sampler

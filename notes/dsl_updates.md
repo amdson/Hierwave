@@ -3,7 +3,8 @@
 Companion to `reference_math.tex` (the current DSL) and
 `reference_math_andrew_notes.txt` (the review).  Decisions from the review
 discussion, October 2026.  The programmatic shape is in
-`dsl_interface.md`; this note is the math.
+`dsl_interface.md`; this note is the math; the test problem and the
+staged build plan are `circles_biome_test.md`.
 
 What does not change: the two models and the identity `Phi_l = F_{l-1}`,
 the window estimator with AIS, the cluster expansion, the toys, the
