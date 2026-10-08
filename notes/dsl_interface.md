@@ -157,16 +157,28 @@ class Window {                     // z_W, z_halo, ref outside; the fine region 
   Window(Channel c, Shape shape, int ref, Proposal p, Rng rng);
 }
 
-interface JointSampler { Sample next(); }   // p* offline: block fine samples (latent = view), or collapsed moves
+interface Targets {                // p*'s collapsed conditional at one site, over the sampler's candidate set
+  double[] at(Model m, Channel c, int y, int x, int[] cand);   // pi_p over cand, sums to 1
+}
+class AISTargets   implements Targets { FreeEnergy F; }   // softmax(-(E_c + F_{l-1}(t; ctx))), F by AIS on a
+                                                          //   one-site Window with halo, one run per candidate;
+                                                          //   the general case
+class ExactTargets implements Targets { }                 // closed-form hook (toys)
+class SampledTargets implements Targets { JointSampler js; }   // one-hot of the value in a free joint sample
+                                                          //   (latent = view: blocked fine data; annotated corpus)
 
 class Trainer {
+  Params fit(Model m, Channel c, Targets T, int iters, int nContexts, int K, double lambda);
+                                   // the bootstrap of dsl_updates C2: contexts from the forward chain,
+                                   //   targets pi_p from T at every active site, K sweeps drawing from pi_p
+                                   //   to move contexts toward p* (K = 0: S1; K > 0: CD-K / S3), cross-entropy
+                                   //   of pi_p against softmax(-(E_c + Delta_theta)) over cand; the dataset of
+                                   //   (context, pi_p) aggregates over iters and is refit each time.
+                                   //   Reports the pair consistency violation of the targets and the fit, the
+                                   //   held-out cross-entropy, and autocorrClamped(children of c | c).
   Params fitWindows(Model m, Channel c, int ref, FreeEnergy F, Proposal p, int nWindows, double lambda);
-                                   // ridge when Phi is linear in theta, Adam otherwise, on x(W) . theta = y(W)
-  Params fitConditional(Model m, Channel c, JointSampler js, int nSamples);
-                                   // pseudo-likelihood: cross-entropy of the sampled value over the sampler's
-                                   //   candidate set, logits = -(E_c + Delta); designed energy a fixed offset.
-                                   //   Reports the pair consistency violation and the fine kernel's
-                                   //   autocorrelation with the coarse level clamped.
+                                   // the same AIS runs on multi-site windows with a regression loss on
+                                   //   x(W) . theta = y(W); diagnostic for pair structure
   Bias install(Params theta, Channel c);
                                    // MaterialisedBias when psi is pairwise and D_c small; OnePassBias when
                                    //   h is linear; BatchedDeltaBias otherwise.  Added to c.biases().
@@ -183,50 +195,51 @@ class Trainer {
 # approximated as  support_l (computed)  +  sum_p psi_theta(z_p, z_{N(p)})  (fitted).
 # The sampler only needs Delta_p(t) = Phi_l(z with z_p = t) - Phi_l(z) over its candidate set C_p.
 
-train(model, nWindows, nSamples):
-    for l = 2 .. L:                                   # bottom up: estimator B needs Phi_{l-1} installed
+train(model, iters, nContexts, K):
+    for l = 2 .. L:                                   # bottom up: the targets at l need Phi_{l-1} installed
         for c in channels(l) with a learned potential:
-            S = support(c)                            # hard rows derived from the stamps / honourability
-            theta = c.jointSamplesFree()              # a view of the level below, an annotated corpus, a toy
-                    ? fitConditional(model, c, c.jointSampler().draw(nSamples))   # estimator A, the cross-check
-                    : fitWindows(model, c, nWindows)                             # estimator B, the general case
-                    # never: build a global sampler of p* to get joint samples
-            c.locals += S
+            S = support(c); c.locals += S             # hard rows derived from the stamps / honourability
+            T = c.targets()                           # AISTargets in general; ExactTargets / SampledTargets
+                                                      #   where free.  Never a global sampler of p*.
+            theta = fit(model, c, T, iters, nContexts, K)
             c.biases += install(theta, c)
-            diagnostics(c)                            # consistency violation (A) or residual (B),
-                                                      # autocorrClamped(children of c | c), held-out monitors
+            diagnostics(c)                            # consistency violation, held-out cross-entropy,
+                                                      # autocorrClamped(children of c | c), monitors
 
-# estimator A: pseudo-likelihood on joint samples
-fitConditional(model, c, samples):
+# the bootstrap: sample from q, move toward p*, update q
+fit(model, c, T, iters, nContexts, K):
+    data = []                                         # (context features, candidate set, pi_p) per site; aggregates
     theta = 0
-    repeat until converged (Adam; L-BFGS when psi is linear in theta, the loss is convex):
-        loss = 0
-        for z in samples:
-            model.load(z restricted to levels >= l); repaint      # levels < l discarded: integrated out
-            for p in sites of c that are active (not dormant, not fixed):
-                C = c.candidates(p)                   # admissible values at p, or the K-subset containing z_p
-                e = [E_designed_c(p, t) for t in C]   # designed rows; hard rows give INF
-                d = [Delta_p(t; theta)  for t in C]   # BatchedDelta: psi terms touching p with z_p = t, minus
-                                                      #   at z_p (paint potential: theta . (x_p(t) - x_p(z_p)))
-                loss += -log softmax(-(e + d))[z_p]
-        theta -= lr * grad(loss + l2 |theta|^2)
+    for it in 1 .. iters:
+        for n in 1 .. nContexts:
+            z = model.generate(theta)                 # 1. a context from q: the forward chain, levels >= l
+            for k in 0 .. K:                          # K = 0: S1.  K > 0: CD-K (S3).  K -> inf: S0.
+                for p in active sites of c (not dormant, not fixed), in the kernel's colour order:
+                    C  = c.candidates(p)              # admissible values, or the capped set containing z_p
+                    pi = T.at(model, c, p, C)         # 2. p*'s collapsed conditional over C:
+                                                      #    softmax(-(E_c(t) + F_{l-1}(t; ctx))), F by AIS on
+                                                      #    a one-site window with halo, one run per t in C
+                    data += (ctx(p), C, pi)
+                    if k < K: z_p ~ pi; repaint       # 3. one p*-invariant step on q's sample, free
+        theta = argmin over theta of                  # 4. update q: refit from scratch on all data
+            sum over data of  KL( pi || softmax(-(e + d)) )  +  l2 |theta|^2
+                where e[t] = E_designed_c(p, t), d[t] = Delta_p(t; theta)      # BatchedDelta; the designed
+                                                      #   energy is a fixed offset, only F is learned
+            # convex when psi is linear in theta (paint potential): L-BFGS; Adam otherwise
     return theta
-    # reports held-out cross-entropy and the pair consistency violation: max over neighbouring
-    # active sites p, q and values t, t' of the closure error of the one-site odds around the square
+    # reports: held-out KL; the pair consistency violation of pi (targets) and of the fit (max over
+    # neighbouring active sites p, q and values t, t' of the closure error of the one-site odds)
 
-# estimator B: window free energies
-fitWindows(model, c, nWindows):
+F(t; ctx) by AIS over the fine region R of the one-site window at p with z_p = t, halo from ctx, r outside:
+    log Z = unaryLogZ() + log mean_m exp(-sum_k (beta_{k+1} - beta_k) E_rest(z^{(m)}_k)),
+    z_k advanced by sweepTempered(beta_k) of level l-1's sampler with Phi_{l-1} in;  F = -log Z.
+    Only differences across t at one site matter, so the halo's own free energy cancels.
+
+fitWindows(model, c, nWindows):                       # diagnostic: multi-site windows, regression loss
     for i in 1 .. nWindows:
-        W   = proposal.window(c)                      # values on the window cells + halo, r outside
-        y_i = F_{l-1}(W) - F_{l-1}(W_ref)             # AIS on level l-1's own sampler (Phi_{l-1} installed)
-                                                      #   over the fine region R(W); exact hook when available
-        x_i = features(W) - features(W_ref)           # sum over window sites of the stamp-pair features
-    theta = ridge(X, y)                               # Adam when psi is not linear in theta
-    return theta
-    # reports the residual on held-out windows and the AIS standard error (the floor)
-
-F(W) by AIS:  log Z = unaryLogZ() + log mean_m exp(-sum_k (beta_{k+1} - beta_k) E_rest(z^{(m)}_k)),
-              z_k advanced by sweepTempered(beta_k);  F = -log Z.
+        W   = proposal.window(c)
+        y_i = F_{l-1}(W) - F_{l-1}(W_ref);  x_i = features(W) - features(W_ref)
+    theta = ridge(X, y)
 
 install(theta, c):
     if psi pairwise and D_c small:  MaterialisedBias (u[v], g_d[v, v'] tabulated once -> rows)
@@ -241,18 +254,23 @@ generate(model):
             c.relax(rng, p_l)
 ```
 
-- Estimator B is the general one: one level, one window, the shipping
-  kernel; it never samples `p*` globally, and its only failure mode is
-  a fine kernel that does not mix with the coarse values clamped, which
-  the C1 criterion flags.  The bottom-up order is for B, whose
-  `F_{l-1}` is computed by sampling level `l-1` under its installed
-  approximation.
-- Estimator A needs no recursion (the marginal of `p*` over levels
-  `>= l` has one-site conditionals `exp(-(E_l + F_{l-1})` exactly) but
-  needs joint samples of `p*`, which exist only where they are free.
-  It is the cross-check, chosen per channel.
-- Both deliver per-site candidate energies up to a constant; neither
-  computes a partition function of level `l`.
+- The targets are local: one level, one site's window, the shipping
+  kernel at the shipping budget.  Nothing samples `p*` globally.  The
+  bottom-up order is because `F_{l-1}` is computed under level `l-1`'s
+  installed approximation.
+- A target is a fixed number once the level below is installed, so the
+  dataset aggregates across iterations; there is no negative phase and
+  nothing goes stale.  `K` moves the contexts from `q` toward `p*` at
+  `K` times the AIS cost and no new mechanism: the draw is from the
+  `pi_p` already computed.
+- The loss is on the object the sampler uses: the conditional over its
+  own candidate set at the contexts it visits.  With a sampled target it
+  is pseudo-likelihood; with a computed one it is pseudo-likelihood with
+  the response Rao-Blackwellised.  Neither computes a partition function
+  of level `l`.
+- The only failure mode is the one generation has: a fine kernel that
+  does not mix with the coarse values clamped, which the C1 criterion
+  flags.
 - The support is never in the fit: hard rows from the stamps go into
   the locals first; the sampled value is always admissible and forbidden
   candidates are at `INF` designed energy, so they drop out of the softmax.

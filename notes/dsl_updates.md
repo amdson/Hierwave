@@ -93,8 +93,8 @@ any joint, and the pair consistency condition (for neighbouring sites
 `(t,t') -> (t',t') -> (t',t) -> (t,t)` must close) is reported as a fit
 diagnostic.  Because the training targets come from one consistent
 distribution the violation is bounded by model error.  Prefer (i) where
-it is cheap; (ii) is the general case and the one trained by
-pseudo-likelihood below.
+it is cheap; (ii) is the general case and the one the bootstrap below
+trains.
 
 *Ways to compute it* (the potential's choice, invisible to the sampler):
 
@@ -117,35 +117,62 @@ to the stencil geometry this is the paint potential of
 one-hot and learned features were not (`convpot_test.md`).  The stamp is
 one option, not the design.
 
-*Training: two estimators for the same object.*  Both deliver the
-per-site candidate energies up to a constant, i.e. log ratios of the fine
-partition function between candidates; neither needs `Z` itself.
+*Training: bootstrap from `q` toward `p*`.*  Level by level from the
+tiles up, with the level below already installed.  At level `l`:
 
-- *Window free energies* (`reference_math` section 4): the general
-  estimator, and the one the bottom-up recursion is built on.  `F` per
-  window by AIS on the fine channel's own sampler with its installed
-  potential, over the fine region of a small coarse window with halo;
-  ridge or Adam on `x(W) . theta = y(W)`.  It never samples `p*`
-  globally: each estimate is one level, one window, the shipping kernel
-  at the shipping budget, so its cost is bounded by construction and its
-  floor is the AIS standard error.  The price is the recursion: error in
-  the potential installed below enters the free energies above, which
-  is also the point (`F` as the budgeted kernel realises it).  It fails
-  only where generation fails: a fine kernel that does not mix with the
-  coarse values clamped, which the autocorrelation criterion of C1 flags.
-- *Pseudo-likelihood on joint samples*: only where joint samples of
-  `p*` are free, and never by building a global sampler of `p*`, which is
-  the problem the hierarchy exists to avoid.  Free: a latent that is a
-  deterministic view of the level below (block the fine samples); a toy
-  with closed-form collapsed moves (circles); an annotated corpus.  Then
-  train the conditional by cross-entropy: softmax over the sampler's
-  candidate set, logits `= -(E_c(t) + Delta_p(t))` with the designed
-  energy as a fixed offset so only `F` is learned.  Counting a table per
-  context is the tabular case.  No windows, no AIS, no recursion: the
-  marginal of `p*` over levels `>= l` has the right one-site
-  conditionals exactly, so one sample set serves every level.
-- The choice is per channel.  Where both apply (Potts; circles) they
-  cross-check each other, and that is what the test uses them for.
+1. *Contexts from `q`.*  Run the forward chain; its states are the
+   contexts.  Accuracy is spent where the sampler goes (the
+   imitation-learning argument: query the expert at the learner's
+   states, not the expert's).
+2. *Targets from `p*`, locally.*  At each active site `p`, the collapsed
+   conditional of `p*` over the sampler's candidate set `C_p`:
+   `pi_p(t) = softmax_t(-(E_l(t) + F_{l-1}(t; ctx)))`, with
+   `F_{l-1}(t; ctx)` the free energy of the fine region of a one-site
+   window with halo, by AIS on level `l-1`'s own sampler with its
+   installed potential (`reference_math` section 4), one run per
+   candidate; an exact hook where one exists.  Never a global sample of
+   `p*`: one level, one window, the shipping kernel at the shipping
+   budget, so the cost is bounded by construction and the floor is the
+   AIS standard error.  Evaluating only the capped set is consistent.
+3. *Move the context toward `p*`.*  Having computed `pi_p`, draw from
+   it.  One sweep of this is one `p*`-invariant step on `q`'s sample at
+   no extra cost; `K` sweeps give contexts `K` steps closer to `p*`.
+4. *Update `q`.*  Fit `theta` by cross-entropy of `pi_p` against the
+   learned conditional `softmax(-(E_l(t) + Delta_p(t; theta)))` over
+   `C_p`, with the designed energy a fixed offset so only `F` is
+   learned.  Pseudo-likelihood with the response Rao-Blackwellised: all
+   of `pi_p` is used, not one draw from it.
+5. Resample contexts under the new `theta` and repeat.  A context's
+   targets are fixed numbers once the level below is installed, so the
+   dataset of (context, targets) aggregates across iterations and is
+   refit from scratch each time; nothing goes stale and there is no
+   negative phase.
+
+This is the self-play of `potts_test.md` with the oracle's collapsed
+conditionals replaced by AIS: `K = 0` is S1, `K` steps is S3 (CD-K),
+`K -> inf` is S0.  The fixed point is a `q` whose conditionals equal
+`p*`'s at the contexts `q` visits; with a potential rich enough to
+represent them `q`'s kernel is then `p*`-invariant and `q` differs from
+`p*` only by how far `S_l` sweeps mix, which the autocorrelation
+criterion of C1 tests.  With a potential that cannot (always), `K` is
+the dial on where the error goes; the Potts leak (S1 ~0.7 of S0 at the
+top, S3 ~0.9) is its measurement.
+
+*Other sources of targets.*  Where joint samples of `p*` are free (a
+latent that is a view of the level below: block the fine samples; a toy
+with closed-form collapsed moves; an annotated corpus) the target at a
+site is the one-hot of the sampled value and step 2 costs nothing; the
+same loss, the same code.  Multi-site windows regressed on `F` directly
+(the estimator of `reference_math` section 4) are the same AIS runs
+with a regression loss; kept as the diagnostic for pair structure.
+Where several sources apply (Potts; circles) they cross-check, which is
+what the test uses them for.
+
+*What the recursion still costs.*  `F_{l-1}` at level `l` is computed
+under level `l-1`'s installed approximation, so error below enters the
+targets above.  That is also the point: `F` as the budgeted kernel
+realises it.  Training fails only where generation fails: a fine kernel
+that does not mix with the coarse values clamped (C1).
 
 *Adaptive features.*  Grow the feature set or stencil where the residual
 (or the consistency violation) is significant and nowhere else, matching
@@ -257,11 +284,10 @@ enumerating combinations of writers.  Kept here for then.
 
 - Q1. Per channel: learned, derived, or mixed features?  Start derived
   and small, grow adaptively (C2); decide on circles + Potts first.
-- Q4. For a free latent with a footprint the production estimator is
-  windows + AIS; joint samples exist only on toys with collapsed moves.
-  What remains open is how much the recursion costs against the
-  joint-sample fit where both exist: circles, then objects on a Potts
-  texture (`circles_biome_test.md`, stretch).
+- Q4. What the recursion and the AIS targets cost against exact
+  targets, and how much `K` buys: measured where exact targets exist
+  (circles, Potts), then on objects over a Potts texture
+  (`circles_biome_test.md`, stretch), where they do not.
 - Q2. The feature of an exemplar coordinate: its window's statement
   (the masked exemplar patch) is a stamp by construction; is that the
   whole feature or does it need learned dimensions for texture?

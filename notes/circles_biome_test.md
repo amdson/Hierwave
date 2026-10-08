@@ -149,7 +149,7 @@ class Oracle:
     def tile_sweep(self, n=1)
     def sweep(self, n=1, tile_sweeps=2)   # top moves, mid moves, tile sweeps
     def moments(self, burn, sweeps)
-    def joint_samples(self, burn, every, n) -> iterator of (biome, obj, tile) states   # the JointSampler
+    def joint_samples(self, burn, every, n) -> iterator of (biome, obj, tile) states   # oracle contexts; SampledTargets
 ```
 
 The top move is the plain conditional `p*(T | slots)`: the biome affects
@@ -194,16 +194,25 @@ Kernel additions (`kernel.py`):
   before the others and skips the rest for candidates already at `INF`,
   so forbidden values cost one lookup.
 
-Training (`train.py` additions; the two estimators of C2):
+Training (`train.py` additions; the bootstrap of C2):
 
 ```
-def fit_conditional(model, home, samples, features, steps, lr) -> theta
-    # pseudo-likelihood: for every joint sample and every active site p of `home`, cross-entropy of the
-    # sampled value over the sampler's candidate set, logits = -(E_designed(t) + Delta_p(t; theta)).
-    # Delta_p from BatchedDeltaBias.  Linear psi (paint potential) -> convex; use Adam or L-BFGS.
-    # Returns theta, the pair consistency violation (max over neighbouring active sites and value
-    # pairs of the closure error of the one-site odds), and the training cross-entropy.
-def fit_windows(...)                    # the existing paintpot / induce path, unchanged
+class Targets:                          # p*'s collapsed conditional at a site over the candidate set
+    def at(self, model, home, y, x, cand) -> (len(cand),) probabilities
+class ExactTargets(Targets)             # Oracle.mid_probs / top_probs restricted to cand (this toy)
+class AISTargets(Targets)               # softmax(-(E_designed + F)) with F by AIS on a one-site window with
+                                        #   halo over the child channel's sampler, one run per candidate;
+                                        #   K, M, L as in induce.ais_log_z
+class SampledTargets(Targets)           # one-hot of the value in a free joint sample (Potts mid: blocked tiles)
+
+def fit(model, home, targets, iters, n_contexts, K, features, l2) -> theta
+    # for it in iters: n_contexts forward runs at the current theta; at every active site of `home`
+    # pi = targets.at(...) over the sampler's candidate set, appended to the dataset; K sweeps that draw
+    # z_p ~ pi in place (K = 0 is S1, K > 0 is S3 / CD-K); then refit theta from scratch on the whole
+    # dataset: sum of KL(pi || softmax(-(E_designed + Delta_theta))), Delta from BatchedDeltaBias
+    # (paint potential: linear in theta, convex, L-BFGS).  Returns theta and reports the held-out KL,
+    # the pair consistency violation of the targets and of the fit, and the dataset size.
+def fit_windows(...)                    # the existing paintpot / induce path, unchanged: the diagnostic
 def autocorr_clamped(model, home, parent, sweeps) -> float
     # the fine kernel's integrated autocorrelation time of its energy with `parent` clamped (C1 criterion)
 ```
@@ -227,9 +236,10 @@ from `support_factors()` added to `extra`.
 - Candidate cap invariance: on `CirclesBiome(2, 2)` with the exact
   tables installed, 2000 sweeps at `K = None` and at `K = 8` give the same
   `present_disc`, `present_bar`, `obj_h` within 3 standard errors.
-- `fit_conditional` on data from the closed form itself (slots drawn from
-  `mid_probs` with the tiles integrated out) recovers the materialised
-  finite part to 1e-2 and reports a consistency violation below 1e-2.
+- `fit` with `ExactTargets` on oracle contexts recovers the materialised
+  finite part to 1e-2 and reports a consistency violation below 1e-2;
+  `AISTargets` with the per-tile exact hook in place of AIS gives the
+  same `pi` as `ExactTargets` to 1e-9 at ten random sites.
 - Energy identity: `Model.energy("tile")` equals the numpy sum of `mu`
   air tiles with every demanded tile satisfied (and `INF` otherwise).
 
@@ -258,28 +268,36 @@ previous gate passes.
    Report per-site time at `K = None` and `K = 8`, and the fraction of
    slots dormant.  Post-relaxation has little to repair in this toy
    (tiles are independent given the objects); report it and move on.
-4. **The mid level, both estimators.**  (a) `fit_conditional` on
-   `Oracle.joint_samples(50, 5, 400)`; (b) `fit_windows` with the exact
-   per-tile hook and with AIS (`K = 32, M = 16`) on 3 x 3 slot windows.
-   Both with stamp features.  Report, double-centred on the finite part:
-   max abs error against `reference()` on held-out value pairs, slope and
-   corr, the pair consistency violation of (a), the two fits against each
-   other, wall time, and `autocorr_clamped("obj", "biome")`.  Gate: both
-   within 0.05 of the reference on held-out pairs; this decides Q1 (stay
-   with derived features if so) and the circles half of Q4 (which
-   estimator is cheaper for the same error).  (b) is the production
-   route; (a) exists here only because collapsed moves are closed form,
-   and its job is to measure what the recursion costs.
-5. **The top level.**  Install the mid bias; fit `bio_*` by (a)
-   `fit_conditional` with oracle top moves and (b) `fit_windows` with AIS
-   on the `obj` channel (the recursion: AIS runs the mid sampler with its
-   bias in).  Compare to oracle moments and the zeroth-order unary;
-   check `Phi_top(none) = 0` exactly from both fits.  End to end: forward
-   with everything installed vs oracle on every monitor, `edge_air_top`
-   held out.  Gate: within eval noise on fitted features; `conflict` 0.
-6. **Potts cross-check.**  Both estimators on the Potts mid level (kappa
-   8, J 0.1 and kappa 1, J 0.3), where block samples are free.  Report
-   the two tables against each other and against S1; one short run.
+4. **The mid level: the bootstrap, exact and AIS targets.**  `fit` with
+   stamp features, `iters = 5`, `n_contexts = 8`, in a 2 x 2 grid of
+   settings: targets `ExactTargets` / `AISTargets` (AIS `K = 32, M = 16`
+   over the one-site window's 37-tile region with halo) and `K = 0` (S1)
+   / `K = 3` (S3).  Plus `fit_windows` on 3 x 3 slot windows with the
+   exact hook as the diagnostic.  Report, double-centred on the finite
+   part: max abs error against `reference()` on held-out value pairs,
+   slope and corr, the consistency violation of targets and fit, the
+   held-out KL, the dataset size and wall time per setting, and
+   `autocorr_clamped("obj", "biome")`.  Gate: exact targets within 0.05
+   of the reference on held-out pairs at `K = 0`.  What the grid measures:
+   the AIS column against the exact column is the cost of estimated
+   targets; `K = 3` against `K = 0` is what moving the contexts buys
+   (the circles leak was S1 0.33 of S0 at the top, so expect it to
+   matter at the top more than here).  Decides Q1 (stay with derived
+   features if the gate holds) and the circles part of Q4.
+5. **The top level.**  Install the mid bias; `fit` on `biome` with the
+   same grid (`ExactTargets` = `Oracle.top_probs` restricted to the
+   admissible values; `AISTargets` runs the `obj` sampler with its bias
+   in, over the one-biome-cell window of 4 slots plus halo: the
+   recursion).  Compare to oracle moments and the zeroth-order unary;
+   check `Phi_top(none) = 0` exactly from every setting.  End to end:
+   forward with everything installed vs oracle on every monitor,
+   `edge_air_top` held out.  Gate: within eval noise on fitted features;
+   `conflict` 0.
+6. **Potts cross-check.**  `fit` on the Potts mid level (kappa 8, J 0.1
+   and kappa 1, J 0.3) with `SampledTargets` (blocked oracle tiles),
+   `ExactTargets` (`Oracle.mid_probs`) and `AISTargets` (transfer matrix
+   replaced by AIS over the block).  Report the three tables against each
+   other and against the published S1; one short run.
 7. **Scaling probe.**  `N` random families (connected stamps of 6-14
    cells inside an 8-block, 16 offsets each) for `N` in 2, 5, 10, 20, with
    a biome whose mask admits a random pair.  Report per-site time, dormant
@@ -292,8 +310,9 @@ previous gate passes.
    anything learned.
 
 Stretch, after 8: objects on a Potts texture (footprint tiles coupled by
-`J`), where collapsed moves are no longer closed form.  The real case of
-Q4: compare windows + AIS against collapsed moves on a periodic world.
+`J`), where no exact target exists.  The real case of Q4: `AISTargets`
+only, judged by the end-to-end monitors against a long oracle chain on a
+periodic world, with `K` as the dial.
 
 ## Results
 
