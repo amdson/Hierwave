@@ -175,6 +175,88 @@ class Trainer {
 }
 ```
 
+## The training algorithm
+
+```
+# Levels l = 1 (tiles) .. L.  Designed E_l(z_l | z_{>l}) given at every level.  Phi_1 = 0.
+# For l >= 2:  Phi_l = F_{l-1} = -log sum_{z_{l-1}} exp(-(E_{l-1} + Phi_{l-1})),
+# approximated as  support_l (computed)  +  sum_p psi_theta(z_p, z_{N(p)})  (fitted).
+# The sampler only needs Delta_p(t) = Phi_l(z with z_p = t) - Phi_l(z) over its candidate set C_p.
+
+train(model, jointSampler or null, nSamples, nWindows):
+    samples = jointSampler ? jointSampler.draw(nSamples) : null
+        # one offline run of p*, every level, full states; reused by every level below.
+        # Collapsed moves for a free latent (Q4); block the fine samples for a latent that is a view.
+    for l = 2 .. L:                                   # bottom up: estimator B needs Phi_{l-1} installed
+        for c in channels(l) with a learned potential:
+            S = support(c)                            # hard rows derived from the stamps / honourability
+            theta = samples ? fitConditional(model, c, samples)
+                            : fitWindows(model, c, nWindows)
+            c.locals += S
+            c.biases += install(theta, c)
+            diagnostics(c)                            # consistency violation (A) or residual (B),
+                                                      # autocorrClamped(children of c | c), held-out monitors
+
+# estimator A: pseudo-likelihood on joint samples
+fitConditional(model, c, samples):
+    theta = 0
+    repeat until converged (Adam; L-BFGS when psi is linear in theta, the loss is convex):
+        loss = 0
+        for z in samples:
+            model.load(z restricted to levels >= l); repaint      # levels < l discarded: integrated out
+            for p in sites of c that are active (not dormant, not fixed):
+                C = c.candidates(p)                   # admissible values at p, or the K-subset containing z_p
+                e = [E_designed_c(p, t) for t in C]   # designed rows; hard rows give INF
+                d = [Delta_p(t; theta)  for t in C]   # BatchedDelta: psi terms touching p with z_p = t, minus
+                                                      #   at z_p (paint potential: theta . (x_p(t) - x_p(z_p)))
+                loss += -log softmax(-(e + d))[z_p]
+        theta -= lr * grad(loss + l2 |theta|^2)
+    return theta
+    # reports held-out cross-entropy and the pair consistency violation: max over neighbouring
+    # active sites p, q and values t, t' of the closure error of the one-site odds around the square
+
+# estimator B: window free energies
+fitWindows(model, c, nWindows):
+    for i in 1 .. nWindows:
+        W   = proposal.window(c)                      # values on the window cells + halo, r outside
+        y_i = F_{l-1}(W) - F_{l-1}(W_ref)             # AIS on level l-1's own sampler (Phi_{l-1} installed)
+                                                      #   over the fine region R(W); exact hook when available
+        x_i = features(W) - features(W_ref)           # sum over window sites of the stamp-pair features
+    theta = ridge(X, y)                               # Adam when psi is not linear in theta
+    return theta
+    # reports the residual on held-out windows and the AIS standard error (the floor)
+
+F(W) by AIS:  log Z = unaryLogZ() + log mean_m exp(-sum_k (beta_{k+1} - beta_k) E_rest(z^{(m)}_k)),
+              z_k advanced by sweepTempered(beta_k);  F = -log Z.
+
+install(theta, c):
+    if psi pairwise and D_c small:  MaterialisedBias (u[v], g_d[v, v'] tabulated once -> rows)
+    elif h_theta linear:            OnePassBias
+    else:                           BatchedDeltaBias(features, psi_theta)
+
+generate(model):
+    for l = L .. 1:
+        for c in channels(l):
+            c.init(rng)                               # paint parents' writes; dormancy
+            for s in 1 .. S_l:  c.sweep(rng)          # at p: e over C_p; b.add(C_p, e) for b in biases; draw
+            c.relax(rng, p_l)
+```
+
+- Estimator A needs no recursion: the marginal of `p*` over levels
+  `>= l` has one-site conditionals `exp(-(E_l + F_{l-1}))` exactly, so
+  one sample set serves every level, in any order.  The bottom-up order
+  is for estimator B, whose `F_{l-1}` is computed by sampling level
+  `l-1` under its installed approximation.
+- Both deliver per-site candidate energies up to a constant; neither
+  computes a partition function of level `l`.
+- The support is never in the fit: hard rows from the stamps go into
+  the locals first; the sampled value is always admissible and forbidden
+  candidates are at `INF` designed energy, so they drop out of the softmax.
+- The candidate set in training matches the sampler's: with a cap, the
+  sampled value is included and the cross-entropy is over the subset,
+  which is consistent since the conditional restricted to a subset is
+  proportional to the same weights.
+
 ## What the interface hides
 
 - The sampler: colouring and Gumbel-max, bit-sliced rows and the integer
