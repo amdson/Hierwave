@@ -1,4 +1,4 @@
-"""Root channel set on port tiles (channels.tex, section 14).
+"""Root channel set on port tiles (notes/history/channels.tex, section 14).
 
 A root tile has a mass (1..3) and 1..3 ports among N, E, S, W; a trunk has
 mass 3 and a south port.  Ports should meet across every seam (soft: a port
@@ -8,7 +8,7 @@ trunk: a root cell is valid iff some joined neighbour has mass >= its own
 and a smaller d.
 
 Soft terms are the exemplar's statistics on views, the cluster expansion of
-channels.tex section 13 counted from a hand-painted picture (EXEMPLAR):
+notes/history/channels.tex section 13 counted from a hand-painted picture (EXEMPLAR):
   unary   -log p(root) - log p(mass) - log p(degree) relative to earth, and
           -log 4 p(side | mass) per port (where the ports point)
   pair    -PMI(mass_left, mass_right | joined) and the same vertically

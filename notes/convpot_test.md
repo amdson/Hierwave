@@ -55,7 +55,7 @@ optimisation for later).  `total_energy` adds `sum_p [U + B + H]`
 exactly as defined.  `Model.compile(home, below=...)` is unchanged for
 other kinds; `describe` names the kind.
 
-Tests (`tests/test_convpot.py`): a numpy reference `convpot_energy(grid,
+Tests (`tests/channels/test_convpot.py`): a numpy reference `convpot_energy(grid,
 params, pad)` written directly from the definition; `total_energy`
 equals it on random grids and params (with and without `pad`, with
 `m = 0` and `m > 0`); `site_energies` differences `e[t] - e[t']` equal
@@ -71,7 +71,7 @@ conditionals as `Factor.pair` with that table.
 - `energy_window(params, E, window_values, pad)`: the definition above
   on a small grid, in JAX, vectorised over a batch of windows.  Must
   equal the numpy reference of the kernel tests to 1e-6 (test it:
-  `tests/test_convfit.py` imports the same numpy reference).
+  `tests/channels/test_convfit.py` imports the same numpy reference).
 - `fit(windows, targets, D, k, m, E=None, pad, steps, lr, l2, seed,
   tie=True)`: Adam on `mean (energy_window(z) - energy_window(ref) -
   target)^2 + l2 * |params|^2`, where the reference window is all `pad`;

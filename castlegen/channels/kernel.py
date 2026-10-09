@@ -7,7 +7,7 @@ of its factor rows (pair / count / unary, and with below packing the
 below-pair / below-count rows of finer channels that read it), then one Gumbel-max draw over the
 finite candidates.
 
-Certificate (channels.tex, 14): the home channel's cells carry a mass, a
+Certificate (notes/history/channels.tex, 14): the home channel's cells carry a mass, a
 trunk flag and join bits (joins[d, t, t']: t at p is joined to t' across
 side d), and a d channel holds a certificate per cell.  A cell is valid iff
   mass = 0 and d = INF, or a trunk with d = 0, or

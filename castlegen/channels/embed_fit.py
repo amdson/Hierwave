@@ -1,4 +1,4 @@
-"""Learned value embeddings for the bootstrap (notes/circles_biome_stage4c.md;
+"""Learned value embeddings for the bootstrap (notes/circles_biome_test.md, "Stage 4c";
 dsl_updates.md C2 "Feature set": learned token embeddings vs derived).
 
 Model at a site with candidate c and neighbour values nb_j (j over the

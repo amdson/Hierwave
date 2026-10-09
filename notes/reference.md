@@ -3,7 +3,7 @@
 A compact description of the project as of 2026-10-08: goals, the
 objects the DSL has, the two probability models, the sampler, and the
 training (combining) algorithm, with enough detail to reimplement.  Longer
-arguments live in `constitution.md`, `channels.tex`, `channels_system.tex`
+arguments live in `constitution.md`, `history/channels.tex`, `channels_system.tex`
 and the per-experiment notes (`potts_test.md`, `circles_test.md`,
 `induce_test.md`, `convpot_test.md`, `paintpot_test.md`).
 
@@ -289,9 +289,15 @@ estimated 1.5-3 s on the reference kernel; bit-sliced C / GPU planned.
 | `induce_circles.py` | circles hooks: windows, exact F, painters, embeddings |
 | `ground.py`, `roots.py`, `coord.py` | real channel sets |
 | `sugar.py`, `potts.py`, `circles.py` | toys with exact oracles (`Forward`, `Oracle`, `reference()`) |
+| `sampler.py` | the Channel-sampler interface: `ChannelSampler`, `Sampler`, `generate`, the admitted list |
+| `targets.py` | bootstrap targets: p*'s collapsed conditional at one site (`ExactTargets`, `SampledTargets`) |
+| `aistargets.py` | `AISTargets`: the same conditional by AIS on the one-site window |
+| `biome_fit.py` | biome circles bootstrap callbacks and stamp-feature materialisation |
+| `embed_fit.py` | learned value embeddings (bilinear / MLP) fitted by hand gradients, materialised to tables |
+| `circles_biome.py` | biome circles toy: object families masked by a biome, exact `Forward` / `Oracle`, periodic |
 | `notes/experiments/selfplay_train.py` | self-play driver (potts / circles hooks) |
 | `notes/experiments/induce_circles.py`, `convpot_circles.py`, `paintpot_circles.py`, `paintpot_potts.py` | the estimator experiments |
-| `tests/test_{channels,train,potts,circles,induce,convpot,convfit,paintpot}.py` | regression suite (oracles vs brute force, kernel vs reference, fits recover planted tables) |
+| `tests/channels/test_*.py` | regression suite (oracles vs brute force, kernel vs reference, fits recover planted tables) |
 
 ## 10. External work
 

@@ -23,7 +23,7 @@
 \code{castlegen/channels} implements, every term defined before it is used;
 then the implementation described in those terms; then an honest ledger of
 what worked, what did not, and what had to be tuned by hand. Companion to
-\code{channels.tex} (the design discussion, which this document supersedes
+\code{history/channels.tex} (the design discussion, which this document supersedes
 where they differ) and \code{channels\_demo.md} (the run log, with numbers).
 Nothing here is a proposal: every mechanism named is in the code and was run.
 
@@ -665,7 +665,7 @@ copy mechanism and the alphabet of views, and are one source of target
 statistics.
 
 What the forward generator approximates is the undirected joint over all
-levels, with bottom-up influence, the ideal of \code{channels.tex} \S13:
+levels, with bottom-up influence, the ideal of \code{history/channels.tex} \S13:
 a chain reproduces it exactly when each level's energy carries the free
 energy of the level below, and moment matching learns those corrections
 implicitly, as far as the feature set spans them. Two corrections to the

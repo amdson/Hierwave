@@ -1,7 +1,7 @@
 # DSL updates: the next version
 
 Companion to `reference_math.tex` (the current DSL) and
-`reference_math_andrew_notes.txt` (the review).  Decisions from the review
+the review notes (not in the repo).  Decisions from the review
 discussion, October 2026.  The programmatic shape is in
 `dsl_interface.md`; this note is the math; the test problem and the
 staged build plan are `circles_biome_test.md`.
