@@ -323,6 +323,32 @@ quadratic in the windows (10 GB there), the next limit.
 images/tree_exemplar_rot.png (upright sheet, then the turned one, at lam8
 2 and 1).
 
+Terrain (`terrain`, `TreeCopy(ground_rows=...)`, `TERRAIN` in the script):
+a sampled ground line, piecewise constant per chunk column with up to 12
+rows of relief, each trunk fixed on its own column's surface (the picture
+is padded with a chunk of ground so a trunk window exists for every row
+the trunk can take within its chunk).  Two rules had to adapt.  The
+height rule read the column's ground, so a copy could not extend into a
+column whose ground differs from its trunk's: verbatim copies came out
+as bare trunks (910-1159 cells for five trees against 2118 on flat
+ground).  It now tolerates the terrain's relief (`align_tol`, default the
+ground's range), which still keeps a trunk out of the sky.  And the
+surface rule forbade any window with a cell inside the ground; with
+`soft_surface` a window pays per buried cell instead and the fine level
+removes those cells and prunes their subtrees.  Upright sheet, 3 seeds:
+
+| relief | lam8 | windows | pruned | cells | leaves | guarantees |
+|---|---|---|---|---|---|---|
+| flat | hard | 115 | 0 | 2118 | 1033 | all |
+| 6 rows | hard | 96 | 66 | 1957 | 805 | all |
+| 12 rows | hard | 102 | 151 | 2064 | 865 | all |
+| 12 rows | 2 | 100 | 694 | 1438 | 503 | all |
+
+The reaction to the terrain is the hard one: limbs that would enter a
+hill are cut and the copy keeps the rest; trunks stand on the surface
+wherever it is.  Nothing is learned about where a tree prefers to stand.
+images/tree_exemplar_terrain.png.
+
 Not learned, copied: the soft terms are the coordinate coupling and
 coherence as in the roots second pass; a learned potential on top of the
 copy is the same open item as for the limbs.

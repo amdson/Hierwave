@@ -122,6 +122,20 @@ def sheet(seeds=(0, 1, 2, 3), mirror=True, rotations=(0,), gap=8, m=64, depth=5)
     return np.concatenate(out, 1)
 
 
+def terrain(W, n_ground, seed=0, amp=12, step=CH):
+    """(W,) ground rows in the flipped frame, piecewise constant per chunk
+    column: n_ground plus smoothed value noise in [0, amp]."""
+    rng = np.random.default_rng(seed)
+    n = W // step
+    knots = rng.uniform(0, 1, n // 4 + 2)
+    x = np.arange(n)
+    i, f = x // 4, (x % 4) / 4
+    w = (1 - np.cos(np.pi * f)) / 2
+    h = (1 - w) * knots[i] + w * knots[i + 1]
+    g = n_ground + np.round(h * amp).astype(np.int64)
+    return np.repeat(g, step)
+
+
 # ------------------------------------------------------------------ kinds
 def make_kinds():
     names = ["air", "grass", "soil", "trunk"]
@@ -287,16 +301,24 @@ class TreeCopy:
 
     def __init__(self, W, trunk_xs, A=None, seed=0, ring=1, nu=6.0, lam=1.0, dangle=1.0, K=1, Kt=1, Dmax=4096,
                  delta=0.05, lam8=INF, f8=0.1, cut=0.1, cut_leaf=0.02, align=True, term_wood=4.0, term_leaf=0.5,
-                 grow=0.0, keep_ref=False, win_bonus=2.0):
+                 grow=0.0, keep_ref=False, win_bonus=2.0, ground_rows=None, H=None, soft_surface=0.5,
+                 align_tol=None):
         self.keep_ref = keep_ref
         self.kinds = KINDS
-        self.A = procedural_tree() if A is None else A
+        A = procedural_tree() if A is None else A
+        # a chunk of ground added under the picture, so a trunk window exists for every row the trunk
+        # can take within its chunk on a terrain
+        self.A = np.concatenate([A, np.full((CH, A.shape[1]), SOIL, np.int32)], 0)
         self.alpha, self.mass, self.mask, self.trunks, self.n_ground, self.floating = parse_tree(self.kinds, self.A, ring)
         self.trunk = self.trunks[0]
         self.depth = coord.exemplar_depth(self.kinds, self.alpha, self.floating)
-        self.H, self.W = self.A.shape[0], W
+        self.H, self.W = (self.A.shape[0] if H is None else H), W
         assert self.H % CH == 0 and W % CH == 0
         self.trunk_xs = list(trunk_xs)
+        # the ground row per column (flipped frame), flat at n_ground unless given; piecewise constant per chunk column
+        self.g = np.full(W, self.n_ground, np.int64) if ground_rows is None else np.asarray(ground_rows, np.int64)
+        assert len(self.g) == W and (self.g.reshape(-1, CH) == self.g.reshape(-1, CH)[:, :1]).all(), "ground per chunk column"
+        assert self.g.min() >= 1 and self.g.max() + 1 < self.H
         self.tile = tile_channel(self.kinds)
         self.u = coord.coord_channel(self.alpha)
         self.cert = roots.cert_channel(Dmax)
@@ -310,18 +332,24 @@ class TreeCopy:
         self.coarse = coord.Coarse(self.kinds, self.alpha, CH, roots=self.floating)
         self.u8, self.d8 = self.coarse.channel(), self.coarse.cert_channel()
         no_trunk = np.where(self.coarse.has_trunk == 1, INF, 0.0)       # trunk windows only where fixed
-        f8s = self.coarse.factors(lam8=lam8, f=f8, cut=cut, cut_leaf=cut_leaf, win_bonus=win_bonus) + [Factor.unary(("u8", "self"), no_trunk, name="no_trunk")]
+        f8s = self.coarse.factors(lam8=lam8, f=f8, cut=cut, cut_leaf=cut_leaf, win_bonus=win_bonus,
+                                  soft_surface=soft_surface) + [Factor.unary(("u8", "self"), no_trunk, name="no_trunk")]
         chans8 = [self.u8, self.surf, self.d8]
         if align:
-            # a window keeps its height above the ground: exemplar row ey = 8 x the world chunk row.  Soft
+            # a window keeps its height above the local ground: exemplar row ey = 8 i - (g_j - ty) for the
+            # chunk (i, j), painted per chunk into row8 (value 1 + that, 0 where no window fits).  Soft
             # coherence lets windows recombine sideways but not stack a trunk on itself or on a branch.
-            self.row8 = Channel("row8", CH, self.H // CH).add_view("val", np.arange(self.H // CH), self.H // CH)
+            # On a terrain a copy has one ground, its trunk's, while the rule reads the column's: the
+            # window's row may differ from the local one by up to align_tol (the terrain's relief; 0
+            # on a flat ground), which still keeps a trunk out of the sky.
             my = self.alpha.shape[0]
-            tab = np.full((my + 1, self.H // CH), INF)
+            tol = int(self.g.max() - self.g.min()) if align_tol is None else int(align_tol)
+            self.row8 = Channel("row8", CH, my + 1).add_view("val", np.arange(my + 1), my + 1)
+            tab = np.full((my + 1, my + 1), INF)
             tab[my] = 0.0                                                # FREE anywhere
-            for i in range(self.H // CH):
-                if CH * i <= my - 1:
-                    tab[CH * i, i] = 0.0
+            for e in range(my):
+                for h in range(max(e - tol, 0), min(e + tol, my - 1) + 1):
+                    tab[e, 1 + h] = 0.0
             f8s.append(Factor.pair(("u8", "ey"), ("row8", "val"), (0, 0), tab, name="align"))
             chans8.append(self.row8)
         self.m8 = Model(self.H, W, chans8, f8s, [self.coarse.certificate()])
@@ -333,9 +361,9 @@ class TreeCopy:
                 continue
             ey, ex = self.coarse.wins[w]
             ts = np.argwhere(self.alpha[ey:ey + CH, ex:ex + CH] == tcode)
-            if len(ts) == 1 and ey == self.n_ground - (self.n_ground % CH) and ts[0][0] + ey == self.n_ground:
+            if len(ts) == 1 and ts[0][0] + ey == self.n_ground:
                 y, x = ts[0][0] + ey, ts[0][1] + ex
-                self.trunk_win[w] = (int(x - ex), int(y * mx + x))
+                self.trunk_win[w] = (int(x - ex), int(y * mx + x), int(ey))    # (column in the chunk, coordinate, ey)
         self.seed = seed
         self.rng = np.random.default_rng(seed)
         self.uref = None
@@ -343,25 +371,28 @@ class TreeCopy:
 
     # ------------------------------------------------------------ state
     def reset(self):
-        k, G = self.kinds, self.n_ground
-        self.surf.grid[:] = CH
-        self.surf.grid[0] = CH - G
-        assert G < CH
+        k, ty = self.kinds, self.n_ground
+        rows = np.arange(self.H)[:, None]
+        ground = rows < self.g[None, :]                                 # (H, W) the ground's cells
+        gj = self.g[::CH]                                               # ground row per chunk column
+        for i in range(self.H // CH):
+            self.surf.grid[i] = np.clip(CH * (i + 1) - gj, 0, CH)       # air rows of the chunk
         self.tile.grid[:] = k.index("air")
-        self.tile.grid[:G] = k.index("soil")
-        self.tile.grid[G - 1] = k.index("grass")
-        self.tile.fixed[:] = False
-        self.tile.fixed[:G] = True
+        self.tile.grid[ground] = k.index("soil")
+        self.tile.grid[rows == self.g[None, :] - 1] = k.index("grass")
+        self.tile.fixed[:] = ground
         self.ck.init_free()
-        self.u.fixed[:] = False
-        self.u.fixed[:G] = True
+        self.u.fixed[:] = ground
+        if hasattr(self, "row8"):
+            my = self.alpha.shape[0]
+            for i in range(self.H // CH):
+                e = CH * i - (gj - ty)
+                self.row8.grid[i] = np.where((e >= 0) & (e < my), 1 + e, 0)
+            self.row8.fixed[:] = True
         self.cert.grid[:] = self.cert.D - 1
         self.u8.grid[:] = 0
         self.u8.fixed[:] = False
         self.d8.grid[:] = self.d8.D - 1
-        if hasattr(self, "row8"):
-            self.row8.grid[:] = np.arange(self.H // CH)[:, None]
-            self.row8.fixed[:] = True
         self.uref = np.full((self.H, self.W), -1, np.int64)
         self._fix_trunks(choose=True)
 
@@ -369,24 +400,25 @@ class TreeCopy:
         """Trunk tiles, their coordinates and their trunk windows fixed.
         choose: draw which exemplar trunk each site copies (the windows
         whose trunk sits at the site's column within the chunk)."""
-        k, G = self.kinds, self.n_ground
+        k, ty = self.kinds, self.n_ground
         if choose or not hasattr(self, "_site_win"):
             self._site_win = {}
             for x in self.trunk_xs:
-                c = x % CH
-                ws = [w for w, (col, _) in self.trunk_win.items() if col == c]
-                assert ws, f"no trunk window with the trunk at column {c}"
+                c, ey = x % CH, ty - (int(self.g[x]) % CH)               # the trunk's column and row in its chunk
+                ws = [w for w, (col, _, e) in self.trunk_win.items() if col == c and e == ey]
+                assert ws, f"no trunk window with the trunk at column {c}, row {ty - ey}"
                 self._site_win[x] = ws[self.rng.integers(len(ws))]
         for x in self.trunk_xs:
             w = self._site_win[x]
+            G = int(self.g[x])
             self.tile.grid[G, x] = k.index("trunk")
             self.tile.fixed[G, x] = True
             self.u.grid[G, x] = self.trunk_win[w][1]
             self.u.fixed[G, x] = True
             self.cert.grid[G, x] = 0
-            self.u8.grid[0, x // CH] = w
-            self.u8.fixed[0, x // CH] = True
-            self.d8.grid[0, x // CH] = 0
+            self.u8.grid[G // CH, x // CH] = w
+            self.u8.fixed[G // CH, x // CH] = True
+            self.d8.grid[G // CH, x // CH] = 0
 
     # -------------------------------------------------------- schedules
     def sweep(self, n, seed=None, mu=0.0):
@@ -399,10 +431,12 @@ class TreeCopy:
         bad = self.m8.sweep("u8", S8, seed=self.seed if seed is None else seed)
         self.uref = self.coarse.refine(self.u8, self.u, self.tile, self.cert, self.kinds, self.alpha, self.depth,
                                        earth_kind="air", keep_ref=self.keep_ref)
-        G, k = self.n_ground, self.kinds
-        self.tile.grid[:G] = k.index("soil")                           # the ground is the ground's
-        self.tile.grid[G - 1] = k.index("grass")
-        self.cert.grid[:G] = self.cert.D - 1
+        k = self.kinds
+        rows = np.arange(self.H)[:, None]
+        ground = rows < self.g[None, :]
+        self.tile.grid[ground] = k.index("soil")                        # the ground is the ground's
+        self.tile.grid[rows == self.g[None, :] - 1] = k.index("grass")
+        self.cert.grid[ground] = self.cert.D - 1
         self._fix_trunks()
         return int((self.u8.grid > 0).sum()), self.coarse.pruned, bad
 
@@ -429,7 +463,7 @@ class TreeCopy:
                         and cert.grid[ny, nx] < cert.grid[y, x]:
                     tips_ok += int(thin[g[ny, nx]] == 1)
                     break
-        G = self.n_ground
+        ground = np.arange(H)[:, None] < self.g[None, :]
         stubs = 0                                                       # wood cells with a port facing nothing
         for i, sd in enumerate(SIDES):
             dy, dx = DIRS4[i]
@@ -441,7 +475,7 @@ class TreeCopy:
         return dict(rule_violations=m["rule_violations"], multi_parent=m["multi_parent"], wood_stubs=stubs,
                     dangling_ports=m["dangling_ports"], tree_cells=int(treec.sum()), attached=attached,
                     attached_frac=float(attached / total) if total else 1.0, trunks=m["trunks"],
-                    in_ground=int(treec[:G].sum()) + int((rv[G:] == roots.SKY).sum()), leaves=n_leaf,
+                    in_ground=int(treec[ground].sum()) + int((rv[~ground] == roots.SKY).sum()), leaves=n_leaf,
                     leaves_on_tips=float(tips_ok / n_leaf) if n_leaf else 1.0,
                     mass_hist=m["mass_hist"], deg_hist=m["deg_hist"], max_d=m["max_d"],
                     windows=int((self.u8.grid > 0).sum()), **coord.metrics(u, tile, self.alpha))

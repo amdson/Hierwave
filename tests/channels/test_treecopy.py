@@ -53,7 +53,7 @@ def test_sheet_parse_and_copy():
     assert len(trunks) == 4 and all(t[0] == n_ground for t in trunks)
     assert coord.check_exemplar(KINDS, alpha, np.where(mass > 0, mass, 0)) == 0
     tc = TreeCopy(128, [40, 104], A=A, seed=3)
-    assert len(tc.trunk_win) == 4 * 8                                   # every trunk at every column of a chunk
+    assert len(tc.trunk_win) == 4 * 8 * 8                               # every trunk at every column and row of a chunk
     tc.seed_coarse(40)
     tc.sweep(5, mu=2.0)
     m = tc.metrics()

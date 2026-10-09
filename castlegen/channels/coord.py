@@ -537,6 +537,7 @@ class Coarse:
         self.masked = np.zeros(self.D, np.int64)
         self.surface_ok = np.zeros((self.D, B + 1), np.float64)       # [window, surf] 0 / inf
         self.above_ok = np.zeros((self.D, B + 1), np.float64)         # [window, surf of the chunk above]
+        self.buried = np.zeros((self.D, B + 1), np.int64)             # [window, surf] root cells above the first solid row
         self.surface_ok[0] = 0.0
         for w in range(1, self.D):
             ey, ex = self.wins[w]
@@ -544,6 +545,7 @@ class Coarse:
             self.masked[w] = 1
             ty = np.argwhere(win == trunk_code)
             rows_nonfree = np.flatnonzero((win >= 2).any(1))             # rows holding root cells
+            per_row = (win >= 2).sum(1)
             self.has_trunk[w] = int(len(ty) > 0)
             for sv in range(B + 1):
                 r0 = B - sv                                             # first solid row in the chunk
@@ -554,6 +556,7 @@ class Coarse:
                 else:
                     ok = all(r >= r0 for r in rows_nonfree)
                 self.surface_ok[w, sv] = 0.0 if ok else INF
+                self.buried[w, sv] = int(per_row[:r0].sum()) - (1 if len(ty) and int(ty[0][0]) < r0 else 0)
                 if len(ty) and int(ty[0][0]) == 0 and sv > 0:            # a trunk on the top row needs an empty chunk above
                     self.above_ok[w, sv] = INF
         self.ey = np.where(self.wins[:, 0] < 0, my, self.wins[:, 0])   # FREE -> my (never equal to a window row)
@@ -621,7 +624,8 @@ class Coarse:
                 c.add_view(f"s{name}{k}", self.code[d, :, k], self.NCODE)
         return c
 
-    def factors(self, u8="u8", surf="surf", lam8=INF, f=0.1, bonus=4.0, win_bonus=2.0, cut=0.1, cut_leaf=0.02):
+    def factors(self, u8="u8", surf="surf", lam8=INF, f=0.1, bonus=4.0, win_bonus=2.0, cut=0.1, cut_leaf=0.02,
+                soft_surface=None):
         """lam8: two masked windows that are not each other's shift (soft
         when finite: recombination at a cost); f: a masked window beside a
         FREE one (per view, so 2 f per boundary edge); bonus on the trunk
@@ -629,9 +633,17 @@ class Coarse:
         Seams are hard between windows (seam_table): the ports crossing a
         shared edge must agree in position and direction with the mass
         rule; a port crossing into the FREE window is a cut at `cut`
-        (`cut_leaf` for a leaf's port), per crossing."""
+        (`cut_leaf` for a leaf's port), per crossing.  soft_surface: a cost
+        per root cell of a window above the chunk's first solid row instead
+        of forbidding the window (the fine level overwrites those cells and
+        prunes their subtrees); a trunk window still needs its trunk on the
+        surface."""
         my, mx, B = self.my, self.mx, self.B
         T = self.seam_table(cut, cut_leaf)
+        surface = self.surface_ok
+        if soft_surface is not None:
+            surface = np.where(np.isinf(self.surface_ok) & (self.has_trunk[:, None] == 0), soft_surface * self.buried,
+                               self.surface_ok)
 
         def shift_table(n, shift):
             """(n + 1, n + 1): 0 where b == a + shift (a, b real), 0 for FREE-FREE,
@@ -651,7 +663,7 @@ class Coarse:
             Factor.pair((u8, "ex"), (u8, "ex"), (0, 1), shift_table(mx, B), name="coh_h_ex"),
             Factor.pair((u8, "ey"), (u8, "ey"), (1, 0), shift_table(my, B), name="coh_v_ey"),
             Factor.pair((u8, "ex"), (u8, "ex"), (1, 0), shift_table(mx, 0), name="coh_v_ex"),
-            Factor.pair((u8, "self"), (surf, "rows"), (0, 0), self.surface_ok, name="surface"),
+            Factor.pair((u8, "self"), (surf, "rows"), (0, 0), surface, name="surface"),
             Factor.pair((u8, "self"), (surf, "rows"), (-1, 0), self.above_ok, pad_b=0, name="surface_above"),
             Factor.unary((u8, "self"), unary, name="window_unary"),
         ]
