@@ -521,8 +521,9 @@ class Coarse:
     """Windows of the exemplar at chunk size B: domain index 0 = FREE, then
     every B x B window with a masked cell."""
 
-    def __init__(self, kinds, alpha, B=8):
+    def __init__(self, kinds, alpha, B=8, leaf_tags=("leaf", "dark")):
         self.B = B
+        self.leaf_tags = set(leaf_tags)
         my, mx = alpha.shape
         wins = [(ey, ex) for ey in range(my - B + 1) for ex in range(mx - B + 1)
                 if (alpha[ey:ey + B, ex:ex + B] != FREE).any()]
@@ -563,6 +564,7 @@ class Coarse:
         sigs = {(): 0}
         self.sig = np.zeros((4, self.D), np.int64)
         DY = ((-1, 0), (0, 1), (1, 0), (0, -1))
+        is_leaf = np.array([bool(set(t) & self.leaf_tags) for t in kinds.tags])
         for w in range(1, self.D):
             ey, ex = self.wins[w]
             for d in range(4):
@@ -573,16 +575,20 @@ class Coarse:
                     if c >= 2 and v["p" + "NESW"[d]][c - 2]:
                         ny, nx = y + DY[d][0], x + DY[d][1]
                         pw = 0 <= ny < my and 0 <= nx < mx and depth[ny, nx] >= 0 and depth[ny, nx] < depth[y, x]
-                        key.append((k, int(v["mass"][c - 2]), int(pw)))
+                        key.append((k, int(v["mass"][c - 2]), int(pw), int(is_leaf[c - 2])))
                 self.sig[d, w] = sigs.setdefault(tuple(key), len(sigs))
         for key in list(sigs):                                          # make sure every flipped signature has an id
-            sigs.setdefault(tuple((k, m, 1 - pw) for k, m, pw in key), len(sigs))
+            sigs.setdefault(tuple((k, m, 1 - pw, lf) for k, m, pw, lf in key), len(sigs))
         self.nsig = len(sigs)
         self.flip = np.zeros(self.nsig, np.int64)
         self.has_parent = np.zeros(self.nsig, np.int64)                 # signature has a parent-ward crossing
+        self.n_wood = np.zeros(self.nsig, np.int64)                     # crossings from wood / leaf cells
+        self.n_leaf = np.zeros(self.nsig, np.int64)
         for key, i in sigs.items():
-            self.flip[i] = sigs[tuple((k, m, 1 - pw) for k, m, pw in key)]
-            self.has_parent[i] = int(any(pw for _, _, pw in key))
+            self.flip[i] = sigs[tuple((k, m, 1 - pw, lf) for k, m, pw, lf in key)]
+            self.has_parent[i] = int(any(pw for _, _, pw, _ in key))
+            self.n_leaf[i] = sum(lf for _, _, _, lf in key)
+            self.n_wood[i] = len(key) - self.n_leaf[i]
         # two facing sides are compatible when their crossings sit at the same positions, parent-ward
         # on exactly one side, and the parent's mass is at least the child's (the certificate's rule;
         # equal mass was required before, which cut every exemplar branch that thins across an edge)
@@ -593,7 +599,7 @@ class Coarse:
                 if len(ka) != len(kb):
                     continue
                 ok = True
-                for (k1, m1, p1), (k2, m2, p2) in zip(ka, kb):
+                for (k1, m1, p1, _), (k2, m2, p2, _) in zip(ka, kb):
                     if k1 != k2 or p1 == p2 or (p1 == 1 and m2 < m1) or (p2 == 1 and m1 < m2):
                         ok = False
                         break
@@ -610,7 +616,7 @@ class Coarse:
             c.add_view("sig" + name, self.sig[d], self.nsig)
         return c
 
-    def factors(self, u8="u8", surf="surf", lam8=INF, f=0.1, bonus=4.0, win_bonus=2.0, cut=2.0):
+    def factors(self, u8="u8", surf="surf", lam8=INF, f=0.1, bonus=4.0, win_bonus=2.0, cut=2.0, cut_leaf=None):
         """lam8: two masked windows that are not each other's shift (soft
         when finite: recombination at a cost); f: a masked window beside a
         FREE one (per view, so 2 f per boundary edge); bonus on the trunk
@@ -622,8 +628,12 @@ class Coarse:
         n = self.nsig
         compat = np.full((n, n), INF)
         compat[0, 0] = 0.0
-        compat[0, 1:] = cut                                                # a crossing against FREE is a cut at a cost,
-        compat[1:, 0] = cut                                                # parent-ward too: two windows whose branch
+        if cut_leaf is None:                                               # a flat price per cut edge (the old rule)
+            cuts = np.full(n, cut)
+        else:                                                              # per crossing, by the crossing cell's class
+            cuts = cut * self.n_wood + cut_leaf * self.n_leaf
+        compat[0, 1:] = cuts[1:]                                           # a crossing against FREE is a cut at a cost,
+        compat[1:, 0] = cuts[1:]                                           # parent-ward too: two windows whose branch
         # crosses their shared edge in both directions would otherwise wait for each other forever; the
         # level-8 certificate still wants a placed parent-ward neighbour on some side, and the refinement
         # prunes cells whose parent chain leaves the placed windows

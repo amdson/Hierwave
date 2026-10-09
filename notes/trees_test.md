@@ -263,6 +263,26 @@ limit, not the material: a window is kept only where its signature
 matches a neighbour's, and a crown cut at a seam loses its outer part.
 images/tree_exemplar_sheet.png (verbatim, then lam8 2, 1, 0.5).
 
+Why the joint kernel does not repair a gap in a handful of sweeps: the
+pruned subtree's parent chain ran through a chunk where no window fits
+both neighbours, the refinement erased the subtree and its reference, and
+the kernel admits a tree cell only from a placed parent, one cell per
+sweep, with no net drive (a growth step closes one dangle and opens the
+new cell's) and a bridge to invent where no exemplar window exists.  The
+gap is the level-8 model's equilibrium, not unmixed state: the cut price
+is flat per edge whatever lies downstream.
+
+A termination cost (`term_wood` 4 on a wood port facing nothing,
+`term_leaf` 0.5 on a leaf's; views t{N,E,S,W}; the default) is the cheap
+repair: on the recombined sheet (lam8 2) the bark stubs go 17 -> 1 within
+10 joint sweeps with the cell count unchanged (1392 -> 1391) and every
+guarantee kept; the kernel retracts a stub to a fork or ends it in a leaf
+rather than regrowing.  Clean trees, same crowns: what was pruned stays
+pruned.  Pricing the level-8 cut per crossing by class (`cut_leaf`) made
+placement worse at the same bonuses (68 / 65 windows against 83, 1012 /
+813 cells against 1388) and is left as an option; the flat price per cut
+edge stays the default.  images/tree_exemplar_term.png.
+
 Not learned, copied: the soft terms are the coordinate coupling and
 coherence as in the roots second pass; a learned potential on top of the
 copy is the same open item as for the limbs.

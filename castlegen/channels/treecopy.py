@@ -28,8 +28,10 @@ contact (tree cells never touch the ground, a trunk has ground on its
 ground side and none on the other, a thin limb or leaf never rests on the
 ground); free cells hold air or tree cells only (the ground and the
 trunks are fixed cells).  Soft: the coupling to the exemplar's statement
-(nu per mismatch), coherence (lam), dangling ports, the parent's
-refinement (mu)."""
+(nu per mismatch), coherence (lam), dangling ports, a termination cost on
+a wood port facing nothing (term_wood; a leaf's port term_leaf: a cut
+branch retracts to a fork or ends in a leaf within a few sweeps instead of
+standing as a stub), the parent's refinement (mu)."""
 import itertools
 
 import numpy as np
@@ -131,6 +133,9 @@ def tile_channel(kinds=KINDS, name="tile"):
     base = np.where(tv["root"] == roots.SKY, 0, np.where(tv["root"] == roots.EARTH, 1, np.where(
         tv["root"] == roots.TRUNK, 2, np.where(tv["mass"] == 3, 3, 4))))
     tile.add_view("base", base, 5)                       # 0 ground, 1 air, 2 trunk, 3 thick limb, 4 thin limb / leaf
+    leaf = np.array([bool(t & {"leaf", "dark"}) for t in kinds.tags])
+    for sd in SIDES:                                     # t{side}: 0 no port, 1 a leaf's port, 2 a wood port
+        tile.add_view("t" + sd, np.where(tv["p" + sd] == 1, np.where(leaf, 1, 2), 0), 3)
     return tile
 
 
@@ -220,14 +225,21 @@ def contact_tables():
     return Hh, Hv
 
 
-def factors(kinds=KINDS, tile="tile", dangle=1.0):
+def factors(kinds=KINDS, tile="tile", dangle=1.0, term_wood=0.0, term_leaf=0.0):
     """Structure only: free cells air or tree cells, port seams (dangle per
-    unmatched port), contact."""
+    unmatched port, plus a termination cost by the class of the cell whose
+    port faces nothing: term_wood for a bark stub, term_leaf for a leaf
+    tip), contact."""
     unary, seam_h, seam_v = roots.tables(kinds, dangle=dangle, counted=False)
     Hh, Hv = contact_tables()
     free_only = np.array([INF, 0.0, INF, 0.0, 0.0])
+    term = np.zeros((3, 3))
+    term[1, 0] = term[0, 1] = term_leaf
+    term[2, 0] = term[0, 2] = term_wood
     return [
         Factor.unary((tile, "base"), free_only, name="free_only"),
+        Factor.pair((tile, "tE"), (tile, "tW"), (0, 1), term, pad_b=0, pad_a=0, name="term_h"),
+        Factor.pair((tile, "tS"), (tile, "tN"), (1, 0), term, pad_b=0, pad_a=0, name="term_v"),
         Factor.pair((tile, "mE"), (tile, "mW"), (0, 1), seam_h, pad_b=0, pad_a=0, name="seam_h"),
         Factor.pair((tile, "mS"), (tile, "mN"), (1, 0), seam_v, pad_b=0, pad_a=0, name="seam_v"),
         Factor.pair((tile, "base"), (tile, "base"), (0, 1), Hh, name="contact_h"),
@@ -245,7 +257,7 @@ class TreeCopy:
     mu) honours the refinement softly."""
 
     def __init__(self, W, trunk_xs, A=None, seed=0, ring=1, nu=6.0, lam=1.0, dangle=1.0, K=1, Kt=1, Dmax=4096,
-                 delta=0.05, lam8=INF, f8=0.1, cut=2.0, align=True):
+                 delta=0.05, lam8=INF, f8=0.1, cut=2.0, cut_leaf=None, align=True, term_wood=4.0, term_leaf=0.5):
         self.kinds = KINDS
         self.A = procedural_tree() if A is None else A
         self.alpha, self.mass, self.mask, self.trunks, self.n_ground = parse_tree(self.kinds, self.A, ring)
@@ -258,7 +270,8 @@ class TreeCopy:
         self.u = coord.coord_channel(self.alpha)
         self.cert = roots.cert_channel(Dmax)
         self.surf = ground.surf_channel()
-        self.model = Model(self.H, W, [self.tile, self.u, self.cert, self.surf], factors(self.kinds, dangle=dangle),
+        self.model = Model(self.H, W, [self.tile, self.u, self.cert, self.surf],
+                           factors(self.kinds, dangle=dangle, term_wood=term_wood, term_leaf=term_leaf),
                            [roots.certificate(Dmax=Dmax, delta=delta, tree=True)])
         self.coupling, self.coup = coord.coupling(self.kinds, self.tile, self.u, nu=nu)
         self.ck = coord.CoordKernel(self.u, self.tile, self.alpha, lam=lam, w=0.0, nu=nu, K=K, Kt=Kt)
@@ -266,7 +279,7 @@ class TreeCopy:
         self.coarse = coord.Coarse(self.kinds, self.alpha, CH)
         self.u8, self.d8 = self.coarse.channel(), self.coarse.cert_channel()
         no_trunk = np.where(self.coarse.has_trunk == 1, INF, 0.0)       # trunk windows only where fixed
-        f8s = self.coarse.factors(lam8=lam8, f=f8, cut=cut) + [Factor.unary(("u8", "self"), no_trunk, name="no_trunk")]
+        f8s = self.coarse.factors(lam8=lam8, f=f8, cut=cut, cut_leaf=cut_leaf) + [Factor.unary(("u8", "self"), no_trunk, name="no_trunk")]
         chans8 = [self.u8, self.surf, self.d8]
         if align:
             # a window keeps its height above the ground: exemplar row ey = 8 x the world chunk row.  Soft
@@ -386,7 +399,15 @@ class TreeCopy:
                     tips_ok += int(thin[g[ny, nx]] == 1)
                     break
         G = self.n_ground
-        return dict(rule_violations=m["rule_violations"], multi_parent=m["multi_parent"],
+        stubs = 0                                                       # wood cells with a port facing nothing
+        for i, sd in enumerate(SIDES):
+            dy, dx = DIRS4[i]
+            t = v["t" + sd][g]
+            q = np.zeros_like(t)
+            ys, xs = slice(max(-dy, 0), H + min(-dy, 0)), slice(max(-dx, 0), W + min(-dx, 0))
+            q[ys, xs] = v["t" + SIDES[(i + 2) % 4]][g][max(dy, 0):H + min(dy, 0), max(dx, 0):W + min(dx, 0)]
+            stubs += int(((t == 2) & (q == 0)).sum())
+        return dict(rule_violations=m["rule_violations"], multi_parent=m["multi_parent"], wood_stubs=stubs,
                     dangling_ports=m["dangling_ports"], tree_cells=int(treec.sum()), attached=attached,
                     attached_frac=float(attached / total) if total else 1.0, trunks=m["trunks"],
                     in_ground=int(treec[:G].sum()) + int((rv[G:] == roots.SKY).sum()), leaves=n_leaf,
