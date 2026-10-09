@@ -32,7 +32,7 @@ def test_limb_kinds_and_views():
 
 
 def test_forward_valid_and_attached():
-    T = Treeland(8, margin=1, limb_kw=dict(grow=3.0))
+    T = Treeland(8, margin=1, limb_kw=dict(grow=1.0))
     fw = Forward(T, seed=0)
     st = fw.run(20, 10, 80)
     _valid(T, fw.chans)
@@ -76,7 +76,7 @@ def test_paint_fine_partial_matches_full():
 
 
 def test_tree_ais_targets_finite():
-    T = Treeland(6, margin=1, win=(6, 4), limb_kw=dict(grow=3.0))
+    T = Treeland(6, margin=1, win=(6, 4), limb_kw=dict(grow=1.0))
     B = Bench(T, seed=0, S=(10, 10, 20))
     B.fw.tables = B.tables_of("tree", None)
     B.fw.run(10, 10, 20)

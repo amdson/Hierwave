@@ -6,8 +6,9 @@ mass 3 and a north port.  Ports should meet across every seam (soft:
 above.  The certificate (roots.certificate(tree=True)) makes the join graph
 a forest rooted at the trunks with mass non-increasing away from them.
 Soft terms are the exemplar's statistics on views, counted by
-roots.exemplar_stats from EXEMPLAR (a tree: '.' sky, ' ' soil, T trunk,
-1..3 limbs), through roots.tables.
+roots.exemplar_stats through roots.tables from EXEMPLAR: the big root
+system of coord.py flipped ('.' sky, ' ' soil, T trunk, 1..3 limbs);
+EXEMPLAR_SMALL is the small one mirrored by hand.
 
 Kinds: sky, soil, trunk, limb{m}_{ports}; the limb kinds carry the root
 set's tags (root, mass{m}, deg{k}, p{s}) so roots.views applies: the view
@@ -16,14 +17,16 @@ import itertools
 
 import numpy as np
 
-from . import roots
+from . import coord, roots
 from .core import Channel, Factor, Kinds
 
 INF = np.inf
 SKY, SOIL, TRUNK, LIMB = roots.SKY, roots.EARTH, roots.TRUNK, roots.ROOT
 SIDES = roots.SIDES
 
-EXEMPLAR = [
+# The small root exemplar mirrored by hand (few branch points: 88 % of its
+# cells have degree 2, and the limbs it gives are wandering chains).
+EXEMPLAR_SMALL = [
     "........................",
     "...1.......1.....1......",
     "...11......1....11......",
@@ -37,6 +40,10 @@ EXEMPLAR = [
     "                        ",
     "                        ",
 ]
+# The big root system of coord.py (40 x 84, painted from strokes, 31 % of
+# its cells branch points) flipped vertically: '.' stays the medium (sky
+# here), the trunk at the bottom.  The default.
+EXEMPLAR = coord.EXEMPLAR_BIG[::-1]
 
 
 def make_kinds():
@@ -74,10 +81,11 @@ def contact_tables():
     return Hh, Hv
 
 
-def factors(kinds: Kinds = KINDS, tile="tile", beta=1.0, alpha=0.1, dangle=4.0, grow=1.0, counted=True):
+def factors(kinds: Kinds = KINDS, tile="tile", beta=1.0, alpha=0.1, dangle=4.0, grow=1.0, counted=True,
+            rows=EXEMPLAR):
     """The limb set's rows on `tile`: unary, port seams, contact.  grow:
-    energy taken off every limb cell."""
-    unary, seam_h, seam_v = roots.tables(kinds, alpha, dangle, counted, rows=EXEMPLAR)
+    energy taken off every limb cell; rows: the exemplar counted."""
+    unary, seam_h, seam_v = roots.tables(kinds, alpha, dangle, counted, rows=rows)
     unary = unary - grow * (roots.views(kinds)["root"] == LIMB)
     Hh, Hv = contact_tables()
     seam_h = np.where(np.isinf(seam_h), INF, beta * seam_h)

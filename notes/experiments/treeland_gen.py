@@ -6,7 +6,7 @@ hard rules make the trees react to the terrain), and a sheet of renders.
 
     NUMBA_NUM_THREADS=1 PYTHONPATH=. python notes/experiments/treeland_gen.py
 
-Env: N (24), RUNS (64), SEED (0), GROW (3.0), DANGLE (4.0), S_TILE (150).
+Env: N (24), RUNS (64), SEED (0), GROW (1.0), DANGLE (4.0), S_TILE (150).
 Outputs images/treeland_gen.json, images/treeland_sheet.png."""
 import os, json, time
 import numpy as np
@@ -17,7 +17,7 @@ from castlegen.channels.treeland import CH, Forward, Treeland
 
 E = os.environ.get
 N, RUNS, SEED = int(E("N", 24)), int(E("RUNS", 64)), int(E("SEED", 0))
-GROW, DANGLE, S_TILE = float(E("GROW", 3.0)), float(E("DANGLE", 4.0)), int(E("S_TILE", 150))
+GROW, DANGLE, S_TILE = float(E("GROW", 1.0)), float(E("DANGLE", 4.0)), int(E("S_TILE", 150))
 os.makedirs("images", exist_ok=True)
 T = Treeland(N, margin=2, limb_kw=dict(grow=GROW, dangle=DANGLE))
 fw = Forward(T, seed=SEED)

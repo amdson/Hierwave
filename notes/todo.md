@@ -23,9 +23,10 @@ order I would do them.  Each item names its source.
       moves over ~150 sweeps.  Needs joint growth moves in the tile kernel
       (group 2), or limbs as coarse records (group 4), before any
       structured type's placement can be learned.
-- [ ] **Limb branching**: the counted root / limb tables give wandering
-      chains (97 % degree 2); the exemplar-coordinates pass fixed this for
-      roots (`channels_demo.md` second pass).  Apply it to limbs.
+- [ ] **Limb shape**: counted from the big root exemplar flipped the limbs
+      branch (15 %) but sprawl wide and low like a root system; a tree
+      exemplar of its own, or the exemplar-coordinates pass
+      (`channels_demo.md` second pass), for a crown.
 - [ ] **Adaptive features / stencil growth.**  Grow the feature set or
       offsets where the residual or the consistency violation is
       significant; never tested, every fit so far used a fixed OFF8

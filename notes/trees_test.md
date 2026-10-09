@@ -94,26 +94,32 @@ root certificate with `tree=True` (a forest rooted at the trunks, mass
 non-increasing away from them).  Painted `ground` and `tdem` force soil and
 the trunk cell.
 
-### Generation (`treeland_gen.py`, 64 runs, 24 slots, grow 3, dangle 4, 150 tile sweeps)
+### Generation (`treeland_gen.py`, 64 runs, 24 slots, grow 1, dangle 4, 150 tile sweeps)
 
-- Valid: 0 certificate violations in 64 runs, 18749 limb cells all
-  attached to a trunk (fraction 1.0000), 0 multi-parent cells; 0.6
-  dangling ports per tree (soft).  1.4 s per run.
-- 18.9 limb cells per tree (sd of the mean 0.2); presence 0.646 (the
-  designed value: no learned terms).  Mass histogram roughly 45 / 25 / 30 %
-  for 1 / 2 / 3; degree histogram 3 % tips, 97 % chains, under 1 %
-  branch points: the limbs are wandering chains thickest at the trunk
-  (images/treeland_sheet.png), the same look the counted root tables gave
-  before the exemplar-coordinates pass, and a knob scan (grow 1..3, dangle
-  2..4, 60..150 sweeps) moves size but not branching.
+The exemplar is the big root system of `coord.py` (40 x 84, painted from
+strokes for the exemplar-coordinates pass, 31 % of its cells branch
+points) flipped vertically; the small root exemplar mirrored by hand
+(`limbs.EXEMPLAR_SMALL`, 88 % of its cells degree 2) was tried first and
+gives wandering chains with under 1 % branch points at any grow / dangle /
+sweep setting (19 cells per tree at grow 3).
+
+- Valid: 0 certificate violations in 64 runs, 22640 limb cells all
+  attached to a trunk (fraction 1.0000), 0 multi-parent cells; 3 dangling
+  ports per tree (the tips; soft).  1.4 s per run.
+- 23.0 limb cells per tree (sd of the mean 0.4); presence 0.646 (the
+  designed value: no learned terms).  Degree histogram about 11 % tips,
+  72 % chains, 15 % branch points, 1 % four-way; mass about 38 / 19 / 43 %
+  for 1 / 2 / 3: bushy, thick at the trunk, thin green tips, wide and low
+  like the root system it was counted from (images/treeland_sheet.png).
+  grow 2 / 3 give 49 / 74 cells per tree and thickets.
 - The trees react to the terrain through the hard rules alone: trees whose
-  slot has a relief of 2 or more rows grow 17.5 limb cells against 19.2 on
-  flatter ground (n 170 vs 510); with the ground one row higher on one
-  side, the limbs sit 1.5 cells further from it (n 218, sd of the mean
-  0.45), the reverse slope 0.4 (n 220); at slopes of 2 the counts are too
-  small (n 52-74) and change sign.  Presence does not depend on the relief
-  (0.64 / 0.65 / 0.69 at relief 0 / 1 / 2+, within noise), as designed:
-  the forward has no term for the limbs' free energy.
+  slot has a relief of 2 or more rows grow 21.0 limb cells against 23.2 on
+  flatter ground (n 170 vs 822); with the ground one row higher on the
+  right the limbs sit 1.6 cells further left (n 218, sd of the mean 0.45),
+  one row higher on the left 0.5 cells further right (n 220), two rows
+  1.3 / 1.7 (n 52 / 74), consistent in sign.  Presence does not depend on
+  the relief (0.64 / 0.65 / 0.69 at relief 0 / 1 / 2+, within noise), as
+  designed: the forward has no term for the limbs' free energy.
 
 ### Learning: the limbs' free energy is not estimable with the shipping tools
 
@@ -176,8 +182,9 @@ that.  Ways out, none built:
   variant can estimate because of single-site growth mixing.
 - `AISTargets` repaints after restoring (bug fix); `train._site_record`
   skips a target with no finite candidate; `roots.tables` takes an
-  exemplar; `actais.ActivityAIS` is kept as the estimator to extend with
-  joint moves.
+  exemplar, and the limb set counts the big root exemplar flipped (the
+  small one gives no branching); `actais.ActivityAIS` is kept as the
+  estimator to extend with joint moves.
 - The terrain-first ordering (tree slots at the terrain's level reading it)
   is the shape the tower grammar needs: a type's hard reads of the ground
   stay hard pairs against a same-level channel, and the learned part is the
