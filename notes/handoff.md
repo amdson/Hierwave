@@ -17,6 +17,11 @@ future work; this note is the state.
   through the hard rules; its placement cannot be learned because the
   limb free energy is not estimable by AIS (`actais.py` kept; the fix is
   joint growth moves or limbs as records, `todo.md` groups 1, 2, 4).
+- Stage C of `trees_test.md`: the legacy procedural tree exemplar copied
+  with every guarantee (`treecopy.py`: the roots' coordinate pipeline run
+  upside down, coarse window seeding, 5 s for five full copies); two
+  `coord.Coarse` fixes (edge signatures use the certificate's mass rule,
+  parent-ward cuts are finite).
 - `AISTargets.log_z` now repaints after restoring the site (it left the
   last candidate painted); `train._site_record` skips targets with no
   finite candidate; `roots.tables(rows=...)`.  144 tests pass.

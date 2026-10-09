@@ -24,9 +24,14 @@ order I would do them.  Each item names its source.
       (group 2), or limbs as coarse records (group 4), before any
       structured type's placement can be learned.
 - [ ] **Limb shape**: counted from the big root exemplar flipped the limbs
-      branch (15 %) but sprawl wide and low like a root system; a tree
-      exemplar of its own, or the exemplar-coordinates pass
-      (`channels_demo.md` second pass), for a crown.
+      branch (15 %) but sprawl wide and low like a root system.  The tree
+      exemplar itself copies with guarantees through the coordinate
+      pipeline (`trees_test.md` stage C); the counted limb set is the
+      stand-in where a copy is not wanted.
+- [ ] **Learning on top of a copied structure** (stage C): the copy's soft
+      terms are coordinate coupling and coherence; nothing is fitted.  The
+      induced free energy of a copied crown on the terrain or the slot is
+      the same open item as the limbs' (group 1).
 - [ ] **Adaptive features / stencil growth.**  Grow the feature set or
       offsets where the residual or the consistency violation is
       significant; never tested, every fit so far used a fixed OFF8

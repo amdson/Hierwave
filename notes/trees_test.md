@@ -1,7 +1,7 @@
-# Trees on terrain: the recursion with a sampled fine level, and limbs (2026-10-09)
+# Trees on terrain: the recursion with a sampled fine level, limbs, and the tree exemplar copied (2026-10-09)
 
-`castlegen/channels/{trees,treeland,limbs,actais}.py`,
-`notes/experiments/{trees_fit,treeland_gen}.py`, `tests/channels/test_{trees,treeland}.py`.
+`castlegen/channels/{trees,treeland,limbs,actais,treecopy}.py`,
+`notes/experiments/{trees_fit,treeland_gen,tree_exemplar}.py`, `tests/channels/test_{trees,treeland,treecopy}.py`.
 The first test of the bootstrap trainer (`dsl_updates.md` C2, `train.fit`)
 where the level below the fitted one is itself sampled with same-level
 couplings, so the collapsed target is a genuine free energy; then the first
@@ -170,6 +170,71 @@ that.  Ways out, none built:
    window's slots), so only the tree level's limb free energy is the
    problem.
 
+## Stage C: the procedural tree exemplar copied with guarantees (`treecopy.py`)
+
+The tree exemplar meant all along was the legacy one: the procedural
+picture of `notes/experiments/legacy/tree_texsyn.py` (64 x 64; branches
+that split, leaf clumps at the tips, grass and soil), which the old
+texture synthesis copied with no guarantees.  `castlegen/channels/treecopy.py`
+copies it through the masked exemplar-coordinates pipeline of the roots
+(`coord.py`: coordinate channel, joint (u, t, d) kernel, `Coarse` window
+channel and refinement) under the tree certificate.  The trick that makes
+the roots machinery apply unchanged is to run upside down: flipped
+vertically, a tree hanging from a ground line at the top is a root system
+(the medium, air, takes the root view's EARTH code; the ground is the
+"sky"), so the surface rule, the level-8 certificate and the refinement
+need no mirror image; `render()` flips back.
+
+Exemplar parse: bark mass = taxicab distance to the nearest non-bark,
+non-ground cell (1..3), leaves mass 1; the 4-connected component holding
+the trunk cell is kept (five leaf specks off the bark are dropped); a
+breadth-first spanning tree from the trunk gives the ports and the mass is
+clamped non-increasing along it, so the exemplar itself satisfies
+`Certificate(tree=True)` (`check_exemplar` 0).  Kinds: air, grass, soil,
+trunk (mass 3, three ports), limb{1..3}, leaf, dark leaf x 15 port sets,
+79 in all.
+
+Guarantees, hard in the kernel: the certificate (every tree cell on a join
+path to a trunk, mass non-increasing from it, exactly one parent); contact
+(tree cells never touch the ground, a trunk has ground below and none
+above, a thin limb or leaf never rests on the ground); free cells hold air
+or tree cells only, the ground and the trunks are fixed cells.  Soft: the
+coupling to the exemplar's statement (nu 6), coherence (lam 1), dangling
+ports (1), the refinement (mu 2).
+
+| schedule | tree cells (5 trunks; exemplar 476 each) | leaves | violations / multi-parent | attached | trunks | in ground | mismatched | seconds |
+|---|---|---|---|---|---|---|---|---|
+| sequential growth, 600 joint sweeps | 323 | 16 | 0 / 0 | 1.000 | 5 | 0 | 18 | 39 |
+| sequential, 4000 sweeps | 495 | 9 | 0 / 0 | 1.000 | 5 | 0 | 15 | 230 |
+| coarse (100 level-8 sweeps) + refinement | 2337 | 1107 | 0 / 0 | 1.000 | 5 | 0 | 0 | 1 |
+| coarse + 60 joint sweeps | 2344 | 1112 | 0 / 0 | 1.000 | 5 | 0 | 47 | 5 |
+
+Sequential growth stalls at a fifth of the exemplar (the copy climbs the
+trunk as a comb and dissolves at the thin tips as fast as it grows); the
+coarse seeding places 24 windows per trunk and the refinement writes a
+complete copy, leaves on tips 1.000, which the joint sweeps then vary
+(47 coordinate mismatches, 41 dangling ports, 0.999 of leaves on tips).
+images/tree_exemplar_{exemplar,coarse,seq}.png, images/tree_exemplar.json.
+
+Two bugs in `coord.Coarse` found on the way, both fixed and both loosening
+the roots case correctly:
+- The edge signatures required equal mass on both sides of every port
+  crossing a chunk edge, so two true neighbour windows of the exemplar were
+  incompatible wherever a branch thins across the edge; the placement
+  stalled at 5 windows per trunk.  The match is now the certificate's rule
+  (the parent's mass at least the child's; `sig_ok`).
+- A window whose parent-ward crossing faced an empty chunk was forbidden
+  outright, so two windows whose branch crosses their shared edge in both
+  directions waited for each other forever (a leaf clump's spanning tree
+  does this).  The crossing is now a cut at a finite cost; the level-8
+  certificate still wants a placed parent-ward neighbour on some side and
+  the refinement prunes what the placed windows leave orphaned.  43 -> 120
+  windows for 5 trunks.
+
+Not learned, copied: the soft terms are the coordinate coupling and
+coherence as in the roots second pass; a learned potential on top of the
+copy is the same open item as for the limbs.
+
 ## What this adds to the design
 
 - The recursion with estimated targets works on a fine level that mixes
@@ -185,11 +250,14 @@ that.  Ways out, none built:
   exemplar, and the limb set counts the big root exemplar flipped (the
   small one gives no branching); `actais.ActivityAIS` is kept as the
   estimator to extend with joint moves.
+- The tree exemplar copies with every guarantee holding and no sequential
+  growth (stage C); the root machinery transfers to any structure that
+  hangs from a surface by running it upside down.
 - The terrain-first ordering (tree slots at the terrain's level reading it)
   is the shape the tower grammar needs: a type's hard reads of the ground
   stay hard pairs against a same-level channel, and the learned part is the
   finer levels' free energy only.
 
-Images: images/trees_{oracle,theta0,hook_K0,hook_K3,ais_K0}.png,
+Images: images/tree_exemplar_{exemplar,coarse,seq}.png, images/trees_{oracle,theta0,hook_K0,hook_K3,ais_K0}.png,
 images/trees_tables.png, images/trees_stageA.json, images/treeland_sheet.png,
 images/treeland_gen.json.

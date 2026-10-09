@@ -583,6 +583,21 @@ class Coarse:
         for key, i in sigs.items():
             self.flip[i] = sigs[tuple((k, m, 1 - pw) for k, m, pw in key)]
             self.has_parent[i] = int(any(pw for _, _, pw in key))
+        # two facing sides are compatible when their crossings sit at the same positions, parent-ward
+        # on exactly one side, and the parent's mass is at least the child's (the certificate's rule;
+        # equal mass was required before, which cut every exemplar branch that thins across an edge)
+        keys = {i: key for key, i in sigs.items()}
+        self.sig_ok = np.zeros((self.nsig, self.nsig), np.bool_)
+        for i, ka in keys.items():
+            for j, kb in keys.items():
+                if len(ka) != len(kb):
+                    continue
+                ok = True
+                for (k1, m1, p1), (k2, m2, p2) in zip(ka, kb):
+                    if k1 != k2 or p1 == p2 or (p1 == 1 and m2 < m1) or (p2 == 1 and m1 < m2):
+                        ok = False
+                        break
+                self.sig_ok[i, j] = ok
 
     def channel(self, name="u8"):
         c = Channel(name, self.B, self.D)
@@ -607,9 +622,12 @@ class Coarse:
         n = self.nsig
         compat = np.full((n, n), INF)
         compat[0, 0] = 0.0
-        compat[0, 1:] = np.where(self.has_parent[1:] == 1, INF, cut)       # a parent must be placed; a child may be cut
-        compat[1:, 0] = np.where(self.has_parent[1:] == 1, INF, cut)
-        compat[np.arange(1, n), self.flip[1:]] = 0.0
+        compat[0, 1:] = cut                                                # a crossing against FREE is a cut at a cost,
+        compat[1:, 0] = cut                                                # parent-ward too: two windows whose branch
+        # crosses their shared edge in both directions would otherwise wait for each other forever; the
+        # level-8 certificate still wants a placed parent-ward neighbour on some side, and the refinement
+        # prunes cells whose parent chain leaves the placed windows
+        compat[1:, 1:] = np.where(self.sig_ok[1:, 1:], 0.0, INF)
 
         def shift_table(n, shift):
             """(n + 1, n + 1): 0 where b == a + shift (a, b real), 0 for FREE-FREE,
@@ -644,7 +662,7 @@ class Coarse:
         J = np.zeros((4, D, D), np.bool_)
         for d in range(4):
             a, b = self.sig[d], self.sig[(d + 2) % 4]
-            J[d] = (self.flip[a][:, None] == b[None, :]) & (self.has_parent[a][:, None] == 1)   # witnesses lie parent-ward
+            J[d] = self.sig_ok[a][:, b] & (self.has_parent[a][:, None] == 1)   # witnesses lie parent-ward
         return J
 
     def recombined_seams(self, u8: Channel):
