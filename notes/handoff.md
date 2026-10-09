@@ -1,82 +1,45 @@
-# Handoff (2026-10-09)
+# Handoff (2026-10-09, evening)
 
 For whoever picks the repository up next, including a fresh session.
-Where things stand, what is not yet in git, how to bring it in, and
-what to do first.  `todo.md` is the full list of future work; this note
-is the state.
+Where things stand and what to do first.  `todo.md` is the full list of
+future work; this note is the state.
+
+## Since the morning handoff
+
+- The blockgram work was committed and merged with the reorganisation
+  (`main` = `origin/main`; the stale worktrees under `.claude/worktrees/`
+  can be removed with `git worktree remove --force` + `prune`).
+- `trees_test.md` (the trees on terrain test): stage A validates the
+  recursion with AIS targets over a sampled chain terrain (within noise of
+  the exact hook; 2-3x eval noise end to end).  Stage B generates the
+  first structured type (limbs under the certificate, `limbs.py`,
+  `treeland.py`) on a sampled terrain, valid and reacting to the terrain
+  through the hard rules; its placement cannot be learned because the
+  limb free energy is not estimable by AIS (`actais.py` kept; the fix is
+  joint growth moves or limbs as records, `todo.md` groups 1, 2, 4).
+- `AISTargets.log_z` now repaints after restoring the site (it left the
+  last candidate painted); `train._site_record` skips targets with no
+  finite candidate; `roots.tables(rows=...)`.  144 tests pass.
 
 ## State of `main`
 
-`origin/main` at 990c13e (PR #2) plus `todo.md` and this note (PR #3):
+`main` = `origin/main` plus the commits of 2026-10-09 (blockgram merged,
+trees test):
 
 - `castlegen/channels/` is the current generic implementation: channels,
   factors, certificates, per-channel samplers with admitted lists and
   dormancy, the bootstrap trainer (`train.fit`, `AISTargets`,
-  `ExactTargets`), the biome circles toy that validates it, and
-  `embed_fit.py` for the feature-set comparison.  132 tests pass:
+  `ExactTargets`, `actais.ActivityAIS`), the biome circles toy, the trees
+  test (`trees.py`, `treeland.py`, `limbs.py`).  144 tests pass:
   `NUMBA_NUM_THREADS=1 python -m pytest tests/channels -q`.
+- `castlegen/blockgram/` is the compiled split grammar (`blockgram.md`);
+  executing its plan through the channels layer is `todo.md` group 4.
 - Everything earlier is under `castlegen/legacy/` with a status line per
   module and `tests/legacy/` (10 known failures xfail by name).
-- The design is in `dsl_updates.md` (decisions and measurements),
-  `dsl_interface.md` (interface and the training algorithm),
-  `circles_biome_test.md` (the test problem and every stage's result),
-  `reference_math.tex` (mathematics; not yet updated for the bootstrap
-  trainer, collapsed targets, admitted lists, periodic worlds).
-- What the build established: support is computed from the writes, the
-  finite part is learned; stamp features are exact including for a
-  never-seen family; targets must integrate out everything drawn after
-  the site (collapsed targets), and with them the number of p* steps
-  buys nothing; the end-to-end chain matches the oracle within eval noise
-  on a periodic world; per-site cost is flat in the library size with
-  admitted lists; parameters are flat (68 against 412k tabular).
-
-## Not in git: the main checkout at `/Users/amdson/dev/Hierwave`
-
-That checkout is at 0b6db4d (the commit before the proofread PR, on the
-old layout) and holds work that is on no branch:
-
-Untracked, all of it the block-compiled grammar and the tower stress test:
-
-    castlegen/blockgram/{__init__,core,towers,tower_spec,compile}.py
-    castlegen/channels/tower.py
-    notes/blockgram.md
-    notes/experiments/{blockgram_towers,blockgram_compile,tower_windows}.py
-    notes/reference_math_andrew_notes.txt      (questions on the math note)
-
-Modified against 0b6db4d:
-
-    notes/channels_demo.md     appends "Towers of counted rooms: a negative result"
-    notes/reference_math.tex   one added comment: adopt the bias field as the
-                               DSL's communication primitive
-    notes/reference_math.pdf   rebuilt (tracked; upstream rebuilt it too)
-
-Every import in the untracked files resolves on the new layout
-(`castlegen.blockgram` is new; `castlegen.channels` did not move).
-`castlegen.egg-info/` is a build artefact; ignore it.
-
-### Bringing it in
-
-`git pull` will refuse as it stands, because the reorganisation also
-edited `channels_demo.md` (six citations to `history/channels.tex`) and
-the proofread edited `reference_math.tex`.  Commit first, then merge:
-
-    cd /Users/amdson/dev/Hierwave
-    git add castlegen/blockgram castlegen/channels/tower.py notes/blockgram.md \
-            notes/experiments/blockgram_towers.py notes/experiments/blockgram_compile.py \
-            notes/experiments/tower_windows.py notes/reference_math_andrew_notes.txt \
-            notes/channels_demo.md notes/reference_math.tex
-    git commit -m "blockgram: split grammars compiled to a block pyramid; tower grammar and its compiler; towers of counted rooms (negative result)"
-    git pull --no-rebase            # merge origin/main
-
-Expected conflicts: `channels_demo.md` (keep both: the upstream citation
-edits and the appended tower section), `reference_math.tex` (keep both:
-the proofread and the one added comment), and `reference_math.pdf`
-(binary; take either, then rebuild it from the merged `.tex`).
-Then `git push`, and the worktrees under `.claude/worktrees/` can go
-(`git worktree prune` after removing the directories).
-
-If the merge is unwelcome, the equivalent is a branch off `origin/main`
-with the same files copied in; nothing in the list collides with a move.
+- The design is in `dsl_updates.md`, `dsl_interface.md`; the test notes in
+  the order of `notes/README.md`; `reference_math.tex` is not yet updated
+  for the bootstrap trainer, collapsed targets, admitted lists, periodic
+  worlds.
 
 ## The questions in `reference_math_andrew_notes.txt`
 

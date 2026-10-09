@@ -371,6 +371,8 @@ def _site_record(model, home, y, x, targets, feats, designed_e):
     if len(cand) == 0:
         return None
     pi = np.asarray(targets.at(model, home, y, x, cand), np.float64)
+    if not np.isfinite(pi).all():                                 # a target with no information (e.g. a dead window)
+        return None
     return cand, np.asarray(feats(model, home, y, x, cand), np.float64), e[cand], pi
 
 
