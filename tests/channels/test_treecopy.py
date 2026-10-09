@@ -6,7 +6,7 @@ from castlegen.channels.treecopy import KINDS, TreeCopy, parse_tree, procedural_
 
 def test_exemplar_parse_satisfies_certificate():
     A = procedural_tree()
-    alpha, mass, mask, trunks, n_ground = parse_tree(KINDS, A)
+    alpha, mass, mask, trunks, n_ground, _ = parse_tree(KINDS, A)
     assert coord.check_exemplar(KINDS, alpha, np.where(mass > 0, mass, 0)) == 0
     (ty, tx), = trunks
     assert alpha[ty, tx] == 2 + KINDS.index("trunk") and n_ground == ty
@@ -49,7 +49,7 @@ def test_sequential_growth_valid():
 def test_sheet_parse_and_copy():
     from castlegen.channels.treecopy import sheet
     A = sheet(seeds=(0, 1), mirror=True)
-    alpha, mass, mask, trunks, n_ground = parse_tree(KINDS, A)
+    alpha, mass, mask, trunks, n_ground, _ = parse_tree(KINDS, A)
     assert len(trunks) == 4 and all(t[0] == n_ground for t in trunks)
     assert coord.check_exemplar(KINDS, alpha, np.where(mass > 0, mass, 0)) == 0
     tc = TreeCopy(128, [40, 104], A=A, seed=3)

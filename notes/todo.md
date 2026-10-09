@@ -33,6 +33,10 @@ order I would do them.  Each item names its source.
       refinement prunes the outer part.  Either let the joint kernel grow
       the cut subtree back (it does not, at 60 sweeps), or choose windows
       whose crossings into FREE are tips only (a signature-aware bonus).
+- [ ] **Level-8 joins quadratic in the windows** (`coord.Coarse.joins`, a
+      (4, D8, D8) table the certificate reads): 10 GB for a sheet of 16
+      panels.  Compute joins from the per-position seam codes inside the
+      kernel, as the seams already are.
 - [ ] **Learning on top of a copied structure** (stage C): the copy's soft
       terms are coordinate coupling and coherence; nothing is fitted.  The
       induced free energy of a copied crown on the terrain or the slot is

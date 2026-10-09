@@ -283,6 +283,46 @@ placement worse at the same bonuses (68 / 65 windows against 83, 1012 /
 813 cells against 1388) and is left as an option; the flat price per cut
 edge stays the default.  images/tree_exemplar_term.png.
 
+Growth.  Three levers tried on the recombined sheet (lam8 2, 3 seeds):
+a per-cell growth bonus at the fine level regrows nothing that was pruned
+and instead sprouts leaf tufts beyond the copies (31 / 269 extra cells at
+grow 1 / 2); keeping the refinement reference on pruned cells does
+nothing (no parent chain to honour); the level-8 window bonus places more
+windows (1388 -> 1814 cells at bonus 4) but noisily.  The pruned cells
+stay pruned in every setting: a gap is the coarse level's decision.
+
+Rotations (`sheet(rotations=(0, 1))`): quarter-turned copies of the trees,
+floating in the sky with their ground stripped.  A floating patch is
+rooted at its thickest bark cell (a mass-3 limb, not a trunk), so it is
+never placed on its own: the level-8 certificate needs a trunk window,
+and a rotated window only enters by matching a standing tree's seam as a
+subtree, with the mass rule.  Two things had to change for that: the
+exemplar depth takes the floating roots as sources (without a direction
+no crossing is parent-ward and the patch can never be witnessed), and the
+coarse channel's seam check is now per position (seam codes: one small
+view per side and edge position, 8 pair tables per direction, joins by
+broadcasting) instead of a table over distinct edge signatures, which was
+quadratic in them (13-24 k signatures on these sheets, 1.4-4.5 GB per
+model, swapping).  The cut against the FREE window is now priced per
+crossing (0.1 per wood port, 0.02 per leaf's).  Four upright trees and
+their mirrors plus the same four quarter-turned, against eight upright:
+
+| sheet | lam8 | windows placed (rotated) | seams | cells | leaves | diversity |
+|---|---|---|---|---|---|---|
+| 8 upright | 2 | 88 (0) | 10 | 1264 | 412 | 0.71 |
+| 8 upright | 1 | 92 (0) | 17 | 1133 | 416 | 0.69 |
+| 4 upright + 4 turned | 2 | 121 (26) | 5 | 2017 | 840 | 0.66 |
+| 4 upright + 4 turned | 1 | 122 (31) | 17 | 1889 | 780 | 0.71 |
+
+Every guarantee held in all 12 runs.  The rotated patches attach as
+sideways limbs with their own leaf clusters, shapes the upright sheet
+cannot make, and the copies are 60 % larger at the same recombination.
+A full set of rotations (16 panels) is 51 k windows; the per-position
+seams handle it but the level-8 certificate's join table is still
+quadratic in the windows (10 GB there), the next limit.
+images/tree_exemplar_rot.png (upright sheet, then the turned one, at lam8
+2 and 1).
+
 Not learned, copied: the soft terms are the coordinate coupling and
 coherence as in the roots second pass; a learned potential on top of the
 copy is the same open item as for the limbs.

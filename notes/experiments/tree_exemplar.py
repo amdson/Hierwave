@@ -9,7 +9,8 @@ images/tree_exemplar_{exemplar,coarse,seq}.png.
     NUMBA_NUM_THREADS=1 PYTHONPATH=. python notes/experiments/tree_exemplar.py
 
 Env: EX (sheet: four procedural trees and their mirror images on one ground
-line; single: the one tree), W (320), S8 (100), SF (60), SEQ (600), MU (2.0),
+line; single: the one tree), ROT (0: upright only; 1: quarter turns too,
+floating patches that only attach to standing trees), SEEDS (0,1,2,3), W (320), S8 (100), SF (60), SEQ (600), MU (2.0),
 NU (6.0), LAM (1.0), LAM8 (inf; finite = recombination at hard seams), SEED (0)."""
 import os, json, time
 import numpy as np
@@ -20,12 +21,13 @@ from castlegen.channels.treecopy import TreeCopy, procedural_tree, sheet
 E = os.environ.get
 W, S8, SF, SEQ = int(E("W", 320)), int(E("S8", 100)), int(E("SF", 60)), int(E("SEQ", 600))
 EX = E("EX", "sheet")
+ROT, SEEDS = int(E("ROT", 0)), tuple(int(x) for x in E("SEEDS", "0,1,2,3").split(","))
 MU, NU, LAM, SEED = float(E("MU", 2.0)), float(E("NU", 6.0)), float(E("LAM", 1.0)), int(E("SEED", 0))
 LAM8 = float(E("LAM8", "inf"))
 TRUNKS = [x for x in range(40, W, 64)]
 os.makedirs("images", exist_ok=True)
-OUT = dict(config=dict(EX=EX, W=W, S8=S8, SF=SF, SEQ=SEQ, MU=MU, NU=NU, LAM=LAM, LAM8=LAM8, SEED=SEED, trunks=TRUNKS))
-A = sheet() if EX == "sheet" else procedural_tree()
+OUT = dict(config=dict(EX=EX, ROT=ROT, SEEDS=SEEDS, W=W, S8=S8, SF=SF, SEQ=SEQ, MU=MU, NU=NU, LAM=LAM, LAM8=LAM8, SEED=SEED, trunks=TRUNKS))
+A = sheet(seeds=SEEDS, rotations=(0, 1) if ROT else (0,)) if EX == "sheet" else procedural_tree()
 
 
 def show(tag, m, t):

@@ -84,22 +84,41 @@ def procedural_tree(m=64, seed=0, depth=5):
     return A
 
 
-def sheet(seeds=(0, 1, 2, 3), mirror=True, gap=8, m=64, depth=5):
+def sheet(seeds=(0, 1, 2, 3), mirror=True, rotations=(0,), gap=8, m=64, depth=5):
     """Several procedural trees on one ground line, side by side with `gap`
-    columns between them, each followed by its mirror image when `mirror`."""
+    columns between them; each followed by its mirror image when `mirror`,
+    and by its rotations (quarter turns, with mirrors) when `rotations`
+    holds more than 0.  A rotated tree floats in the sky, its ground
+    stripped: it is never rooted and never placed on its own, it only
+    lends patches that attach to a standing tree through a matching seam
+    (the certificate and the mass rule hold for any patch)."""
+    g = int(m * 0.86)
     pics = []
     for sd in seeds:
         A = procedural_tree(m, sd, depth)
-        pics.append(A)
-        if mirror:
-            pics.append(A[:, ::-1])
-    g = int(m * 0.86)
+        for k in rotations:
+            if k % 4 == 0:
+                B = A
+            else:
+                treeish = (A == BARK) | (A == LEAF) | (A == DARK)
+                ys, xs = np.nonzero(treeish)
+                crop = np.where(treeish, A, SKY)[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+                crop = np.rot90(crop, k)
+                h, w = crop.shape
+                B = np.full((m, max(m, w)), SKY, np.int32)
+                B[g:] = SOIL
+                B[g:g + 2] = GRASS
+                y0 = max(g - 2 - h, 0)
+                B[y0:y0 + h, :w] = np.where(crop != SKY, crop, B[y0:y0 + h, :w])
+            pics.append(B)
+            if mirror:
+                pics.append(B[:, ::-1])
     col = np.full((m, gap), SKY, np.int32)
     col[g:] = SOIL
     col[g:g + 2] = GRASS
     out = [col]
-    for A in pics:
-        out += [A, col]
+    for B in pics:
+        out += [B, col]
     return np.concatenate(out, 1)
 
 
@@ -140,35 +159,44 @@ def tile_channel(kinds=KINDS, name="tile"):
 
 
 # --------------------------------------------------------------- exemplar
-def parse_tree(kinds, A, ring=1):
-    """(alpha, mass, mask, trunks [(y, x)], n_ground) in the flipped frame:
+def parse_tree(kinds, A, ring=1, min_cells=20):
+    """(alpha, mass, mask, trunks [(y, x)], n_ground, floating [(y, x)]) in the flipped frame:
     the ground is rows [0, n_ground), every trunk on row n_ground.  One
     tree per 4-connected component of tree cells that reaches the ground
     row; its trunk is the bark cell on that row nearest the component's
-    centre; components off the ground (leaf specks) become air."""
+    centre; a component off the ground with at least min_cells cells (a
+    rotated tree) is a floating patch rooted at its thickest bark cell (a
+    mass-3 limb, not a trunk: never placed on its own); smaller ones (leaf
+    specks) become air."""
     A = A[::-1]
     my, mx = A.shape
     treeish = (A == BARK) | (A == LEAF) | (A == DARK)
     bark = A == BARK
     lab, n = ndimage.label(treeish)
     ty = int(np.nonzero(bark.any(1))[0].min())
-    trunks = []
-    for c in range(1, n + 1):
-        comp = lab == c
-        xs = np.flatnonzero(comp[ty] & bark[ty])
-        if len(xs) == 0:
-            continue
-        cx = np.nonzero(comp)[1].mean()
-        trunks.append((ty, int(xs[np.argmin(np.abs(xs - cx))])))
-    keep = np.isin(lab, [lab[t] for t in trunks])
     solid = bark.copy()
     solid[:ty] = True                                            # the ground counts as solid for the thickness
     thick = ndimage.distance_transform_cdt(solid, metric="taxicab")
+    trunks, floating = [], []
+    for c in range(1, n + 1):
+        comp = lab == c
+        xs = np.flatnonzero(comp[ty] & bark[ty])
+        if len(xs):
+            cx = np.nonzero(comp)[1].mean()
+            trunks.append((ty, int(xs[np.argmin(np.abs(xs - cx))])))
+        elif comp.sum() >= min_cells:                            # a floating patch: rooted at its thickest bark
+            ys_, xs_ = np.nonzero(comp & bark)
+            if len(ys_) == 0:
+                continue
+            i = int(np.argmax(thick[ys_, xs_]))
+            floating.append((int(ys_[i]), int(xs_[i])))
+    roots_ = trunks + floating
+    keep = np.isin(lab, [lab[t] for t in roots_])
     mass = np.where(keep & bark, np.clip(thick, 1, 3), np.where(keep, 1, 0)).astype(np.int64)
     seen = np.zeros((my, mx), bool)
     ports = np.zeros((my, mx, 4), bool)
     queue = []
-    for t in trunks:
+    for t in roots_:
         seen[t] = True
         mass[t] = 3
         queue.append(t)
@@ -206,7 +234,7 @@ def parse_tree(kinds, A, ring=1):
         mask = d
     mask[:ty] = False
     alpha[mask & ~keep] = coord.EARTH
-    return alpha, mass, mask, trunks, ty
+    return alpha, mass, mask, trunks, ty, floating
 
 
 # ---------------------------------------------------------------- factors
@@ -225,7 +253,7 @@ def contact_tables():
     return Hh, Hv
 
 
-def factors(kinds=KINDS, tile="tile", dangle=1.0, term_wood=0.0, term_leaf=0.0):
+def factors(kinds=KINDS, tile="tile", dangle=1.0, term_wood=0.0, term_leaf=0.0, grow=0.0):
     """Structure only: free cells air or tree cells, port seams (dangle per
     unmatched port, plus a termination cost by the class of the cell whose
     port faces nothing: term_wood for a bark stub, term_leaf for a leaf
@@ -236,6 +264,7 @@ def factors(kinds=KINDS, tile="tile", dangle=1.0, term_wood=0.0, term_leaf=0.0):
     term = np.zeros((3, 3))
     term[1, 0] = term[0, 1] = term_leaf
     term[2, 0] = term[0, 2] = term_wood
+    free_only = free_only + np.array([0.0, 0.0, 0.0, -grow, -grow])      # grow: energy taken off every tree cell
     return [
         Factor.unary((tile, "base"), free_only, name="free_only"),
         Factor.pair((tile, "tE"), (tile, "tW"), (0, 1), term, pad_b=0, pad_a=0, name="term_h"),
@@ -257,12 +286,14 @@ class TreeCopy:
     mu) honours the refinement softly."""
 
     def __init__(self, W, trunk_xs, A=None, seed=0, ring=1, nu=6.0, lam=1.0, dangle=1.0, K=1, Kt=1, Dmax=4096,
-                 delta=0.05, lam8=INF, f8=0.1, cut=2.0, cut_leaf=None, align=True, term_wood=4.0, term_leaf=0.5):
+                 delta=0.05, lam8=INF, f8=0.1, cut=0.1, cut_leaf=0.02, align=True, term_wood=4.0, term_leaf=0.5,
+                 grow=0.0, keep_ref=False, win_bonus=2.0):
+        self.keep_ref = keep_ref
         self.kinds = KINDS
         self.A = procedural_tree() if A is None else A
-        self.alpha, self.mass, self.mask, self.trunks, self.n_ground = parse_tree(self.kinds, self.A, ring)
+        self.alpha, self.mass, self.mask, self.trunks, self.n_ground, self.floating = parse_tree(self.kinds, self.A, ring)
         self.trunk = self.trunks[0]
-        self.depth = coord.exemplar_depth(self.kinds, self.alpha)
+        self.depth = coord.exemplar_depth(self.kinds, self.alpha, self.floating)
         self.H, self.W = self.A.shape[0], W
         assert self.H % CH == 0 and W % CH == 0
         self.trunk_xs = list(trunk_xs)
@@ -271,15 +302,15 @@ class TreeCopy:
         self.cert = roots.cert_channel(Dmax)
         self.surf = ground.surf_channel()
         self.model = Model(self.H, W, [self.tile, self.u, self.cert, self.surf],
-                           factors(self.kinds, dangle=dangle, term_wood=term_wood, term_leaf=term_leaf),
+                           factors(self.kinds, dangle=dangle, term_wood=term_wood, term_leaf=term_leaf, grow=grow),
                            [roots.certificate(Dmax=Dmax, delta=delta, tree=True)])
         self.coupling, self.coup = coord.coupling(self.kinds, self.tile, self.u, nu=nu)
         self.ck = coord.CoordKernel(self.u, self.tile, self.alpha, lam=lam, w=0.0, nu=nu, K=K, Kt=Kt)
         # level 8
-        self.coarse = coord.Coarse(self.kinds, self.alpha, CH)
+        self.coarse = coord.Coarse(self.kinds, self.alpha, CH, roots=self.floating)
         self.u8, self.d8 = self.coarse.channel(), self.coarse.cert_channel()
         no_trunk = np.where(self.coarse.has_trunk == 1, INF, 0.0)       # trunk windows only where fixed
-        f8s = self.coarse.factors(lam8=lam8, f=f8, cut=cut, cut_leaf=cut_leaf) + [Factor.unary(("u8", "self"), no_trunk, name="no_trunk")]
+        f8s = self.coarse.factors(lam8=lam8, f=f8, cut=cut, cut_leaf=cut_leaf, win_bonus=win_bonus) + [Factor.unary(("u8", "self"), no_trunk, name="no_trunk")]
         chans8 = [self.u8, self.surf, self.d8]
         if align:
             # a window keeps its height above the ground: exemplar row ey = 8 x the world chunk row.  Soft
@@ -367,7 +398,7 @@ class TreeCopy:
         into u, tiles and d.  Returns (windows placed, pruned cells, no-candidate count)."""
         bad = self.m8.sweep("u8", S8, seed=self.seed if seed is None else seed)
         self.uref = self.coarse.refine(self.u8, self.u, self.tile, self.cert, self.kinds, self.alpha, self.depth,
-                                       earth_kind="air")
+                                       earth_kind="air", keep_ref=self.keep_ref)
         G, k = self.n_ground, self.kinds
         self.tile.grid[:G] = k.index("soil")                           # the ground is the ground's
         self.tile.grid[G - 1] = k.index("grass")
