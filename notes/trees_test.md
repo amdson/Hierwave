@@ -214,7 +214,9 @@ trunk as a comb and dissolves at the thin tips as fast as it grows); the
 coarse seeding places 24 windows per trunk and the refinement writes a
 complete copy, leaves on tips 1.000, which the joint sweeps then vary
 (47 coordinate mismatches, 41 dangling ports, 0.999 of leaves on tips).
-images/tree_exemplar_{exemplar,coarse,seq}.png, images/tree_exemplar.json.
+images/tree_exemplar_{exemplar,coarse,seq}.png, images/tree_exemplar.json
+(solid kind colours; `render_ports` draws the root set's port sprite, which
+makes one-cell branches look like wire and a comb of the trunk).
 
 Two bugs in `coord.Coarse` found on the way, both fixed and both loosening
 the roots case correctly:

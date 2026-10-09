@@ -333,6 +333,13 @@ class TreeCopy:
                     windows=int((self.u8.grid > 0).sum()), **coord.metrics(u, tile, self.alpha))
 
     def render(self, px=4):
+        """The kinds' colours per cell, the picture's way up."""
+        img = np.array(self.kinds.colours, np.uint8)[self.tile.grid][::-1]
+        return np.repeat(np.repeat(img, px, 0), px, 1)
+
+    def render_ports(self, px=4):
+        """The root set's port sprite (bars toward each port, width by mass):
+        shows the join structure, not the picture."""
         return roots.render(self.kinds, self.tile, px, earth=(169, 212, 240))[::-1]
 
     def render_exemplar(self, px=4):
