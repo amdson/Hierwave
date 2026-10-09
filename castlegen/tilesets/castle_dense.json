@@ -1,0 +1,83 @@
+{
+  "name": "castle_dense",
+  "sockets": ["wall", {"name": "door", "draw": "gap"}, "court", "hall"],
+  "connects": [["door", "door"], ["court", "court"], ["hall", "hall"]],
+  "dangling": {"door": 2.0, "court": 3.0, "hall": 3.0},
+
+  "wall": {"unary": 0.0, "render": {"color": "#3b3632"}},
+  "gate": {"socket": "door", "render": {"color": "#c0392b"}},
+
+  "kinds": [
+    {"name": "hall_straight", "tags": ["hallway"],
+     "sides": {"N": "door", "E": "wall", "S": "door", "W": "wall"},
+     "rotations": [0, 90], "glyphs": ["│", "─"], "render": {"color": "#d8c7a4"}},
+    {"name": "hall_corner", "tags": ["hallway"], "unary": 0.3,
+     "sides": {"N": "door", "E": "door", "S": "wall", "W": "wall"},
+     "rotations": "all", "glyphs": ["└", "┌", "┐", "┘"], "render": {"color": "#d8c7a4"}},
+    {"name": "hall_tee", "tags": ["hallway"], "unary": 0.6,
+     "sides": {"N": "door", "E": "door", "S": "door", "W": "wall"},
+     "rotations": "all", "glyphs": ["├", "┬", "┤", "┴"], "render": {"color": "#d8c7a4"}},
+    {"name": "hall_cross", "tags": ["hallway"], "unary": 1.2,
+     "sides": {"N": "door", "E": "door", "S": "door", "W": "door"},
+     "glyph": "┼", "render": {"color": "#d8c7a4"}},
+    {"name": "hall_plaza", "tags": ["hallway"], "unary": 0.0,
+     "sides": {"N": "door", "E": "door", "S": "door", "W": "door"},
+     "glyph": "#", "render": {"color": "#e8dcc0"}},
+
+    {"name": "chamber", "tags": ["chamber"],
+     "sides": {"N": "door", "E": "wall", "S": "wall", "W": "wall"},
+     "rotations": "all", "glyphs": ["▲", "▶", "▼", "◀"],
+     "variants": {"use": ["bedroom", "study", {"name": "store", "weight": 0.5}]}},
+
+    {"name": "great_hall", "tags": ["hall_family"], "unary": 1.0,
+     "sides": {"N": "hall", "E": "hall", "S": "hall", "W": "hall"},
+     "glyph": "H", "render": {"color": "#b5835a"}},
+    {"name": "great_hall_wall", "tags": ["hall_family"], "unary": 0.5,
+     "sides": {"N": "wall", "E": "hall", "S": "hall", "W": "hall"},
+     "rotations": "all", "glyphs": ["━", "┃", "━", "┃"], "render": {"color": "#b5835a"}},
+    {"name": "great_hall_corner", "tags": ["hall_family"], "unary": 0.0,
+     "sides": {"N": "wall", "E": "hall", "S": "hall", "W": "wall"},
+     "rotations": "all", "glyphs": ["┏", "┓", "┛", "┗"], "render": {"color": "#b5835a"}},
+    {"name": "great_hall_entrance", "tags": ["hall_family"], "unary": 2.0,
+     "sides": {"N": "door", "E": "hall", "S": "hall", "W": "hall"},
+     "rotations": "all", "glyphs": ["e", "e", "e", "e"], "render": {"color": "#b5835a"}},
+
+    {"name": "courtyard", "tags": ["yard"], "unary": 1.0,
+     "sides": {"N": "court", "E": "court", "S": "court", "W": "court"},
+     "glyph": ".", "render": {"color": "#6db36b"}},
+    {"name": "courtyard_wall", "tags": ["yard"], "unary": 0.5,
+     "sides": {"N": "wall", "E": "court", "S": "court", "W": "court"},
+     "rotations": "all", "glyphs": ["═", "║", "═", "║"], "render": {"color": "#6db36b"}},
+    {"name": "courtyard_corner", "tags": ["yard"], "unary": 0.0,
+     "sides": {"N": "wall", "E": "court", "S": "court", "W": "wall"},
+     "rotations": "all", "glyphs": ["╔", "╗", "╝", "╚"], "render": {"color": "#6db36b"}},
+    {"name": "courtyard_gateway", "tags": ["yard"], "unary": 2.0,
+     "sides": {"N": "door", "E": "court", "S": "court", "W": "court"},
+     "rotations": "all", "glyphs": ["c", "c", "c", "c"], "render": {"color": "#6db36b"}},
+
+    {"name": "tree", "tags": ["outdoor"], "solid": true, "unary": 1.0,
+     "sides": {"N": "court", "E": "court", "S": "court", "W": "court"},
+     "glyph": "♣", "render": {"image": "img/tree.png"}}
+  ],
+
+  "rules": [
+    {"a": "chamber",     "b": "chamber",     "when": "door",    "energy":  4.0},
+    {"a": "chamber",     "b": "hallway",     "when": "door",    "energy": -2.0},
+    {"a": "chamber",     "b": "yard",        "when": "door",    "energy":  2.0},
+    {"a": "hallway",     "b": "hallway",     "when": "door",    "energy": -3.3},
+    {"a": "hallway",     "b": "hallway",     "when": "contact", "energy":  3.0},
+    {"a": "hall_family", "b": "hall_family", "when": "door",    "energy": -2.4},
+    {"a": "hall_family", "b": "hall_family", "when": "contact", "energy":  1.0},
+    {"a": "yard",        "b": "yard",        "when": "door",    "energy": -2.4},
+    {"a": "yard",        "b": "yard",        "when": "contact", "energy":  1.0},
+    {"a": "tree",        "b": "courtyard",   "when": "contact", "energy": -1.3},
+    {"a": "tree",        "b": "tree",        "when": "contact", "energy":  4.0},
+    {"a": "greenhouse",  "b": "greenhouse",  "when": "door",    "energy": -1.5}
+  ],
+
+  "structures": [
+    {"name": "greenhouse", "size": [3, 4], "tags": ["structure"], "unary": 1.8, "seam": 4.5,
+     "doors": [{"piece": [2, 1], "side": "S", "socket": "door"}],
+     "glyph": "g", "render": {"color": "#a8dce8"}}
+  ]
+}

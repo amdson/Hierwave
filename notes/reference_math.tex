@@ -1,0 +1,376 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{dsfont}
+\usepackage{array}
+
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\1}{\mathds{1}}
+\newcommand{\Dom}{\mathcal{D}}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\pstar}{p^{*}}
+\DeclareMathOperator{\softplus}{softplus}
+\DeclareMathOperator{\logmeanexp}{logmeanexp}
+
+\title{Hierwave: the mathematics}
+\author{Companion to \code{notes/reference.md} (October 2026)}
+\date{}
+
+\begin{document}
+\sloppy
+\maketitle
+
+\noindent The models, the sampler, and the training algorithm, as equations.
+Definitions only; the arguments are in \code{channels.tex} and the
+per-experiment notes. Section numbers follow \code{reference.md}.
+
+The setting: a world is an $H \times W$ grid of \emph{tiles} (voxels in 3D) described at
+several \emph{levels} of resolution. A level is a block size $h \in \{1, 2, 4, \dots\}$; level
+$h$ partitions the tile grid into $h \times h$ blocks and holds one value per block. The
+levels together form a Markov random field (MRF) whose factors are small tables; generation
+runs top-down, each level sampled with the coarser ones held fixed.
+
+%-----------------------------------------------------------------------------
+\section{Objects}
+
+\paragraph{Channels and views.} A channel $c$ at block size $h_c$ holds a state
+$z_c : \Lambda_c \to \Dom_c = \{0, \dots, D_c - 1\}$ on the grid
+$\Lambda_c = \{0, \dots, H/h_c - 1\} \times \{0, \dots, W/h_c - 1\}$; $D_c$ is its number of
+values. The tile channel has $h = 1$. A \emph{view} of $c$ is a map
+$\alpha : \Dom_c \to \{0, \dots, V_\alpha - 1\}$ onto a small feature; factors read views,
+never raw values. A \emph{fixed} mask $\phi_c \subseteq \Lambda_c$ marks cells the sampler
+never updates.
+
+\paragraph{Parent cell and block.} For $p \in \Lambda_a$ and a coarser-or-equal channel $b$
+($h_a \le h_b$), the cell of $b$ containing $p$, shifted by an offset $\delta$ in $b$'s cells, is
+\begin{equation}
+  q_b(p, \delta) = \left\lfloor \frac{p\, h_a}{h_b} \right\rfloor + \delta, \qquad \delta \in \Z^2 ;
+\end{equation}
+conversely $\mathrm{block}(q) = \{p \in \Lambda_a : q_b(p, 0) = q\}$ is the set of $a$-cells
+inside the $b$-cell $q$.
+
+\paragraph{Factors.} A factor is anything that assigns each candidate value at a cell a local
+energy. Three kinds exist: tables (this paragraph), the conv potential (Section~\ref{sec:convpot}),
+and the certificate (below), whose energy is computed by a procedure. Tables are the fast path
+(a candidate's energy is a lookup) and are also what training produces. A table factor is a table
+$T$ in energy units (nats), with $+\infty$ for hard rules, indexed by views of one or two
+channels. Writing $a$ for the finer (or only) channel and $b$ for the other, the three kinds are
+\begin{align}
+  \text{pair:}\quad & E^{\mathrm{pair}}_{a\alpha, b\beta, \delta}(z) = \sum_{p \in \Lambda_a}
+    T\big[\alpha(z_a(p)),\ \beta^{\mathrm{pad}}(z_b(q_b(p,\delta)))\big], \\
+  \text{count:}\quad & E^{\mathrm{count}}_{a\alpha, b\beta}(z) = \sum_{q \in \Lambda_b}
+    T\Big[\beta(z_b(q)),\ \textstyle\sum_{p \in \mathrm{block}(q)} \alpha(z_a(p))\Big], \qquad h_a < h_b, \\
+  \text{unary:}\quad & E^{\mathrm{un}}_{a\alpha}(z) = \sum_{p \in \Lambda_a} T\big[\alpha(z_a(p))\big].
+\end{align}
+A pair factor is one offset $\delta$ applied at every cell of $a$, i.e.\ a translation-invariant
+term with a position-free table; a neighbourhood is a set of such factors, one per offset, and
+the largest $|\delta|$ among a channel's factors sets its sampler's radius. With $b = a$ and
+$\delta \ne 0$ it is a same-level neighbour term; with $h_b > h_a$ it is a parent read (the
+parent cell, or a parent cell $\delta$ away). $\beta^{\mathrm{pad}}$ returns the factor's pad value when $q_b(p, \delta)$ is off
+the grid, and the term is dropped when the pad is $-1$. A factor is \emph{homed} on its finer side
+$a$. The sampler of a channel reads only the factors homed on it, plus the reflections of
+same-level pairs (transposed table, negated offset), so during generation a coarse channel never
+sees a finer one (top-down).
+
+\paragraph{Honour factors.} A factor is \emph{honour} when it makes a finer channel agree with
+a view of a coarser one, i.e.\ a pair factor whose table penalises $\alpha(z_a(p)) \ne
+\beta(z_b(q_b(p,0)))$: hard ($+\infty$) for guarantees, soft (a cost $\kappa$ per violated cell)
+otherwise. A coarse value is \emph{honourable} if some finer completion has finite energy.
+
+\paragraph{Certificate.} The factor that enforces connectivity or support. It lives
+on a tile channel with three views, $m = \mathrm{mass}$ ($0$: not part of the structure),
+$\tau = \mathrm{trunk}$ ($1$: a root of the structure), and \emph{join bits}
+$J_d(t, t') \in \{0,1\}$ saying whether tile value $t$ joins value $t'$ across side
+$d \in \{\mathrm{N}, \mathrm{E}, \mathrm{S}, \mathrm{W}\}$; and on a companion distance channel
+$d : \Lambda \to \{0, \dots, D_{\max}, \mathrm{INF}\}$ at the same level, $\mathrm{INF} = D_{\max} + 1$.
+Write $t_p = z(p)$, $q \sim_d p$ for the 4-neighbour of $p$ across side $d$. Cell $p$ is
+\emph{valid} iff
+\begin{equation}
+  \big(m_p = 0 \wedge d_p = \mathrm{INF}\big) \ \vee\
+  \big(\tau_p = 1 \wedge d_p = 0\big) \ \vee\
+  \Big(d_p < \mathrm{INF} \wedge \exists\, q \sim_d p:\ J_d(t_p, t_q) \wedge m_q \ge m_p \wedge d_q < d_p\Big).
+\end{equation}
+A neighbour $q$ satisfying the last clause is a \emph{witness} for $p$; $p$'s \emph{dependants}
+are the neighbours for which $p$ is the only witness. The energy is $+\infty$ on an invalid cell
+and $\gamma\, d_p$ otherwise ($\gamma$ is \code{delta} in the code). With the \code{tree} option,
+exactly one neighbour may witness $p$ (its parent) and every other joined neighbour must be a
+child ($m_q \le m_p$, $d_q > d_p$), so the join graph is a forest.
+
+\paragraph{Painted channels.} A \emph{painter} $\pi_c : \Dom_c^{\Lambda_c} \to \Dom_w^{\Lambda_w}$,
+$h_w < h_c$, writes a finer channel $w$ deterministically from $z_c$; $w$ is fixed everywhere and
+is rewritten whenever $z_c$ changes. Honour factors then read $w$ through position-free pair
+tables; the dependence on where a cell sits inside its block (which tiles of a block are in an
+object's disc, say) lives in $\pi_c$. The \emph{spill} of a painter is the set of $w$-cells
+outside the blocks of a region that the painter writes from values inside it.
+
+% [NOTE:  it made more sense to make it an operation done to the tiles by a communication channel. for instance tiles would expose an energy biasing vector, and higher latents would be able to add to that mask. adopt the bias field as the DSL's communication primitive, treat painted alphabets as its compression, and let the learned potential take the field as input. ]
+
+\paragraph{Promotion.} A hard factor on a view $\alpha$ of a channel $u$ with many values (an
+exemplar coordinate, say) rejects most of $u$'s candidates and can leave no candidate at all;
+promotion moves the hard factor onto a small channel that is updated exactly, and lets $u$ pay
+only a soft cost for disagreeing with it. Add a channel $w$ at the same level with
+$\Dom_w = \mathrm{range}(\alpha)$, move the factors that read $\alpha(z_u)$ to read $w$, and add
+the cell-wise factor
+\begin{equation}
+  E^{\mathrm{cell}}(w_p, u_p) = \mathrm{cost}\big(w_p, \alpha(u_p)\big),
+\end{equation}
+with $\mathrm{cost}$ one of: $\nu\,\1[w \ne \alpha(u)]$ (a soft copy, which tempers the hard
+factors that now read $w$); $-\log \hat p(w \mid u)$ counted from an exemplar; or the induced free
+energy of Section~\ref{sec:identity}. Marginalising $w$ recovers the original model with its hard
+factors softened by exactly $\mathrm{cost}$.
+
+%-----------------------------------------------------------------------------
+\section{The two models}
+\label{sec:identity}
+
+Index the levels $\ell = L, \dots, 1$ from coarsest to finest, block sizes $h_L > \dots > h_1 = 1$.
+Let $z_\ell$ be the channels at level $\ell$, $z_{>\ell}$ the coarser ones, $z_{\ge \ell}$ both,
+and $E_\ell(z_\ell \mid z_{>\ell})$ the sum of the factors homed on level $\ell$ (they read
+level $\ell$ and coarser levels only).
+
+\paragraph{Bidirectional (the ideal).} The undirected joint of every declared factor,
+\begin{equation}
+  \pstar(z) = \frac{1}{Z}\exp\Big(-\sum_\ell E_\ell(z_\ell \mid z_{>\ell})\Big).
+\end{equation}
+It is the specification; it is never sampled in production.
+
+\paragraph{Forward (the chain, what ships).}
+\begin{equation}
+  q(z) = \prod_{\ell = L}^{1} q_\ell(z_\ell \mid z_{>\ell}),
+\end{equation}
+where $q_\ell$ is the law of level $\ell$ after $S_\ell$ sweeps of a kernel that leaves
+$\exp(-(E_\ell + \Phi_\ell))$ invariant (Gibbs for small domains, candidate-set Gibbs for large
+ones; Section~\ref{sec:sampler}) at temperature $T = 1$, started from the \emph{painted
+initialisation} (a consistent refinement of $z_{>\ell}$ written by the painters), with
+$z_{>\ell}$ clamped. $\Phi_\ell(z_\ell \mid z_{>\ell})$ is the \emph{learned potential} of
+level $\ell$. We call $S_\ell$ sweeps of this kernel the \emph{budgeted kernel}.
+
+\paragraph{The identity.} Define the free energy of the levels below $\ell$, recursively from
+the bottom,
+\begin{equation}
+  F_{\ell}(z_{> \ell}) \;=\; -\log \sum_{z_\ell} \exp\!\Big(-E_\ell(z_\ell \mid z_{>\ell}) - F_{\ell-1}(z_{\ge \ell})\Big),
+  \qquad F_{0} \equiv 0 .
+\end{equation}
+Then $\pstar(z_{\ge \ell}) \propto \exp\big(-\sum_{\ell' \ge \ell} E_{\ell'} - F_{\ell-1}(z_{\ge \ell})\big)$,
+and the chain with equilibrated kernels reproduces $\pstar$ exactly iff
+\begin{equation}
+  \Phi_\ell = F_{\ell-1} \quad \text{for every level } \ell .
+\end{equation}
+The learned potential of a level is the free energy the levels below induce on it. With the
+budgeted kernel in place of the exact sum in the definition of $F$, the identity holds for the
+chain \emph{as it runs} (the free energy as that kernel realises it at that budget).
+
+\paragraph{Cluster expansion.} $F_{\ell-1}$ is approximated by local terms over the cells of
+level $\ell$,
+\begin{equation}
+  F_{\ell-1}(z_\ell) \approx \sum_{p} f_1(z_p) + \sum_{\langle p, q\rangle} f_2(z_p, z_q) + \cdots ,
+\end{equation}
+exact in the limit where the correlation length of the finer levels is below the block size
+(off-critical content); the residual of the fit (Section~\ref{sec:train}) measures the omitted
+orders.
+
+\paragraph{Support and finite part.} The support of $\Phi_\ell$ ($+\infty$ on coarse values
+that are not honourable) comes from honourability checks, not from the fit; only the finite part
+is learned.
+
+%-----------------------------------------------------------------------------
+\section{The sampler}
+\label{sec:sampler}
+
+A sweep of a channel at level $\ell$ visits every non-fixed site $p$ once. At $p$, with
+everything else fixed, the candidate energy $e_p(t)$ is the sum of the factors homed on the
+channel that involve $p$, evaluated with $z_p = t$: the designed terms of $E_\ell$ (reading
+level $\ell$ and coarser) and the tables of $\Phi_\ell$, which is a same-level potential and
+enters as ordinary unary and pair rows. Factors homed on finer levels are never read; $\Phi_\ell$
+stands in for them. The site draws its exact conditional,
+\begin{equation}
+  t \sim \frac{\exp(-e_p(t)/T)}{\sum_{t'} \exp(-e_p(t')/T)}
+  \quad\text{as}\quad
+  \arg\max_{t:\, e_p(t) < \infty} \big[-e_p(t)/T + G_t\big],\ G_t \sim \mathrm{Gumbel}(0,1);
+\end{equation}
+a site with no finite candidate keeps its value. Sites are visited colour by colour so that sites
+of one colour do not interact: $(x+y) \bmod 2$ when every factor has radius 1, $(x + 2y) \bmod 5$
+at radius 2. With a certificate the draw is joint in $(t, d)$: for each $t$ the valid $d$ form an
+interval $[a_t, b_t)$ ($a_t$ one above the smallest witness $d$, $b_t$ the smallest $d$ among
+$p$'s dependants, which must stay valid), so
+\begin{equation}
+  w_t = \exp(-e_p(t)/T) \sum_{d = a_t}^{b_t - 1} e^{-\gamma d / T}
+      = \exp(-e_p(t)/T)\, e^{-\gamma a_t/T}\, \frac{1 - e^{-\gamma (b_t - a_t)/T}}{1 - e^{-\gamma/T}},
+\end{equation}
+$t$ by Gumbel-max over $\log w_t$, then $d$ from the truncated geometric law on $[a_t, b_t)$.
+Dependants read their other neighbours, hence radius 2.
+
+\paragraph{Large domains.} Enumerating $\Dom_c$ at every site is only for small $D_c$. A channel
+with a large domain (an exemplar coordinate, $D_c$ = the exemplar's cells) draws over a
+\emph{candidate set} $C_p \subset \Dom_c$ instead: the current value, the coherent continuation
+$z_q + (p - q)$ of each neighbour $q$, $K$ random values, and $K_t$ random values consistent
+with the tile under $p$. The draw is the same Gumbel-max restricted to $C_p$. Because $C_p$
+contains the current value and is chosen without reference to $z_p$, the step leaves the
+level's conditional invariant, which is all the chain needs. Cost per site: $|C_p|$ energy
+evaluations, each over the candidate's footprint; $\Phi_\ell$ is then evaluated on the fly on that
+footprint rather than read from tables. Any such invariant kernel may stand in for the Gibbs
+sweep in $q_\ell$ and in the identity of Section~\ref{sec:identity}.
+
+%-----------------------------------------------------------------------------
+\section{The training (combining) algorithm}
+\label{sec:train}
+
+Input: a coarse channel $c$ at level $\ell$; the levels below it, already corrected (carrying
+$E + \Phi$); its painter $\pi$; and a \emph{reference value} $r \in \Dom_c$, the background
+value (empty, absent) against which every other value is measured. Output: $\Phi_\ell$ as tables
+for the forward kernel. Nothing samples $c$ itself.
+
+\paragraph{Windows.} A window $W \subset \Lambda_c$ (e.g.\ $3 \times 3$ cells) with halo
+$\partial W$ (the one-cell ring around it). Draw $z_W$ and $z_{\partial W}$ from a proposal
+(uniform at first, later windows cut from forward samples); set $c$ to $r$ outside
+$W \cup \partial W$. Let $z^{r}_W$ be the configuration with $r$ on all of $W$ and the same
+halo. The fine region $R(W)$ is the blocks of $W \cup \partial W$ plus the painters' spill.
+
+\paragraph{Free energy per window.} With $E_{\mathrm{fine}}$ the energy of the levels below
+$c$ restricted to $R(W)$ (the coarse values clamped),
+\begin{equation}
+  F(z_W \mid z_{\partial W}) = -\log \sum_{z_{R(W)}} \exp\big(-E_{\mathrm{fine}}(z_{R(W)} \mid z_W, z_{\partial W})\big),
+  \qquad
+  y(W) = F(z_W \mid z_{\partial W}) - F(z^{r}_W \mid z_{\partial W}).
+\end{equation}
+$F$ is computed exactly where the toy allows it (transfer matrix; per-cell products when the fine
+cells are independent given the paint), otherwise by annealed importance sampling (AIS) with the
+forward model's own fine kernel. For AIS split $E_{\mathrm{fine}} = E_{\mathrm{un}} +
+E_{\mathrm{rest}}$ (the unary factors of the fine channel vs.\ everything else), replace
+$+\infty$ by a finite $\Lambda$ ($30$) in $E_{\mathrm{rest}}$, and take inverse temperatures
+$\beta_0 = 10^{-3} < \beta_1 < \dots < \beta_K = 1$ (linear). With $E_{\mathrm{un}, s}(t)$ the
+unary energy of value $t$ at fine site $s$,
+\begin{align}
+  \log Z_0 &= \sum_{s \in R(W)} \log \sum_{t} e^{-E_{\mathrm{un}, s}(t)}, \\
+  x_0 &\sim p_0 \propto e^{-E_{\mathrm{un}}}, \qquad
+  x_k \sim \text{one Gibbs sweep of } p_{\beta_k} \propto e^{-E_{\mathrm{un}} - \beta_k E_{\mathrm{rest}}} \text{ from } x_{k-1}, \\
+  \log w &= -\sum_{k=0}^{K-1} (\beta_{k+1} - \beta_k)\, E_{\mathrm{rest}}(x_k), \\
+  \widehat{\log Z} &= \log Z_0 + \logmeanexp_{m = 1..M}\, \log w^{(m)}, \qquad \hat F = -\widehat{\log Z},
+\end{align}
+over $M$ independent chains. $\hat F$ is biased upward at small $K$; $K = 256$, $M = 4$--$8$ was
+adequate on the toys.
+
+\paragraph{Paint potential.} The parametrisation of $\Phi_\ell$ that generalises to unseen
+value pairs: a local energy over the painted image rather than over $c$'s values. Let
+$\pi = \pi(z_c)$ be the painted channel at fine resolution with values $\{0, \dots, V-1\}$,
+indexed by fine cells $t$, and $\mathcal{O} = \{(0,1), (1,0), (1,1), (1,-1)\}$ the four
+independent offsets of the 8-neighbourhood. Then
+\begin{equation}
+  F_\theta(\pi) = \sum_{t} u\big(\pi_t\big) + \sum_{\delta \in \mathcal{O}} \sum_{t} g_\delta\big(\pi_t, \pi_{t+\delta}\big),
+  \qquad \theta = (u, \{g_\delta\}),
+\end{equation}
+off-grid partners dropped. $F_\theta = N(\pi) \cdot \theta$ is linear in $\theta$ through the
+count features $N(\pi) \in \R^{V + |\mathcal{O}| V^2}$ (how often each value, and each offset
+pair of values, occurs). Regression with the halo painted:
+\begin{equation}
+  x(W) = N\big(\pi(z_W, z_{\partial W})\big) - N\big(\pi(z^{r}_W, z_{\partial W})\big), \qquad
+  \hat\theta = \arg\min_\theta \sum_W \big(x(W)\!\cdot\!\theta - y(W)\big)^2 + \lambda \|\theta\|^2 .
+\end{equation}
+The halo's own terms cancel in $x$ and $y$; the window--halo cross terms are features. The
+relative residual $\sqrt{\sum_W (x\cdot\hat\theta - y)^2 / \sum_W y^2}$ measures what is not local in
+the painted map at this order, down to the AIS noise floor.
+
+\paragraph{Materialisation.} Tables over $\Dom_c$ for the forward kernel. Write $\pi(v)$ for
+the paint of a configuration with $v$ at one cell and $r$ everywhere else, and
+$\pi(v \text{ at } p, v' \text{ at } p + d)$ likewise for a pair. Then
+\begin{align}
+  u_c(v) &= F_{\hat\theta}\big(\pi(v)\big) - F_{\hat\theta}\big(\pi(r)\big), \\
+  g_{c,d}(v, v') &= F_{\hat\theta}\big(\pi(v \text{ at } p,\ v' \text{ at } p + d)\big) - u_c(v) - u_c(v') - F_{\hat\theta}\big(\pi(r)\big),
+\end{align}
+for the coarse adjacencies $d$ (east, south, the two diagonals). Exact for a linear $F_\theta$.
+For large $D_c$, skip the tables and evaluate $F_{\hat\theta}$ on the candidate's painted
+footprint at sampling time. Upward recursion: for the next coarser channel, $c$ with
+$E_c + \Phi_c$ is the fine level, and the AIS base $p_0$ is built from $c$'s unaries (designed
+and learned $u_c$).
+
+\paragraph{Gauge.} Only $y$ is observed, so $u$ and $\{g_\delta\}$ are identified up to the
+transformations that leave every window sum invariant (e.g.\ moving a constant from $u$ into
+$g_\delta$). The materialised coarse tables are invariant and are what is used. When comparing
+coarse tables between methods, fix the reference gauge ($g_c(r, \cdot) = g_c(\cdot, r) = 0$) or
+double-centre (subtract row and column means).
+
+%-----------------------------------------------------------------------------
+\section{The conv potential (coarse-level pair potentials)}
+\label{sec:convpot}
+
+A parametric factor over one channel, kept for coarse levels. Each value has a feature vector
+$e : \Dom \to \R^k$, the channel's \emph{feature set}, fixed before fitting: the rows of a free
+matrix $M \in \R^{D \times k}$ (one-hot, or learned like token embeddings), or derived from what
+the value asks of the finer level (the \emph{stamp}: paint $v$ alone in its block's frame and take
+the indicator over footprint cells and paint values). Offsets $d \in \{-1,0,1\}^2$ index the
+$3 \times 3$ neighbourhood. Then
+\begin{equation}
+  E(z) = \sum_p \Big[\, a \cdot e(z_p) + \sum_{d \ne 0} e(z_p)^{\!\top} A_d\, e(z_{p+d})
+       + v \cdot \softplus\!\Big(\sum_{d} W_d\, e(z_{p+d}) + b\Big)\Big],
+\end{equation}
+with $a \in \R^k$, $A_d \in \R^{k\times k}$, $W_d \in \R^{m \times k}$, $b, v \in \R^m$; off-grid
+neighbours use $e(\mathrm{pad})$ or drop out. The softplus term with $m$ hidden units (the
+\emph{plaquette head}) adds 3- and 4-body interactions. With one-hot $M$ and $m = 0$ this is the
+8-offset pair-table model and the fit (same regression as above) is closed-form ridge; for $m > 0$
+it is fitted by Adam. With stamp features and $A_d$ tied to the geometry (entry $(s, s')$ of $A_d$ is
+$g_\delta$ for cell pairs within the stencil offsets $\mathcal{O}$, zero otherwise) the free
+parameters are the stencil $(u, \{g_\delta\})$ and the factor is the paint potential of
+Section~\ref{sec:train} written over coarse values; its materialised tables are exact.
+Candidate cost in the kernel: $9k$ operations (bilinear) $+\, 9km$ (head, updated incrementally),
+or table lookups when materialised. On the toys the head added nothing measurable; the bilinear
+form with one-hot or learned features reached the estimator's noise floor at the top level but
+did not generalise to held-out value pairs at the mid level; stamp features did.
+
+%-----------------------------------------------------------------------------
+\section{Self-play moment matching (retained as a diagnostic)}
+
+The earlier trainer. The learned tables are exponential-family parameters $\theta_k$, one per
+table entry, with sufficient statistics $N_k(z)$ (how often entry $k$ occurs in $z$). For a
+forward sample $z \sim q$ and a one-site kernel that leaves $\pstar$ invariant (the full
+$\pstar$ conditional at a site, including factors homed below it),
+\begin{equation}
+  \Delta_k(z) = \sum_{p} \sum_{t} \pstar(z_p = t \mid z_{-p})\,\big[N_k(z \text{ with } z_p = t) - N_k(z)\big],
+  \qquad
+  \theta_k \leftarrow \theta_k - \eta\,\mathbb{E}_{q}[\Delta_k] ,
+\end{equation}
+the Rao-Blackwellised expected change of the statistics under one step of that kernel.
+Contrastive divergence (CD-$K$) replaces the bracket by $N_k(z_K) - N_k(z) + \Delta_k(z_K)$
+after $K$ sweeps of the $\pstar$ kernel. Fixed point: $q$ invariant under the kernel on the
+features. Under hard honour the $\pstar$ conditional of a coarse site is a point mass (its
+children pin it), so $\Delta \equiv 0$ and nothing is learned; this is why the free-energy route
+replaced it.
+
+%-----------------------------------------------------------------------------
+\section{The toys' exact quantities}
+
+\paragraph{Circles.} Tiles are $\mathrm{air}$ or $\mathrm{dirt}$, with a field $\mu$ (unary cost
+$\mu$ per air tile). The level above (\emph{objects}, blocks of 8) holds either \emph{absent} or
+a disc at one of 16 offsets inside the block; a present object demands dirt on its 13-cell disc
+and air on the surrounding ring, at a soft-honour cost $\kappa$ per violated tile. The painter
+writes each tile's \emph{demand} $\pi_t \in \{\mathrm{free}, \mathrm{dirt}, \mathrm{air}, \mathrm{conflict}\}$
+(conflict: in one object's disc and another's ring). Given the objects, tiles are independent,
+with per-tile partition functions
+\begin{equation}
+  Z_{\mathrm{free}} = 1 + e^{-\mu},\quad
+  Z_{\mathrm{dirt}} = 1 + e^{-\mu-\kappa},\quad
+  Z_{\mathrm{air}, n} = e^{-\mu} + e^{-n\kappa},\quad
+  Z_{\mathrm{conflict}} = e^{-\kappa} + e^{-\mu-\kappa},
+\end{equation}
+where $n$ is the number of rings covering an air-demand tile. So $F(\text{objects}) = -\sum_t
+\log Z_{\pi_t}$; a conflict tile costs
+$-\log Z_{\mathrm{conflict}} + \log Z_{\mathrm{dirt}} + \log Z_{\mathrm{air},1} - \log Z_{\mathrm{free}}$
+and a ring tile shared by two objects gains
+$-\log Z_{\mathrm{air},2} + 2 \log Z_{\mathrm{air},1} - \log Z_{\mathrm{free}}$,
+relative to the objects placed separately. The induced potential on the object level is exactly
+a unary paint potential ($g_\delta \equiv 0$). An isolated object costs
+$F_{\mathrm{obj}} = F(\text{one object}) - F(\text{none})$; the designed \emph{presence bonus}
+(unary $-b$ on every present value) with $b = F_{\mathrm{obj}} - \log 16$ makes an isolated
+block present or absent with equal probability.
+
+\paragraph{Potts.} Tiles carry $q$ colours with cyclic distance $\rho(c, c') = \min(|c - c'|,
+q - |c - c'|)$ and a neighbour coupling $J\,\rho$; the level above (\emph{mid}, blocks of $B$)
+holds a block colour $m$ with honour cost $\kappa\,\1[c \ne m]$ per tile; the top level holds a
+palette (a pair of adjacent colours) with honour cost $\lambda$ per mid cell outside it. At
+$\kappa \to \infty$ the induced coupling between adjacent blocks is $g(m, m') = B\,J\,\rho(m, m')$
+per shared edge of length $B$; the mid level is then a $q$-state clock model with coupling
+$BJ$, ordered for $J \gtrsim 0.2$ at $B = 4$, $q = 4$. Block free energies are exact by a column
+transfer matrix over $q^{B}$ states.
+
+\end{document}

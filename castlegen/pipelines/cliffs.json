@@ -1,0 +1,8 @@
+{
+  "name": "cliffs", "tileset": "cliffs", "exemplar": "cliffs",
+  "size": 128, "seed": 0,
+  "stages": [
+    {"stage": "synthesize", "kappa": 4.0, "r": [1, 1, 0, 0, 0, 0, 0]},
+    {"stage": "repair", "rounds": 20, "T": 0.4, "tau": 1.9}
+  ]
+}

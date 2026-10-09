@@ -1,0 +1,1462 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{dsfont}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\1}{\mathds{1}}
+\newcommand{\Dom}{\mathcal{D}}
+\newcommand{\Chan}{\mathcal{C}}
+\newcommand{\Cand}{\mathcal{Q}}
+\newcommand{\refine}{\mathcal{R}}
+
+\title{Channels: one interface for latents and tiles}
+\author{Hierwave notes (working document)}
+\date{}
+
+\begin{document}
+\sloppy
+\maketitle
+
+\noindent Purpose: fix a notation in which every variable the sampler touches
+(exemplar coordinates, promises, object codes, macro rooms, certificate fields,
+tiles) is an instance of one thing, a \emph{channel}, so that adding a channel
+adds tables and declared couplings and nothing else. Companion to
+\texttt{coarse\_to\_fine.tex} (target, generator, promise machinery), which this
+document does not repeat; \texttt{dsl.md} \S4--5 and \texttt{macro\_objects.md}
+are the prose sources.
+
+Sections~\ref{sec:notation}--\ref{sec:existing} state what exists in the
+notation. Section~\ref{sec:open} lists what is not yet settled; it is the agenda.
+
+%-----------------------------------------------------------------------------
+\section{Notation}
+\label{sec:notation}
+
+\paragraph{Lattices.} Levels are cell sides $h \in \{h_{\text{top}}, \dots, 2, 1\}$
+in tile units. $\Lambda_h = (h\Z)^2$ is the level-$h$ lattice; a \emph{cell}
+$p \in \Lambda_h$ covers the $h \times h$ tiles $[p, p + h)^2$. $\mathrm{par}(p)
+\in \Lambda_{2h}$ is the parent of $p$, $\mathrm{ch}(p) \subset \Lambda_{h/2}$ its
+four children, $N_r(p) \subset \Lambda_h$ the same-level cells within Chebyshev
+distance $r$ (in cells). A chunked world is a finite window of each $\Lambda_h$
+with a halo; nothing below depends on the window.
+
+\paragraph{Channels.} A channel $c \in \Chan$ lives at one level $h_c$ and has a
+finite domain $\Dom_c$. Its state is a field $z_c : \Lambda_{h_c} \to \Dom_c$.
+The channels at level $h$ are $\Chan_h$, and $z_h = (z_c)_{c \in \Chan_h}$ is the
+level's state; $z_h(p) \in \prod_{c \in \Chan_h} \Dom_c$ is one cell's state. Tiles
+are the channel $t$ with $h_t = 1$ and $\Dom_t = \mathcal T$. A channel is
+\emph{small} if $|\Dom_c|$ is enumerable per update (promises, codes, certificate
+fields; tens to a few thousand) and \emph{large} otherwise (exemplar coordinates,
+$m^2$; macro rooms, $K \cdot \mathrm{BS}^2$).
+
+\paragraph{Abstractions.} A \emph{derived} channel has an abstraction
+\[
+  \alpha_c : \mathcal T^{\,h_c \times h_c} \to \Dom_c,
+  \qquad z_c(p) = \alpha_c\big(x|_{p}\big)\ \text{in the target},
+\]
+a deterministic summary of the tiles under the cell. It is \emph{compositional}
+if there is $m_c$ with $\alpha_c(x|_p) = m_c\big((\alpha_c(x|_q))_{q \in \mathrm{ch}(p)},
+\text{seams}\big)$, which gives an exact parent--child relation for free. A
+\emph{free} channel has no $\alpha$ (exemplar coordinates: a statement about the
+tiles, compared softly, not a function of them).
+
+\paragraph{Factors.} Every term of the energy is one of three kinds, each either
+soft (a table $E \in \R \cup \{+\infty\}$) or hard (an indicator; written as
+$E \in \{0, +\infty\}$):
+\begin{center}
+\small
+\begin{tabular}{@{}llll@{}}
+\toprule
+kind & arguments & scope & examples \\
+\midrule
+neighbour $E^{\mathrm{nb}}_{c,c'}$ & $z_c(p),\, z_{c'}(q)$, $q \in N_{r}(p)$ & $2r+1$ cells & $E_c$, pair tables, compat, overlap \\
+cell $E^{\mathrm{cell}}_{c,c'}$ & $z_c(p),\, z_{c'}(p)$ & one cell & $\mathrm{cost}(u,v)$, $-\log z$, $t = \mathrm{tmpl}[o]$, $V_p$ \\
+parent $E^{\mathrm{par}}_{c,c'}$ & $z_c(p),\, z_{c'}(\mathrm{par}\,p)$ & two levels & $E_{\mathrm{par}}$, refinement, $\nu$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+Hard neighbour factors of radius $r > 1$ exist (a room's footprint reaches
+$\mathrm{RAD} = 3$ blocks); so far every soft neighbour factor has $r \le 2$.
+
+%-----------------------------------------------------------------------------
+\section{Target and generator in channel terms}
+
+As in \texttt{coarse\_to\_fine.tex}: the \emph{target} is undirected on tiles,
+$p_G(x) \propto e^{-E_p(x)/T}\,\1[G(x)]$, and derived channels are its
+push-forward through $\alpha$. The \emph{generator} is a chain graph whose chain
+components are the levels, directed coarse to fine:
+\begin{gather}
+  g(z) = g_{\text{top}}(z_{h_{\text{top}}})\prod_{h < h_{\text{top}}} g_h(z_h \mid z_{2h}), \notag \\
+  g_h(z_h \mid z_{2h}) = \frac{1}{Z_h(z_{2h})}
+  \exp\!\Big(-\tfrac{1}{T}\big[E^{\mathrm{par}}_h(z_h, z_{2h}) + E^{\mathrm{nb}}_h(z_h) + E^{\mathrm{cell}}_h(z_h)\big]\Big),
+  \label{eq:level}
+\end{gather}
+with the tile level $h = 1$ included as the last component. Within a level all
+factors are undirected over the cells and channels of that level; between levels
+every factor is directed downward. Local normalisation is what buys locality,
+fittable tables and ancestral sampling, at the price that nothing below ever
+pushes back on a level above (the \texttt{coarse\_to\_fine} $\mathrm{TV}$ bound).
+Everything in this document is about the \emph{within-level} and
+\emph{parent} factors of one level and how they are sampled.
+
+%-----------------------------------------------------------------------------
+\section{The channel interface}
+\label{sec:interface}
+
+What a channel must expose for the sampler to treat it generically. Items marked
+$\dagger$ are present in the code for at least one channel; the rest are
+proposals. Section~\ref{sec:views} reduces this list to views and factors.
+
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+member & meaning & code today \\
+\midrule
+$h_c$, $\Dom_c$ $\dagger$ & level and domain & every channel \\
+$\alpha_c$, $m_c$ $\dagger$ & abstraction and merge (derived channels) & \texttt{leaf}, \texttt{merge} (generic.py) \\
+$\refine_c(z_c(\mathrm{par}\,p) \mid \text{halo})$ $\dagger$ & child values a parent allows (hard) & \texttt{refine}, \texttt{compat} \\
+$E^{\mathrm{nb}}, E^{\mathrm{cell}}, E^{\mathrm{par}}$ $\dagger$ & factor tables, by kind; hard ones as masks & scattered \\
+$\Cand_c(p \mid z_{-p})$ $\dagger$ & candidates for a large domain, from neighbours & \texttt{\_mh\_S}, macroobj A \\
+$\iota_d(z_c)$ & the interface a value presents across side $d$ & ports, seam projections \\
+$\mathrm{cost}_c$ & work per update (for a compile-time report) & -- \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{The cell update.} Fix a cell $p$ at level $h$ and a block of channels
+$B \subseteq \Chan_h$ updated jointly. The conditional of $z_B(p)$ given everything
+else is
+\begin{align}
+  \pi_p(z_B) \;\propto\; \exp\!\Big(-\tfrac1T \Big[
+    &\sum_{c \in B} \Big( E^{\mathrm{par}}_c\big(z_c, z(\mathrm{par}\,p)\big)
+    + \sum_{c'}\sum_{q \in N_r(p)} E^{\mathrm{nb}}_{c,c'}\big(z_c, z_{c'}(q)\big)
+    + \sum_{c' \notin B} E^{\mathrm{cell}}_{c,c'}\big(z_c, z_{c'}(p)\big)\Big) \notag \\
+    &+ \sum_{c, c' \in B} E^{\mathrm{cell}}_{c,c'}(z_c, z_{c'})
+  \Big]\Big),
+  \label{eq:cell}
+\end{align}
+where the neighbour sum includes the cells that $p$'s value is read by, not only
+the ones $p$ reads (symmetry of $E^{\mathrm{nb}}$). Two update kinds, chosen by
+the block's domain size:
+\begin{itemize}
+  \item \textbf{exact} when $\prod_{c \in B}|\Dom_c|$ is enumerable: every candidate
+        scored, hard factors as masks, a Gumbel-max or integer draw (bit-sliced
+        when the factors factor over port groups, \texttt{port\_gibbs.md});
+  \item \textbf{proposal} otherwise: a candidate multiset $\Cand(p)$ built from the
+        neighbours' values (coherent shifts, parent prolongation, $k$ links,
+        $\epsilon$ uniform), scored exactly within it, with the
+        Metropolis--Hastings correction wherever $\Cand$ depends on $z_B(p)$ itself.
+\end{itemize}
+A large channel paired with a small one (coordinate $u$ with promise $v$) is
+updated by marginalising the small one inside each candidate's score,
+$\bar\pi(u) = e^{-\Delta E(u)} \sum_v e^{-\mathrm{cost}(u,v)}\,\1[v \text{ compatible}]$,
+then drawing $v \mid u$ (\texttt{joint\_sampler.md}).
+
+\paragraph{Correctness conditions.} The following are what each update needs; they
+are the generic replacements for per-channel arguments.
+\begin{enumerate}
+  \item \emph{Colouring.} Cells updated in parallel share no factor: with neighbour
+        radius $r$ and a certificate that reads witnesses at distance 2, same-colour
+        cells are $\ge 2r+1$ apart ($r = 2$: spacing 5; the plus-shaped
+        neighbourhood needs the 5-colouring $(x + 2y) \bmod 5$).
+  \item \emph{Never empty.} Under a hard neighbour factor the current value must
+        remain a candidate: true for pair factors under a 2-colouring, and for
+        certificates when the dependant checks are reproduced exactly.
+  \item \emph{Valid proposals.} A candidate set that depends only on the neighbours
+        and is sampled exactly, plus an $\epsilon$ uniform fallback, is a valid
+        move; a set that depends on the current value needs a symmetric graph or
+        the MH ratio with the reverse set.
+  \item \emph{Partition rule.} Restricting an exact update to a subset must offer the
+        same subset whichever member is current (a partition of the domain), else
+        moves out of it cannot be reversed.
+  \item \emph{Rates are free.} Channels in different blocks may be updated at any
+        relative rate; each step leaves the joint invariant. This is what lets a
+        matching variable be re-drawn once per ten sweeps while a hard channel is
+        swept every time.
+\end{enumerate}
+
+\paragraph{Honourability.} With top-down sampling and no revisiting, for every
+derived channel and every parent value its constraints allow, in every halo its
+constraints allow,
+\[
+  \refine_c\big(z_c(\mathrm{par}\,p) \mid \text{halo}\big) \neq \varnothing,
+\]
+and the level-$K$ grid must have a tile completion. For one channel this is the
+realisability property of a promise language. For several hard channels on one
+cell it is a joint condition on $\prod_c \refine_c$, which no single language
+checks; it is where joint promises (support with connectivity) can fail.
+
+%-----------------------------------------------------------------------------
+\section{The existing channels in this notation}
+\label{sec:existing}
+
+\begin{center}
+\small
+\begin{tabular}{@{}lllll@{}}
+\toprule
+channel & $h$ & $\Dom$ & $\alpha$ & update \\
+\midrule
+coordinate $u_h$ & every & $\Z_m^2$ & free & proposal \\
+promise $v_h$ & $\ge K$ & small & $\alpha$, $m$ & exact, chain blocks \\
+object code $o$ & 1 & codes & cell of template & exact, with $t$ \\
+certificate $(g,d)$ & 1 & $(G{+}2)(D{+}1)$ & -- & closed form, with $t$ \\
+macro room $(k,\phi)$ & block & $1 + K\,\mathrm{BS}^2$ & none & exact heat bath \\
+tile $t$ & 1 & $\mathcal T$ & identity & exact, bit-sliced \\
+\bottomrule
+\end{tabular}
+
+\medskip
+\begin{tabular}{@{}lll@{}}
+\toprule
+channel & hard factors & soft factors \\
+\midrule
+coordinate $u_h$ & object seam check (nb) & $E_c$ (nb), $E_{\mathrm{par}}$ (par), cost (cell) \\
+promise $v_h$ & compat (nb), refine (par) & $u$, pair, parent tables; cost (cell) \\
+object code $o$ & nbr rule (nb), $t = \mathrm{tmpl}[o]$ (cell) & -- \\
+certificate $(g,d)$ & validity $V_p$ (nb, $r = 2$) & $\mu g + \delta d$ (cell) \\
+macro room $(k,\phi)$ & overlap, attachment or contact (nb, $r = 3$) & $\mu_{\mathrm{fam}}$, $-\lambda\,\#$contacts (nb), $\nu$ (par) \\
+tile $t$ & rules, codes, ports (nb, cell) & $E_{\mathrm{loc}}$ (nb), parent term (par), $\tau$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Where the macro channel does not fit.} It is sampled alone on its own
+lattice (blocks of $\mathrm{BS} = 8$) with a pasted coarse labelling as a fixed
+parent, with no tile level under it (rooms are rendered from templates), with
+connectivity as a heuristic (a spanning forest recomputed per sweep, which reads
+the whole window) rather than a certificate or a promise, and with doors chosen
+at render by a global union-find. Its energy
+\[
+  E(\text{rooms}) = \sum_{\text{rooms}} \mu_{\mathrm{fam}(k)} - \lambda\, \#\text{contacts}
+  + \nu\, \#\{\text{blocks off the parent}\} + (\text{connectivity terms})
+\]
+is a neighbour factor of radius 3 in blocks plus a parent factor, so it fits
+Eq.~\eqref{eq:cell}; what is missing is the parent relation $\refine$ and the
+abstraction that a coarser level would carry, and the object codes that would
+tie it to a tile level.
+
+\paragraph{The matching variable.} \texttt{macro\_objects.md} \S1 proposes
+$p(x, z) \propto e^{-E_{\mathrm{hard}}(x) - E_{\mathrm{soft}}(x, z)}$ with $z$ an
+exemplar coordinate per block or window. In this notation $z$ is a coordinate
+channel at the block level with $E^{\mathrm{cell}}(x, z)$ the $O(1)$ agreement
+table and $E^{\mathrm{nb}}(z, z')$ the coherence of neighbouring matches; the
+observation is rule 5 above (rates are free), and the current pipeline is the
+case where $z$ is drawn once.
+
+%-----------------------------------------------------------------------------
+\section{Objects as a block-level coordinate channel}
+\label{sec:objects}
+
+Proposal: there is no separate ``macro room'' domain. The block level $h = B$
+($B = 8$) carries an ordinary coordinate channel $u_B : \Lambda_B \to \Z_m^2$,
+at tile stride, so a window can sit at any tile offset (this is where the phase
+$\phi$ comes from), and objects are read off it by an abstraction. The macro
+coarse level already is this (coordinates per window, pasted); the proposal is
+that the fine macro stage is too.
+
+\paragraph{Two abstractions, two hard rules.} Let $o_E$ be the exemplar's object
+code channel and $W(u) = [u, u+B)^2$ the window a coordinate names.
+\begin{itemize}
+  \item \textbf{Seam form.} $\alpha^{\mathrm{seam}}_d(u) = o_E|_{\partial_d W(u)}$, the
+        codes on the window's side-$d$ edge. Hard neighbour factor between
+        adjacent cells: the \texttt{nbr} rule holds across the seam, pair by pair.
+        This is \texttt{objects.coarse\_term}. Exact and whole-or-absent at every
+        level.
+  \item \textbf{Ownership form.} $\alpha^{\mathrm{own}}(u) \in A = \{\varnothing\} \cup
+        \{(k,\phi)\}$: the object whose centre cell lies in $W(u)$, if any, with
+        footprint $F(k,\phi) \subset \Z^2$ relative to the cell. Hard neighbour
+        factor over $N_{\mathrm{RAD}}(p)$: $F_p \cap F_q = \varnothing$ (overlap), plus
+        attachment or contact as a function of $(\alpha(p), \alpha(q))$. This is
+        \texttt{macroobj} with $(k,\phi)$ replaced by $\alpha^{\mathrm{own}}(u)$.
+\end{itemize}
+
+\paragraph{Why the seam form freezes.} Under the seam form a cell's update must
+keep every partial object on its four seams, so an object straddling a seam can
+only be exchanged for another instance of the same template at the same offset.
+An object of side $s$ lies inside one cell of side $h \ge s$ at a fraction
+$\big((h - s + 1)/h\big)^2$ of positions: at $h = s$ almost none, at $h = 2s$
+one in four. So at the level where the object ``is one cell'' most instances
+still straddle, and the level above does not help, since there the cell holds
+several objects and the window move drags all of them. The macro runs that
+worked are ownership-form runs, and the tile-level finding that single-site
+updates cannot move a rigid object is the seam form at $h = 1$.
+
+\paragraph{The ownership form as $(a, u)$.} Hard terms depend on $u$ only
+through $\alpha^{\mathrm{own}}(u)$; soft terms ($E_c$, $E_{\mathrm{par}}$) depend on
+$u$ fully. Split the channel into $a_p \in A$ and $u_p \in \Z_m^2$ with
+\[
+  E^{\mathrm{cell}}(a, u) = \nu\,\1\big[a \ne \alpha^{\mathrm{own}}(u)\big],
+\]
+hard factors on $a$ alone, soft factors on $u$ alone. Then
+\begin{itemize}
+  \item $a_p \mid \text{rest}$ is an exact heat bath over $A$ ($|A| \approx 1300$):
+        the current block update, with $\nu$ as the only soft term;
+  \item $u_p \mid \text{rest}$ is a coordinate proposal update (coherent shifts,
+        parent, $k$ links), scored by $E_c + E_{\mathrm{par}} + \nu\,\1[\cdot]$, run at
+        whatever rate is wanted (rule 5, Section~\ref{sec:interface}).
+\end{itemize}
+This is \texttt{macro\_objects.md} \S1 stated as a channel: $\nu$ is not a
+heuristic pull toward a pasted parent but the cell coupling between two channels
+of one level, and the current pipeline is the case where $u$ is drawn once. At
+$\nu \to \infty$ the pair collapses to one channel $u$ with $a = \alpha(u)$.
+
+\paragraph{Masking.} With $a_p$ owning a footprint that runs into neighbouring
+cells, the coordinate $u_q$ of a neighbour still states what its whole window
+looks like, including the cells now under $F_p$. The statement must be masked
+there: $E_c(u_q)$ and the tile term $\tau$ are evaluated over
+$W(u_q) \setminus \bigcup_{p} F_p$, and the tile level reads $t = \mathrm{tmpl}[\cdot]$
+on footprints and the coordinate elsewhere. This is the fixed-mask case of
+\texttt{dsl.md} \S6, with the mask a deterministic function of the $a$ channel.
+
+\paragraph{What it gives for free.}
+\begin{itemize}
+  \item \textbf{Interlocking.} Replace $F_p \cap F_q = \varnothing$ by agreement on the
+        overlap, $\mathrm{tmpl}_p = \mathrm{tmpl}_q$ on $F_p \cap F_q$: shared walls and
+        nested pieces are the same radius-$\mathrm{RAD}$ factor with a different
+        table. The seam form would need successor sets for this.
+  \item \textbf{The parent.} $u_B$ has the usual coordinate parent $u_{2B}$ with
+        $E_{\mathrm{par}}$; no hard parent relation is needed for objects, since
+        $\varnothing$ is always admissible. A parent that \emph{promises} an object
+        (a grammar leaf, a required room) is a hard $E^{\mathrm{par}}$ on $a$, and
+        honourability is then the question whether the footprint fits the halo.
+  \item \textbf{Connectivity.} Contacts are a function of $(a_p, a_q)$, so the
+        contact graph is a hard-table neighbour relation on $a$; the port promise
+        and a certificate over objects-as-nodes attach to $a$, not to $u$.
+\end{itemize}
+
+\paragraph{What it costs.} Two channels at the block level instead of one, the
+mask bookkeeping in $E_c$ and $\tau$, and a coordinate proposal set that knows
+about object instances (a candidate for $u_p$ with $a_p$ fixed should prefer
+windows whose $\alpha^{\mathrm{own}}$ equals $a_p$: the instances of $(k, \phi)$ in
+the exemplar, which is a precomputed list).
+
+%-----------------------------------------------------------------------------
+\section{Derived rules, and planning in the coordinate update}
+\label{sec:plan}
+
+\paragraph{Non-overlap is derived, not authored.} Under a correct parent
+$\to$ tile relation, two objects claiming one cell with different templates
+have no tile completion: the exact coupling $F(a) = -\log Z_{\text{tiles}}(a)$ is
+$+\infty$ on overlapping footprints, so the overlap rule would be learned (the
+$F = \infty$ case of self-play, \texttt{dsl.md} \S7). It would also be found by
+the honourability checker: it is exactly the set of $a$-configurations whose
+$\prod \refine$ is empty. Either route needs machinery that does not exist, and
+the rule is known in closed form, so it is hard-coded; in the source taxonomy of
+\texttt{dsl.md} \S5 it is a \emph{derived} factor written by hand, not an
+authored one. The same holds for interlocking (agreement on the overlap) and for
+``a promised contact must have a door-capable wall behind it''. The general
+principle: a hard neighbour factor at level $h$ is legitimate whenever it is
+implied by the hard rules at level $h/2$ through $\alpha$; hand-writing it is a
+shortcut for the compiler, and the checker, when it exists, verifies the hand
+version.
+
+\paragraph{Connectivity belongs in the plan.} In the macro runs the expensive
+part was merging components by single-block moves on $a$: with no unmatched
+door no single move merges two components, and the forest heuristic worked by
+dissolving and regrowing. The coordinate update is the natural place to decide
+where rooms connect, because a window $W(u)$ is a piece of the exemplar and is
+connected inside exactly as the exemplar is; only the seams need planning. Give
+the coordinate a second abstraction, its \emph{interfaces},
+\[
+  \iota_d(u) \in \mathcal I, \qquad d \in \{N, E, S, W\},
+\]
+the door-capable openings of $W(u)$'s objects on side $d$ (from $o_E$ and the
+template's port sides; a $B$-bit pattern, or coarser: the half-sides that open).
+Then:
+\begin{itemize}
+  \item \textbf{Seam factor on $u$.} $E^{\mathrm{nb}}_{u,u}(u_p, u_q) =
+        \kappa\, \delta\big(\iota_d(u_p), \iota_{\bar d}(u_q)\big)$ for adjacent $p, q$: a
+        proposal for $u_p$ is scored by whether its openings line up with the
+        neighbours'. Read from the exemplar at both ends, so an $O(1)$ table
+        per candidate, like $\nu$. Soft with $\kappa$, or hard on sides a promise
+        requires joined.
+  \item \textbf{The plan is honoured by $a$.} A three-way factor
+        $E\big(a_p, a_q, \iota_d(u_p)\big)$: wherever the plan opens side $d$, the
+        objects $a_p, a_q$ must be in contact across it (a hard mask on the
+        $a$-update, built from the neighbour's $a_q$ and the own $u_p$, so still
+        local). This replaces the forest heuristic: $a$ never has to \emph{discover}
+        a merge, it has to realise an opening the plan already placed.
+  \item \textbf{The global half stays a promise.} Interfaces give local joins
+        only. Reachability needs the window-level promise as now (root side,
+        keys): the contract ``every object reaches a contact across the root
+        side'' is a hard $E^{\mathrm{par}}$ from $v_{\text{win}}$ onto the block-level
+        $(u, a)$, honoured through $\iota$. The exemplar's own windows satisfy it
+        trivially; proposals that break it are masked.
+\end{itemize}
+
+\paragraph{What the block level is, then.} Three channels on $\Lambda_B$:
+\begin{center}
+\small
+\begin{tabular}{@{}llll@{}}
+\toprule
+channel & domain & reads & role \\
+\midrule
+$u$ & $\Z_m^2$ & $E_c$, $E_{\mathrm{par}}$, seam $\kappa$, $\nu$, $\mathrm{cost}(u, v)$ & the plan: appearance, objects, openings \\
+$a$ & $\{\varnothing\} \cup K \times \Phi$ & overlap, contact, $\nu$, plan mask & the realisation: whole objects, hard \\
+$v$ & small & compat, refine, $\mathrm{cost}(u, v)$ & the contract: reachability to the root \\
+\bottomrule
+\end{tabular}
+\end{center}
+with the update rates ordered $u \ll v \le a$: the plan is re-matched rarely
+and expensively, the realisation is swept often and cheaply. The one thing
+single $a$-moves could not do, merging, is no longer asked of them.
+
+\paragraph{Where $\nu$ sits now.} $a$ may deviate from $\alpha^{\mathrm{own}}(u)$ at
+cost $\nu$ (a different room of the same family, a shifted phase), but the plan's
+openings are hard on $a$. So $\nu$ is a style term and $\iota$ a structural one.
+Whether $\iota$ should also be $\nu$-soft (letting $a$ close a planned opening when
+nothing fits) is the honourability question for this level: is there always a
+realisation of a plan drawn from exemplar windows with matched interfaces? For
+windows copied verbatim yes; for $a \ne \alpha(u)$ it must be checked.
+
+%-----------------------------------------------------------------------------
+\section{The interface, second pass: channels, views, factors}
+\label{sec:views}
+
+Sections~\ref{sec:objects}--\ref{sec:plan} make the coordinate look like a
+promise: a value chosen above that the level below must honour. That is right,
+and it is the simplification. The difference between a promise and a coordinate
+is not in the channel but in how its statements are used. This section replaces
+the member list of Section~\ref{sec:interface} with a smaller one.
+
+\paragraph{Views.} A channel $c$ exposes a finite set of \emph{views}
+\[
+  \alpha_{c,k} : \Dom_c \to V_{c,k}, \qquad k \in \mathrm{views}(c),
+\]
+each a small-valued statement about the cell. The identity is a view. Examples:
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+channel & views & where they come from \\
+\midrule
+tile $t$ & port byte per side $\iota_d(t)$; node, exit, solid bits & tile set (ports \emph{are} views) \\
+promise $v$ & identity; interface $\iota_d(v)$ & the language \\
+object $a$ & identity; footprint bitmap; slots per side & templates \\
+coordinate $u$ & $N_E(u)$; $\alpha^{\mathrm{own}}(u)$; $\iota_d(u)$; $\alpha_v(u)$ & \textbf{tables over exemplar positions} \\
+certificate $(g,d)$ & identity & -- \\
+\bottomrule
+\end{tabular}
+\end{center}
+A coordinate differs from every other channel in one way only: its views are
+read from precomputed tables indexed by exemplar position, so it exposes as
+many statements as one cares to tabulate, and every tuple of them is
+\emph{jointly realisable by construction}, since the exemplar is a real map. A
+coordinate is a library of consistent promise bundles indexed by position.
+
+\paragraph{Factors.} Every factor is a table over views, with offsets:
+\[
+  E\big(\alpha_{c_1,k_1}(z_{c_1}(p + o_1)),\; \dots,\; \alpha_{c_n,k_n}(z_{c_n}(p + o_n))\big),
+  \qquad E : \textstyle\prod_i V_{c_i,k_i} \to \R \cup \{+\infty\},
+\]
+with $o_i \in \Z^2$ a same-level offset (the neighbour kinds), $o_i = 0$ (cell
+kind) or $o_i$ pointing to the parent lattice (parent kind). Hard is a property
+of the table ($\{0, +\infty\}$), not of the channel. Arity is usually 2; the
+plan constraint $\big(a_p, a_q, \iota_d(u_p)\big)$ and the certificate's validity
+$\big(t_p, g_p, d_p, t_q, g_q, d_q\big)$ are 3- and 6-ary, read as ``the other
+arguments are fixed during this update''. A table may be stored
+($V \times V$ floats, or bit planes) or computed (footprint bitmaps ANDed under a
+shift); the update does not care which. Coupling through views keeps every
+table small: $(\alpha^{\mathrm{own}}(u), a)$ is $|A| \times |A|$, never $m^2 \times |A|$.
+
+\paragraph{Update.} A cell update on a block $B$ of channels enumerates (or
+proposes) joint values, computes their views, sums every factor touching $B$
+with the other arguments fixed, and draws. Exact when $\prod_{c \in B}|\Dom_c|$
+is enumerable; bit-sliced when every factor on $B$ is a per-side relation on
+port-group views; proposal-based otherwise, with the candidate set from
+neighbours' values and the parent. Rates per block are free.
+
+\paragraph{What ``promise'' and ``coordinate'' mean now.} Both are channels.
+\begin{itemize}
+  \item A \textbf{promise} is a channel some of whose views are honoured
+        \emph{hard} by a lower level ($E^{\mathrm{par}}$ or $E^{\mathrm{cell}}$ tables
+        in $\{0, \infty\}$), whose seam factor on its interfaces is exact (a
+        compatible grid is realisable), and which has a hard parent relation
+        $\refine$ (compositional $\alpha$).
+  \item A \textbf{coordinate} is a channel whose views are honoured by a
+        \emph{mix}: $\iota_d(u)$ hard on $a$ (the plan), $\alpha^{\mathrm{own}}(u)$ soft on
+        $a$ ($\nu$), features soft on neighbours ($E_c$) and on tiles ($\tau$),
+        $\alpha_v(u)$ soft on $v$ ($\mathrm{cost}$); whose seams are soft ($\kappa$)
+        except on sides a promise requires; and whose parent relation is soft
+        ($E_{\mathrm{par}}$, finite), so it has no $\refine$ and can never be stuck
+        between levels.
+\end{itemize}
+So $u$ is a promise with respect to exactly its hard views, and realisability
+of a hard view is witnessed per window by the exemplar and across seams by the
+seam rule. The three properties a promise language needs (soundness,
+realisability, exact seam rule) are asked of the \emph{hard views and their
+tables}, view by view, not of the channel.
+
+\paragraph{The data a level needs.} Enough to implement without further
+decisions:
+\begin{itemize}
+  \item channels: $(h_c, \Dom_c, \{\alpha_{c,k}\})$, each view as an array over
+        $\Dom_c$ (for $u$: arrays over exemplar positions, one per view);
+  \item factors: $(\text{arguments } (c_i, k_i, o_i)_i,\ \text{table or kernel},\ \text{hard?})$;
+  \item update blocks: a partition of $\Chan_h$ into jointly updated groups,
+        each with its update kind, candidate generator if proposal-based, colouring
+        (from the largest offset among its factors) and rate;
+  \item per-level schedule: sweeps per block, ramp of any soft-to-hard weights,
+        and the top level's prior.
+\end{itemize}
+The compile-time checks are then mechanical: symmetry of neighbour tables,
+colouring spacing from offsets, never-empty for hard tables under the chosen
+colouring, and a cost report $\sum_B |\Cand_B| \cdot \#\{\text{factors on } B\}$.
+
+\paragraph{Mapping the existing code.} \texttt{port\_gibbs} is this interface at
+$h = 1$ with views = port groups and factors = per-side relations. The promise
+levels (\texttt{promise.py}) are identity-view channels with hard seam and parent
+tables. \texttt{JointLevel} is a two-channel block $(u, v)$ with one cell table.
+\texttt{macroobj} is a one-channel level ($a$) with a computed neighbour kernel
+and a parent table $\nu$ against a fixed $u$. None of them is wrong; they are
+four hand-specialised instances of one update.
+
+%-----------------------------------------------------------------------------
+\section{Promises are hard factors, not a kind of variable}
+\label{sec:hard}
+
+Section~\ref{sec:views} still names two usage patterns. They collapse further:
+there are only channels and factors, and the hard factors are what used to be
+called promises.
+
+\paragraph{Hard and soft subsystems.} Split the factor set of a level into
+$\mathcal F^{\mathrm{hard}}_h$ (tables in $\{0, +\infty\}$) and
+$\mathcal F^{\mathrm{soft}}_h$ (finite). Write
+\[
+  H_h(z_{2h}) = \big\{ z_h : E(z_h, z_{2h}) = 0 \ \text{for every } E \in \mathcal F^{\mathrm{hard}}_h \big\}
+\]
+for the hard set of a level given its parent. The level conditional of
+Eq.~\eqref{eq:level} is
+\[
+  g_h(z_h \mid z_{2h}) = \frac{\1[z_h \in H_h(z_{2h})]\; e^{-E^{\mathrm{soft}}_h(z_h, z_{2h})/T}}{Z_h(z_{2h})} .
+\]
+The hard subsystem fixes the support; the soft subsystem fixes the
+distribution on it. The two have different sources and different obligations:
+\begin{center}
+\small
+\begin{tabular}{@{}lp{2.9in}p{2.1in}@{}}
+\toprule
+ & hard factors & soft factors \\
+\midrule
+source & authored (sockets, templates, masks) or derived (compiled from a level below) & learned (counts, pseudo-likelihood, self-play) \\
+count & a handful per channel type: seam, refine, honour & as many as declared \\
+specific to & a channel \emph{type} (support, ports, objects), taking the tile set as data & an exemplar \\
+checked by & the compiler (Section~\ref{sec:views}) & nothing; errors show as atypical output \\
+tempered & never & by $T$ and the ramps \\
+\bottomrule
+\end{tabular}
+\end{center}
+This is the constitution's line: general rules, no rules specific to one tile
+set. A hard rule belongs to a channel type and takes the tile set as data.
+
+\paragraph{The three hard patterns.} Every hard factor so far is one of:
+\begin{enumerate}
+  \item \textbf{seam}: $(c, \iota_d, 0)$ with $(c, \iota_{\bar d}, e_d)$ at the same level
+        (compat; the tile rules; overlap and contact on $a$);
+  \item \textbf{refine}: $(c, \mathrm{id}, 0)$ with $(c, \mathrm{id}, \mathrm{par})$, the
+        channel against its own coarser copy (merge consistency);
+  \item \textbf{honour}: $(c, \alpha_k, \mathrm{par})$ with $(c', \mathrm{id}, 0)$ for a finer
+        channel $c'$, or at one level $(c, \alpha_k, 0)$ with $(c', \mathrm{id}, 0)$
+        (a view of a coarser or sibling channel equals what the finer one
+        realises: $t = \mathrm{tmpl}[o]$, the plan mask on $a$, $A_b(x) = \pi_b$,
+        validity of a certificate).
+\end{enumerate}
+A channel ``is a promise'' exactly when it appears in a honour factor as the
+coarser or viewed argument. By that test $u$ (through $\iota$), $a$ (through
+$\mathrm{tmpl}$), $v$, the object code $o$ and the certificate fields all are;
+nothing is a promise by type.
+
+\paragraph{Strong downward, soft elsewhere.} The user's description, read in
+this notation: a channel's \emph{downward} factors (honour) are hard, its
+\emph{sideways} factors (seam) are hard where the guarantee needs them and soft
+otherwise, and its \emph{upward} factor (refine) is hard for derived channels
+and soft ($E_{\mathrm{par}}$) for free ones. A guarantee $G$ holds for the output
+iff it is implied by the hard subsystem alone, along an unbroken chain of
+honour and seam factors from its certificate down to the tiles. A soft link
+anywhere in that chain turns the guarantee into a tendency; it does not break
+the sampler. That is the whole rule for deciding what is hard: make hard
+exactly the factors on the chain of each guarantee, and nothing else.
+
+\paragraph{What the correctness conditions attach to.} They are conditions on
+$\mathcal F^{\mathrm{hard}}$ as a system, not on channels:
+\begin{itemize}
+  \item \textbf{soundness}: $z \in \bigcap_h H_h \Rightarrow G(x)$, by the chain argument above;
+  \item \textbf{honourability}: $H_h(z_{2h}) \ne \varnothing$ for every $z_{2h}$ the levels
+        above can produce, decided within a local halo (top-down never stuck);
+  \item \textbf{never empty}: under the chosen colouring and update blocks the
+        current value stays in every hard mask (local Gibbs never stuck);
+  \item \textbf{exactness of seams} (quality, not correctness): a seam table no
+        stronger than the tile-level rules imply, or coverage is lost.
+\end{itemize}
+The first three are what the compiler checks; the fourth is what the
+self-play or the derived-rule compiler would eventually improve. For one
+language these are the four properties of \texttt{coarse\_to\_fine.tex}
+\S5.1; here they are asked once of the union of all hard tables at a level,
+which is where joint honourability (support with connectivity, objects with
+the plan) lives.
+
+\paragraph{Coupling strength as a knob.} With hard and soft as two ends, a
+factor may be ramped ($\lambda$ in the field sampler, $\mathrm{lam} \to \mathrm{HARD}$
+in the macro runs) and ends hard; a run that ends with a finite weight has
+turned a guarantee into a tendency for that run. Ramps are a sampler device
+for mixing and do not change which factors are hard in the model.
+
+%-----------------------------------------------------------------------------
+\section{Promoting a view to a channel}
+\label{sec:promote}
+
+A view $\alpha_{c,k}$ is a deterministic function of $z_c$, so a hard factor on
+it is a mask on $z_c$'s candidates. That is fine when $z_c$ is small and
+enumerated (tiles: the port bytes are deterministic views and the tile update
+scores every tile). It is a problem when $z_c$ is large and proposal-updated
+(a coordinate): the hard factor rejects most candidates, and the exemplar may
+hold no window that matches both the texture and the hard requirement, so the
+channel freezes or coverage is lost. The remedy is the $(a, u)$ split of
+Section~\ref{sec:objects}, as a general operation.
+
+\paragraph{The operation.} Given a channel $c$ with view $\alpha : \Dom_c \to V$,
+add a channel $w$ with $\Dom_w = V$ at the same level and
+\begin{itemize}
+  \item move every factor that read $\alpha(z_c)$ to read $w$ instead, hard ones
+        included (seam, refine, honour by the level below);
+  \item add one soft cell factor $E^{\mathrm{cell}}(w, z_c) = \mathrm{cost}(w, \alpha(z_c))$,
+        either $\nu\,\1[w \ne \alpha(z_c)]$ or the calibrated form
+        $-\log p(w \mid u)$, a smoothed histogram of $\alpha$ over exemplar windows
+        near $u$ (\texttt{joint\_sampler.md}'s $\mathrm{cost}(u, v)$);
+  \item give $w$ an exact update (small domain) and let $z_c$'s proposal update
+        score $\mathrm{cost}(w, \alpha(\cdot))$ per candidate, or marginalise $w$ inside
+        each candidate's score, $\bar\pi(u) \propto e^{-\Delta E(u)}\sum_w e^{-\mathrm{cost}(w, \alpha(u))}\1[w \text{ allowed}]$,
+        which also credits a candidate for how many hard-feasible $w$ it admits.
+\end{itemize}
+As $\nu \to \infty$ the pair collapses to the deterministic view; the marginal
+over $w$ of the promoted model is the original model with the hard factors
+softened by exactly the cost table. So promotion is not a different model but
+the same one with one knob, and the knob is what lets a hard system be
+satisfied when the library has no exact match.
+
+\paragraph{What a promise is, finally.} A promise in the old sense is a promoted
+view of the coordinate: $v$ with $\mathrm{cost}(u, v)$ is $\alpha_v$ promoted, $a$
+with $\nu$ is $\alpha^{\mathrm{own}}$ promoted. The pattern exists twice in the code
+already. The rule for new hard factors follows:
+\begin{quote}
+  Put every hard factor on a small-domain channel. If the natural statement is a
+  view of a large channel, promote the view. Keep a view deterministic only
+  when its channel is enumerated exactly.
+\end{quote}
+Promotion costs one channel, one cost table and the masking of the large
+channel's statement where the promoted one overrides it (Section~\ref{sec:objects});
+it buys fast exact sweeps for the hard system, never-empty by construction,
+and free update rates between the hard and the soft side.
+
+\paragraph{Levels.} A promoted channel has a coarser copy where a refine factor
+is wanted ($w_{2h}$ with a merge), and the coarser copy is itself the promoted
+view of $u_{2h}$ with its own cost table. Honour runs downward: the level below
+realises $w_h$ hard, not $\alpha(u_h)$. So the hard chain of a guarantee runs
+entirely through promoted channels, and the coordinates touch it only through
+cost tables. This is the picture the question asked for: hard variables, softly
+coupled to the block channel, hard-coupled sideways and downward.
+
+%-----------------------------------------------------------------------------
+\section{Kernels: each update block owns its sampler}
+\label{sec:kernels}
+
+Hard channels are swept far more often than soft ones (they search; a hard
+move is mostly rejected, so attempts must be cheap), and the fast samplers are
+specialised: bit-sliced site draws, chain-block FFBS, closed-form interval
+draws, kNN proposals. The generic layer should not try to be any of them. It
+should own the factors and the schedule, and let each update block bring its
+own kernel.
+
+\paragraph{The contract.} An update block $B \subseteq \Chan_h$ comes with a
+Markov kernel $K_B$ on $z_B$ (one cell, a colour class, or a chain of cells)
+that leaves the conditional
+\[
+  \pi(z_B \mid z_{-B}) \;\propto\; \exp\!\Big(-\tfrac1T \sum_{E \ni B} E(\ldots)\Big)
+\]
+invariant, where the sum runs over \emph{every} factor with an argument in $B$,
+the other arguments fixed. That is the whole requirement. Then any schedule
+that applies kernels in sequence,
+$K = K_{B_1}^{n_1} K_{B_2}^{n_2} \cdots$, leaves the level's joint invariant,
+whatever the rates $n_B$, and is ergodic if the union of the blocks covers the
+level and each kernel is irreducible on its conditional. A kernel that runs
+many internal sweeps is the same as a high rate.
+
+\paragraph{What a kernel may and may not do.}
+\begin{itemize}
+  \item It owns the \emph{storage} of its channels (tiles as port bytes and bit
+        planes; rooms as label, phase and an occupancy grid; coordinates as
+        integer pairs). Other channels never read that storage, only the views
+        the channel publishes (Section~\ref{sec:views}).
+  \item It must consume every factor touching $B$, including the cross-channel
+        ones (cost tables from $u$, honour masks from a promoted channel, the
+        plan mask). A factor it cannot consume exactly it may consume
+        approximately and correct by Metropolis--Hastings (\texttt{port\_gibbs.md}
+        \S5.3), which is still invariant.
+  \item It may use any internal device whose correctness is its own business:
+        a rotating partition of a large domain (the partition rule), a
+        state-dependent candidate set (with the MH reverse set), a closed form
+        over an interval, a chain block drawn by FFBS.
+  \item It does not change other channels, and it does not ramp. Ramps and
+        annealing belong to the schedule, as explicit weights on soft factors.
+\end{itemize}
+
+\paragraph{What the generic layer hands it.} The one real design decision: the
+\emph{format of a factor restricted to $B$}. With the other arguments fixed, a
+factor is a function $e : \Dom_B \to \R \cup \{+\infty\}$; kernels consume it in
+different shapes, and a factor must be deliverable in the shape its consumer
+wants:
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+kernel & consumes $e$ as & existing code \\
+\midrule
+enumerated site draw & a dense vector over $\Dom_B$ & \texttt{hier.pick}, macroobj A, \texttt{JointLevel} \\
+bit-sliced site draw & quantised level planes plus a forbid mask & \texttt{bg\_sweep\_pairs}, \texttt{bg\_sweep\_field} \\
+proposal (MH) & a callable per candidate & \texttt{\_mh\_S}, macroobj B \\
+chain block (FFBS) & site vectors $e_i$ and transition tables $t_i$ & \texttt{envelope\_var.ffbs} \\
+closed-form field & interval bounds from neighbours' values & \texttt{blockfield} \\
+\bottomrule
+\end{tabular}
+\end{center}
+A stored table converts to any of these (a level plane is a quantised table
+row; a callable is a lookup). A computed factor (footprint overlap, the
+dependant test) delivers a mask or a callable. So each factor declares the
+shapes it can produce, each kernel the shape it consumes, and the compiler
+checks that every factor on $B$ has a shape $K_B$ accepts. The cross-channel
+terms a bit-sliced kernel sees from $u$ are then ``constant levels on masks'',
+which \texttt{bg\_sweep\_field} already takes for its parent term; the
+quantisation error is either accepted (a truncated target) or removed by the
+MH correction.
+
+\paragraph{Rates as the search budget.} With $u$ frozen, the hard channels'
+kernels sample the conditional of the hard system given the soft one; the cost
+tables are the only thing the search sees of the soft side. Sweeping the hard
+system $n$ times per $u$-update is the budget for that search, and the free-rate
+rule says any $n$ is valid. What $n$ affects is mixing: too small and the hard
+system never equilibrates to the plan; too large wastes work and, with a
+plan that keeps moving, chases a slowly moving target
+(\texttt{macro\_objects.md} \S1). It is a knob of the schedule, reported next to
+the per-kernel cost.
+
+\paragraph{Division of labour, summarised.}
+\begin{center}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+the channel brings & the generic layer owns \\
+\midrule
+storage, views, a kernel with its consumed shape & factors, with offsets and producible shapes \\
+(domain, candidate generator if proposal-based) & update blocks, colouring, rates, ramps \\
+ & restriction of factors to a block, in the kernel's shape \\
+ & compile-time checks and the cost report \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%-----------------------------------------------------------------------------
+\section{Composition, and what the compiler decides}
+\label{sec:compiler}
+
+\paragraph{Exact-kernel levels.} A Perlin-style terrain generator is a channel
+too: its domain is a height (and slope, biome, \ldots) per cell, its kernel is
+an exact draw from position-hashed noise, and it has no within-level factors.
+In the chain graph it is a top component sampled once, never revisited, and
+the levels below see it only through parent-kind cost tables on its views
+(height $\to$ the support promise's cost; biome $\to$ a gate on the exemplar
+library, the style channel of \texttt{dsl.md} \S7). The same holds for a split
+grammar emitting regions, or a Wilson tree over windows: a kernel that samples
+its conditional exactly in one pass needs no sweeps. What makes a cheap
+generator and an MCMC level composable is the directed structure between
+levels: local normalisation means the castle machinery never pushes back on the
+terrain, so the terrain's kernel is exact regardless of what sits below. The
+price is the one already paid (no bottom-up feedback), and the gain is that
+levels are combined by views and cost tables only, with neither side knowing
+the other's kernel.
+
+\paragraph{What bounds the complexity.} Four things, all already in the
+interface:
+\begin{enumerate}
+  \item the \textbf{DAG}: between levels directed, so the global schedule is a
+        sequence of per-level schedules, each a cyclic order over a few blocks;
+  \item \textbf{views}: a channel is known to others only by its published
+        statements, so adding a generator adds view tables, not kernel knowledge;
+  \item \textbf{declared couplings}: no table exists unless written, and the cost
+        report prices each one;
+  \item \textbf{bounded joint blocks}: channels tied by a hard cell factor must be
+        updated jointly; the product domain is reported and capped.
+\end{enumerate}
+The explosion, when it comes, comes from soft couplings ($\binom{n}{2}$ tables)
+and joint blocks (product domains). Both are visible at compile time.
+
+\paragraph{Mechanical: structure and correctness.} From the declarations alone
+the compiler can decide
+\begin{itemize}
+  \item the \textbf{order of levels}: a topological sort of the chain components by
+        parent-kind factors; a partially directed cycle is an error (promises
+        pointing both ways, \texttt{coarse\_to\_fine.tex} \S2);
+  \item the \textbf{update blocks}: the connected components of channels under hard
+        cell factors, which must be joint (else never-empty fails), with every
+        other channel its own block; a cap on $\prod |\Dom|$ per block, with a
+        warning and a suggested promotion when it is exceeded;
+  \item \textbf{shape matching}: every factor on a block deliverable in its kernel's
+        shape (Section~\ref{sec:kernels});
+  \item the \textbf{colouring} of each block from the largest offset among its
+        factors, plus one for dependant reads;
+  \item the \textbf{hard-system checks}: symmetry of seam tables, never-empty under
+        the colouring, honourability by enumeration on small halos, and
+        optionally seam exactness against the level below;
+  \item the \textbf{cost report}: per block per sweep,
+        $|\Cand_B| \cdot \#\{\text{factors on } B\}$ in the kernel's units, and
+        per level.
+\end{itemize}
+
+\paragraph{Not mechanical: rates, sweeps, ramps.} How many sweeps a block
+needs, how often a soft channel is re-drawn per hard sweep, and how a hard
+factor is ramped in are mixing questions, and mixing times are not computable
+from the specification. Three ways to set them, in order of preference:
+\begin{enumerate}
+  \item \textbf{calibration}: run the level on finite windows with a generous
+        schedule, measure per channel the autocorrelation of its views across
+        sweeps and the decay of hard-factor violations under the ramp, and fit
+        the smallest $n_B$ and ramp length that reach the plateau; emit a fixed
+        schedule. This is an offline step like fitting the tables, and the
+        output is a constant, so the fixed-step and locality rules hold at run
+        time;
+  \item \textbf{heuristics} as the starting point for calibration: exact-kernel
+        levels one pass; small hard blocks many cheap sweeps; large soft blocks
+        few expensive ones; rates in the ratio of their per-sweep costs so each
+        block gets a comparable share of time;
+  \item \textbf{declared} by the author, when the calibration is not worth running.
+\end{enumerate}
+Not allowed: deciding at run time from global statistics (a convergence test
+over the map). A run-time rule must be local and bounded, as the ramps are,
+and is then part of the schedule, not of the model.
+
+\paragraph{The schedule as an object.} Per level: an ordered list of
+$(B, n_B, \text{ramp}_B)$ repeated $s_h$ times, then the next level. It is small,
+printable, and the only thing that changes between a calibrated run and a
+default one. Everything correctness-related is fixed before it is chosen; the
+schedule can make a sampler slow or poorly mixed but never invalid.
+
+%-----------------------------------------------------------------------------
+\section{Direction, and the free energy of the level below}
+\label{sec:direction}
+
+Take the simplest case: a block channel $\rho$ (dirt density) and the tiles
+under it, with the honour factor $\mathrm{count}(x|_p) = f(\rho_p)$. In the
+\emph{target} this factor is undirected: it constrains tiles given $\rho$ and
+$\rho$ given tiles. In the \emph{generator} it is used top-down only. The
+question is whether that loses anything.
+
+\paragraph{The two models differ by a free energy.} Write $E_{h/2}(z_{h/2} \mid z_h)$
+for the energy of the level below given the level above (its soft factors,
+with the hard ones as masks). Its partition function given $z_h$,
+\[
+  Z_{h/2}(z_h) = \sum_{z_{h/2}} e^{-E_{h/2}(z_{h/2} \mid z_h)/T},
+  \qquad
+  F_{h/2}(z_h) = -T \log Z_{h/2}(z_h),
+\]
+is the \emph{free energy of the level below} as a function of the level above.
+In one undirected energy over all levels, the marginal of $z_h$ is tilted by
+$e^{-F_{h/2}(z_h)/T}$: a coarse value is weighted by how many fine
+completions it admits and how good they are. In the chain graph it is not.
+So ``both ways'' and ``top-down'' are different distributions on $z_h$, and the
+difference is exactly $F_{h/2}$. This is not about mixing. A both-ways model
+sampled perfectly and a top-down model sampled perfectly give different
+coarse marginals.
+
+\paragraph{Which one is right depends on where the coarse tables come from.}
+\begin{itemize}
+  \item If $z_h$ is \textbf{derived} and its tables are fitted as the
+        \emph{push-forward} of the target, $\hat q(z_h) \approx q(z_h) = \sum_{x:\,\alpha(x) = z_h} p_G(x)$,
+        then $-\log q = F + \text{const}$: the tilt is already in the tables,
+        because a corpus of fine samples shows each coarse value as often as its
+        completions warrant. Top-down is then exact (the $\mathrm{TV}$ bound of
+        \texttt{coarse\_to\_fine.tex} \S3), and adding a bottom-up tilt would
+        count $F$ twice.
+  \item If $z_h$ is \textbf{designed} (Perlin heights, a grammar, a density the
+        author draws), its distribution is a specification, and the tilt would
+        corrupt it: heights with more tile completions would become more
+        likely. Top-down is what the author means. A designed level sits above
+        the learned ones and replaces their coarse marginal by a choice; the
+        learned levels below realise it (the constitution's ``coarse levels are
+        learned'' applies to the levels that model the exemplar, not to a
+        specification placed above them).
+  \item If $z_h$ is \textbf{free} ($u$), it is an auxiliary variable; its tables
+        are the exemplar's statistics, and the pull-back toward $p$ happens in
+        the tile-level relaxation, as now.
+\end{itemize}
+So, A: top-down only, as a rule of the model and not of the sampler. The
+bottom-up direction is not a factor; it is the requirement that each level's
+within-level energy be an approximation to $F$ of the level below, or be
+intended as a specification that overrides it.
+
+\paragraph{Where top-down breaks: the support of $F$.} Two objects that fully
+determine the tiles under them cannot overlap, because $Z_{\text{tiles}}(a) = 0$,
+$F = \infty$. A joint Gibbs on $(a, x)$ sees this with no extra rule: a move of
+$a_p$ onto $a_q$'s footprint fails the honour factor against the \emph{current}
+tiles, locally and immediately. A top-down pass cannot: when $a$ is sampled,
+$x$ does not exist yet. The alternation the question mentions is the price of
+the undirected model, and it breaks the single pass and chunked generation. The
+top-down model must therefore carry $F$'s infinite part at the coarse level
+itself, as the derived rule of Section~\ref{sec:plan}. This gives the general
+statement:
+\begin{quote}
+  A top-down level is sound only if its hard factors contain $\mathrm{supp}\,F_{h/2}$,
+  the set of coarse values with a feasible completion. Honourability is the
+  same condition read downward.
+\end{quote}
+The checker that enumerates small halos for honourability is computing
+$\mathrm{supp}\,F$; the derived overlap rule is $\mathrm{supp}\,F$ written by hand.
+
+\paragraph{B: the learnable interaction terms are the finite part of $F$.}
+$F_{h/2}(z_h)$ is a global function, but it is approximately local: the fine
+level's energy is a sum of local factors, so $Z$ factorises over regions up to
+boundary terms, and
+\[
+  F_{h/2}(z_h) \;\approx\; \sum_p f_1(z_h(p)) \;+\; \sum_{p \sim q} f_2\big(z_h(p), z_h(q)\big) \;+\; \cdots,
+\]
+a cluster expansion in which $f_1$ is the free energy of one cell's
+completions, $f_2(z, z') = F_{\{p,q\}} - F_{\{p\}} - F_{\{q\}}$ the excess from two
+neighbours having to agree across their seam, and higher terms are dropped. The
+\emph{learnable interaction term} of the question is $f_2$ (and $f_1$), the
+soft within-level tables of a coarse level, with three estimators:
+\begin{center}
+\small
+\begin{tabular}{@{}lp{2.5in}p{1.8in}@{}}
+\toprule
+estimator & what it computes & where it fits \\
+\midrule
+derived (closed form, checker) & $\mathrm{supp}\,F$: the $\{0, \infty\}$ part & hard tables \\
+counted from a corpus & $-\log \hat q$, i.e.\ $F$ up to a constant, by frequency & soft tables (counts, pseudo-likelihood) \\
+self-play & $F_W(z_h|_W)$ on small windows $W$ by clamped fine-level runs & soft tables where no corpus exists \\
+\bottomrule
+\end{tabular}
+\end{center}
+Self-play, concretely: for each value pair $(z, z')$ of a two-cell window (and a
+few halo values), clamp the coarse level, run the fine kernel, and estimate
+$\log Z_W$ (thermodynamic integration or annealed importance sampling; or,
+cheaply, the mean energy reached, which is the $T \to 0$ limit of $F$). Infeasible
+runs give $f_2 = \infty$ and so recover the derived rule without writing it.
+Cost: $|V|^2 \times$ halo values fine-level runs per table, which is why coupling
+through views ($|V|$ small) and not through $u$ ($m^2$) is required.
+
+\paragraph{The density example, closed.} With $\rho$ derived and counted from
+the exemplar, $f_1(\rho)$ already contains $-\log \#\{\text{tile configurations
+with that count}\}$ weighted by their energies: the entropy of each density
+is in the table, and top-down is exact. With $\rho$ drawn from noise, the
+author has chosen the density distribution and the tiles realise it; the
+count honour factor is hard, nothing flows up, and that is the intent. In
+neither case is a bottom-up factor written.
+
+%-----------------------------------------------------------------------------
+\section{The ideal, and the chain as its approximation}
+\label{sec:ideal}
+
+Interactions between levels will conflict in ways nobody wrote down. The
+position taken here: the \emph{ideal} is the undirected joint of every declared
+factor over every level, sampled by an algorithm too expensive to run
+(Gibbs up and down all levels to equilibrium); the directed chain is its
+approximation; and the learned terms are \emph{defined} as what makes the
+approximation exact, with self-play as their estimator and cheaper things used
+in practice. This section makes the three parts precise.
+
+\paragraph{The ideal.} With levels $h_{\text{top}}, \dots, 1$ and the energies
+$E_h(z_h \mid z_{2h})$ of Section~\ref{sec:direction} (within-level and parent
+factors of level $h$, hard ones as masks),
+\[
+  p^*(z) \;=\; \frac{1}{Z^*}\, \exp\!\Big(-\tfrac1T \sum_h E_h(z_h \mid z_{2h})\Big).
+\]
+Every unforeseen conflict is in $p^*$: a coarse configuration whose fine
+completions are all bad or all infeasible has small or zero marginal under
+$p^*$, whether or not anyone anticipated it.
+
+\paragraph{The identity.} Define, from the bottom up, the cumulative free
+energy of everything below a level,
+\[
+  \tilde F_{1}(z_2) = -T\log \sum_{x} e^{-E_1(x \mid z_2)/T},
+  \qquad
+  \tilde F_{h}(z_{2h}) = -T\log \sum_{z_h} e^{-[E_h(z_h \mid z_{2h}) + \tilde F_{h/2}(z_h)]/T}.
+\]
+Then, with the corrected level energies $\tilde E_h = E_h + \tilde F_{h/2}$,
+\begin{equation}
+  p^*(z) \;=\; \prod_h \tilde g_h(z_h \mid z_{2h}),
+  \qquad
+  \tilde g_h(z_h \mid z_{2h}) = \frac{e^{-\tilde E_h(z_h \mid z_{2h})/T}}{\sum_{z_h'} e^{-\tilde E_h(z_h' \mid z_{2h})/T}} ,
+  \label{eq:telescope}
+\end{equation}
+by telescoping: each normaliser is the partition function of everything below
+$2h$ given $z_{2h}$, which is $e^{-\tilde F_h(z_{2h})/T}$, and the next level up
+cancels it. So \emph{a directed chain whose level energies include the
+cumulative free energy of the levels below is the undirected joint, sampled
+top-down in one pass}. The chain as used, $\tilde F \equiv 0$, is the
+approximation; the only thing it drops is $\tilde F$. With estimates $\hat F$ in
+place of $\tilde F$,
+\[
+  \log p^*(z) - \log g(z) \;=\; \sum_h \big(\hat F_{h/2} - \tilde F_{h/2}\big)(z_h) \;+\; \text{(the same errors, re-normalised one level up)},
+\]
+so every discrepancy between the ideal and the chain is an error in some
+$\hat F$, and an error at level $h$ shows up as a wrong marginal at level $2h$,
+nowhere else.
+
+\paragraph{The learned terms, defined.} The soft within-level tables of a
+coarse level are an approximation to $\tilde F_{h/2}$ in cluster-expanded
+form (Section~\ref{sec:direction}): a per-cell term, a pair term per
+adjacency, both over views. This is the definition the question asks for: a
+learned coupling between channels at level $h$ is a term of the cluster
+expansion of the free energy of the corrected level $h/2$. It has three
+properties worth having.
+\begin{itemize}
+  \item It is \textbf{recursive and two-level}. $\tilde F_h$ is computed from
+        $E_h$ and $\tilde F_{h/2}$ only, so self-play at level $h$ runs the
+        \emph{corrected} kernel of level $h/2$, not the whole stack below. Fit
+        from the bottom: tiles first, then each level against the one below it.
+  \item It \textbf{absorbs the unforeseen}. Any conflict among lower factors,
+        hard or soft, local or carried by a certificate, raises $\tilde F$ on the
+        coarse values that provoke it. Nothing has to be anticipated; it has
+        to be measured.
+  \item It is \textbf{the sampler's own free energy if measured with the sampler}.
+        Running the fixed-step fine kernel under clamping, rather than an exact
+        sampler, estimates the free energy \emph{as realised by that kernel at
+        that budget}: the coarse level then prefers values the real fine stage
+        can complete well, which is what cross-scale consistency as a training
+        goal means (constitution, non-goals).
+\end{itemize}
+
+\paragraph{Self-play as the estimator.} For a view pair $(v, v')$ on two
+adjacent cells and a small set of halo values: clamp the coarse channel, run
+the corrected kernel of the level below for its scheduled sweeps, record
+\[
+  \hat F_W \approx -T\log Z_W \ \ \text{(thermodynamic integration or AIS)}
+  \qquad\text{or}\qquad
+  \hat F_W = \langle E \rangle \ \ (\text{the } T \to 0 \text{ proxy}),
+\]
+and set $f_2(v, v') = \hat F_{\{p,q\}} - \hat F_{\{p\}} - \hat F_{\{q\}}$, $f_1(v) = \hat F_{\{p\}}$
+up to a constant, $+\infty$ on runs that end infeasible. Cost:
+$|V|^2 \times$ halos $\times$ one fine run per pair table, feasible because
+views are small.
+
+\paragraph{Cheaper in practice, in order of fidelity.}
+\begin{enumerate}
+  \item \textbf{A corpus.} If fine samples exist (an exemplar, an exact reference
+        sampler), counting the push-forward gives $-\log \hat q = \hat F + \text{const}$
+        with no runs at all; this is self-play someone already did.
+        Pseudo-likelihood fits the same thing as conditionals.
+  \item \textbf{Mean energy.} $\langle E \rangle$ instead of $-T \log Z$: drops the
+        entropy of the completions; right at $T \to 0$, biased toward coarse
+        values with few good completions over many fair ones.
+  \item \textbf{Support only.} The honourability checker: $\hat F \in \{0, \infty\}$.
+        This is the derived hard rules, and it is the minimum a sound level
+        needs (Section~\ref{sec:direction}).
+  \item \textbf{Truncation.} Pairs along adjacency only, halos marginalised by
+        a few draws, views coarser than the channel.
+  \item \textbf{Nothing}: channels couple only through tiles and hard rules,
+        $\hat F \equiv 0$ beyond the support. The current state of the code.
+\end{enumerate}
+Each step down is a known omission from the identity, so the price of each
+is nameable: the entropy term, the finite part, the off-adjacency terms.
+
+\paragraph{In practice.} Exact sampling of $p^*$ is not the goal; plausible,
+coherent output under parameters the author controls is. The identity is
+still useful under that goal, for two reasons. It says which omissions are
+safe: the support must be right (a wrong support is a stuck sampler or an
+invalid map), the finite part only shifts statistics, and a shifted statistic
+is a knob. And it says what a knob \emph{is}: a weight on a soft table is a
+tempered estimate of a free energy, so turning it up or down has a meaning (more
+or less credit for how well the level below can complete a value) rather than
+being a tuning accident. The working default is therefore: support from the
+checker or by hand; pair and unary tables from counts where a corpus exists and
+from the mean-energy proxy where it does not; each table with a weight the
+author sets. Refit by self-play only where a run shows coherence failing across
+a level boundary.
+
+\paragraph{What self-play cannot see, and what fixes it.} The cluster
+expansion is local; a conflict that is nonlocal at the lower level
+(reachability across many cells) does not appear in a pair term. It appears
+once a certificate or promise has made it local, as a term on the certificate's
+views. So certificates and self-play are complementary: certificates make
+$\tilde F$ local, self-play measures the local $\tilde F$. The rule for an
+unforeseen conflict discovered in a run is then: if it is local, it will be
+absorbed by refitting; if it is not, it needs a certificate first.
+
+%-----------------------------------------------------------------------------
+\section{Worked example: a tree with mass-monotone branches}
+\label{sec:tree}
+
+Guarantee wanted: every branch block is joined to a branch block of equal or
+higher mass. What has to be written, in the interface of
+Sections~\ref{sec:views}--\ref{sec:hard}.
+
+\paragraph{The channel that carries branches.} Whatever block-level channel $z$
+holds the tree: segments as objects $a$ (mass from the template), a coordinate
+$u$ (mass tabulated over exemplar positions), or tiles aggregated per block
+(mass as $\alpha$ of the block's wood cells). The recipe does not depend on
+the choice; only where the view tables come from.
+
+\paragraph{Views (two, plus one bit).} Deterministic if $z$ is enumerated
+exactly (objects, aggregated tiles); promoted to channels with a cost table if
+$z$ is a coordinate (Section~\ref{sec:promote}). Everything below reads the same
+either way.
+\begin{itemize}
+  \item $\mathrm{mass}(z) \in \{0, 1, \dots, M\}$, with $0$ meaning no branch;
+  \item $\mathrm{join}_d(z) \in \{0,1\}^{B}$, the cells on side $d$ at which wood
+        reaches the seam (an interface, as $\iota_d$ for rooms). Two adjacent
+        blocks are \emph{joined} when
+        $\mathrm{join}_d(z_p) \wedge \mathrm{join}_{\bar d}(z_q) \ne 0$;
+  \item $\mathrm{root}(z) \in \{0,1\}$: a trunk block, which needs no witness.
+\end{itemize}
+
+\paragraph{The rule as stated is local but not sound.} ``Some joined neighbour has
+mass $\ge$ mine'' is a hard factor of radius 1 and can be used as is. But two
+blocks of equal mass joined to each other and to nothing else satisfy it, so
+equal-mass islands float, and with strict $>$ the walk ends at a local maximum
+that need not be a trunk. The guarantee that is probably meant, \emph{every branch
+block is joined by a chain of non-decreasing mass to a trunk}, is the
+certificate pattern: add a rank.
+
+\paragraph{The certificate channel.} $d_p \in \{0, \dots, D\} \cup \{\infty\}$ at the
+block level, small, updated jointly with $z_p$. Validity:
+\[
+  V_p \;=\; [\mathrm{mass}(z_p) = 0] \;\lor\; \mathrm{root}(z_p) \;\lor\;
+  \exists\, q \in N_1(p):\ \mathrm{joined}(p,q)\ \land\ \mathrm{mass}(z_q) \ge \mathrm{mass}(z_p)\ \land\ d_q < d_p ,
+\]
+with $\mathrm{root}(z_p) \Rightarrow d_p = 0$ and $\mathrm{mass} = 0 \Rightarrow d_p = \infty$. One hard
+factor, $L \cdot \1[\lnot V_p]$, reading $(z_p, d_p)$ and $(z_q, d_q)_{q \in N_1(p)}$:
+arity 10, radius 1. This is \texttt{blockfield}'s $(g, d)$ field with the gap
+count $g$ dropped and the mass comparison added.
+
+\paragraph{Soundness (three lines).} Follow witnesses from any branch block:
+$d$ strictly decreases, so the walk ends, and it can end only at a root; every
+step is a join, and mass never decreases along it. So every branch block is
+joined by a non-decreasing chain to a trunk. The check is local: count invalid
+blocks.
+
+\paragraph{The update.} Block $p$ redraws $(z_p, d_p)$ given its neighbours:
+\begin{enumerate}
+  \item for each candidate $z$: compute $\mathrm{mass}, \mathrm{join}_d, \mathrm{root}$ (table
+        reads), and for each neighbour $q$ whether $q$ is a possible witness
+        ($\mathrm{joined}$, $\mathrm{mass}_q \ge \mathrm{mass}$) and whether $q$ is a
+        \emph{dependant} (its only current witness is $p$; computed once per update
+        from the neighbours' own neighbourhoods);
+  \item the valid $d$ for a fixed $z$ form an interval: $d > \min_{\text{witnesses}} d_q$
+        from own validity, $d < \min_{\text{dependants}} d_q$ from theirs, $d = 0$ if
+        root, $d = \infty$ if mass $0$ and no dependant; a dependant that would lose
+        its join or its mass bound under $z$ forbids $z$ outright;
+  \item weight: the soft factors on $z$ (exemplar terms, $\nu$, $\kappa$) plus an
+        optional $\delta\, d$ pulling toward short routes, summed over the interval
+        in closed form; draw $z$, then $d$ within its interval.
+\end{enumerate}
+Never empty: the current $(z_p, d_p)$ satisfies every mask, as long as the
+dependant test is reproduced exactly. Colouring: $V_q$ for a neighbour reads
+$q$'s neighbours, so same-colour blocks must be $\ge 3$ apart: the 5-colouring.
+
+\paragraph{Infinite worlds.} A chain to a trunk crosses chunk boundaries, which
+the block level may not follow. So a coarser level must commit, as
+\texttt{macro\_full} does for rooms: each window either contains a trunk or
+names a \emph{root side} toward its parent window; a block on that side may take
+a virtual witness across it (mass $M$, $d = -1$). That is one refine factor
+(the window tree) and one honour factor (the virtual witness), both already
+written for rooms. Without it the rule still holds within a chunk, but a tree
+cannot be guaranteed to reach a trunk that lies elsewhere.
+
+\paragraph{Mixing.} Hard from the start, a branch can only grow outward from a
+trunk one block per sweep and only shrink from the tips, a ratchet; the field
+sampler's experience is that a soft ramp ($\lambda\, \1[\lnot V_p]$ rising to $L$)
+lets the soft factors lay out branches first and the certificate then prunes
+and reconnects. The ramp does not change the model's hard set.
+
+\paragraph{What to write, as code.}
+\begin{center}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+piece & size \\
+\midrule
+three view tables over $\Dom_z$ (mass, join per side, root) & precompute \\
+the certificate channel $d$ and its interval draw & reuse of \texttt{blockfield}, minus $g$ \\
+the validity kernel $V$ and the dependant test & one function, $\sim$50 lines \\
+the window-level root side (if infinite) & reuse of \texttt{macro\_full}'s tree \\
+compiler entries: arity, radius, colouring 5, never-empty & declarations \\
+\bottomrule
+\end{tabular}
+\end{center}
+No table is learned; nothing is specific to the tree's exemplar.
+
+%-----------------------------------------------------------------------------
+\section{Adding a channel: the recipe and its cost}
+\label{sec:recipe}
+
+Suppose many channels exist and one more is to be added, with its own
+constraints. What has to be written, and what the machinery does.
+
+\paragraph{The steps.}
+\begin{enumerate}
+  \item \textbf{Level and domain.} Pick $h_c$ and $\Dom_c$, and whether the channel is
+        derived (a function of the tiles under a cell), designed (a generator)
+        or free.
+  \item \textbf{Views.} Write each $\alpha_{c,k}$ once, as a function of a cell's
+        tiles (derived) or of the value (designed, free). The machinery applies
+        it to the exemplar to make the view tables, and for a coordinate at the
+        same level the cost table $-\log p(\alpha_{c,k} \mid u)$ by counting.
+  \item \textbf{Hard rules.} Write the seam predicate on the interface view (if the
+        constraint is sideways), the honour predicate (how the level below
+        realises the value: a mask on the lower channel's views), and the merge
+        (if the channel has a coarser copy). Each is a small table or a
+        predicate of a few lines.
+  \item \textbf{Kernel.} Small domain: the enumerated site draw, nothing to write.
+        Large domain: promote the views (Section~\ref{sec:promote}) and write a
+        candidate generator for the large part. A nonlocal constraint: add a
+        certificate channel and reuse the field kernel with a new validity
+        predicate.
+  \item \textbf{Couplings.} Declare any soft coupling to another channel beyond the
+        defaults. The default is none; the automatic ones are the channel's own
+        unary, pair and parent tables and its cost table to the coordinate, all
+        counted.
+  \item \textbf{Compile.} The checks, colouring, block membership, default schedule
+        and cost report run without input. Calibrate rates if the default is
+        visibly wrong.
+\end{enumerate}
+
+\paragraph{Written versus automatic.}
+\begin{center}
+\small
+\begin{tabular}{@{}lp{2.2in}p{2.2in}@{}}
+\toprule
+item & written per channel & automatic \\
+\midrule
+view functions & 1--4 small functions & tables over $\Dom$ or exemplar positions \\
+unary, pair, parent tables & -- & counted from the exemplar through the views \\
+cost table to $u$ & -- & counted (the promoted-view coupling) \\
+seam, honour, merge & 1--3 predicates or tables & conversion to each kernel's shape \\
+couplings to other channels & 0 by default; one table each if declared & counted or self-played if asked \\
+kernel & 0 (enumerated); 1 generator (large); 1 predicate (certificate) & restriction of factors, draw, MH bookkeeping \\
+colouring, blocks, schedule & -- & from offsets, hard cell factors, defaults \\
+checks & -- & symmetry, never-empty, honourability, cost \\
+tests & the predicates against enumeration on small cases & invariants of the generic layer \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Three sizes.}
+\begin{itemize}
+  \item \textbf{A soft derived channel} (a material class per block that should
+        follow the exemplar): one view function; no hard rule; everything else
+        counted. Tens of lines. It changes nothing elsewhere.
+  \item \textbf{A hard local channel} (a density that tiles must match exactly, with
+        a seam rule): one view, one honour mask on tiles, one seam table. The
+        tile kernel receives one more factor in its shape and is otherwise
+        untouched. Under a hundred lines.
+  \item \textbf{A hard nonlocal channel} (the tree of Section~\ref{sec:tree}): the
+        views, a certificate channel, one validity predicate with its dependant
+        test, and a window-level commitment reused from the rooms. A few
+        hundred lines, most of it the predicate and its test.
+\end{itemize}
+For comparison, each channel today is a module with its own sweep, energy,
+state and experiment script: \texttt{macroobj} 1050 lines, \texttt{macrocontact}
+560, \texttt{blockfield} 560, \texttt{generic} 1050.
+
+\paragraph{What is paid once.} The recipe is cheap only because the generic
+layer exists: view tables and counting, factor restriction in each kernel's
+shape, the enumerated and proposal kernels, the field kernel with pluggable
+validity, masking of the coordinate's statement under a promoted channel, the
+checker, the schedule compiler and the cost report. That is the refactor, and
+it is where the lines go. Of it, the pieces not in the code in any form are
+factor restriction with shapes, the checker, the schedule compiler and the
+masking; the rest is consolidation.
+
+\paragraph{The condition behind the recipe.} The counts above assume kernels
+take a stack of factors and never a named term, so that a channel acting on
+tiles adds an entry to the tile kernel's stack and not a line to its code.
+Section~\ref{sec:stacking} states that rule, the closure it needs, and the one
+addition to the factor interface (gates) that keeps two channels' statements
+about the same tiles from being counted twice.
+
+\paragraph{What nobody escapes.} Two costs stay per channel whatever the
+machinery. A hard rule must be \emph{right}: sound, with an exact seam, and
+the checker only finds the second kind of error. And an existing channel that
+should \emph{respond} to the new one needs a declared coupling, which is a
+decision, not code; the default of zero is what keeps $n$ channels from
+costing $n^2$ tables, and it is also why a new channel is invisible to the old
+ones until someone says otherwise.
+
+%-----------------------------------------------------------------------------
+\section{Many channels on one kernel}
+\label{sec:stacking}
+
+Two channels both change the energy of the tiles under them. If the tile
+kernel was written to take \emph{a} parent term, the second channel forces a
+rewrite, and the third again. The recipe of Section~\ref{sec:recipe} holds only
+if this cannot happen. What prevents it is a rule on the kernel side of the
+contract, a closure property of the shapes, and one addition to the factor
+interface.
+
+\paragraph{The rule: a kernel takes a list, never a named term.} The input to a
+kernel for block $B$ at site $p$ is the \emph{stack} of restricted factors,
+$\{e_1, \dots, e_K\}$, each in the kernel's shape, from whatever channels
+declared them. The kernel sums (or ANDs) the stack and draws. It never knows
+which channel a factor came from, how many there are, or at what level they
+live. Adding a channel that affects tiles adds one entry to the stack. This
+is what \texttt{bitgibbs.c} already does with \texttt{acc\_add} over factor
+stacks; the generic version makes it the only way a kernel receives energy.
+A kernel written against a fixed neighbourhood (``the four sides and the
+parent'') violates the rule; one written against ``the factors on $B$, each
+with its offsets'' satisfies it.
+
+\paragraph{Closure: every shape must add.} For the stack to be summed inside
+the kernel, each shape needs a sum (soft) and a meet (hard):
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+shape & soft sum & hard meet \\
+\midrule
+dense vector over $\Dom_B$ & vector add & mask AND \\
+level planes + forbid plane & bit-sliced adder, within a level budget & forbid OR \\
+callable per candidate & sum of calls & conjunction \\
+chain tables $e_i, t_i$ & add site and transition tables & mask AND on both \\
+interval bounds & -- & intersect intervals \\
+\bottomrule
+\end{tabular}
+\end{center}
+One real cost hides here: the bit-sliced kernel has a \emph{level budget}
+($\mathrm{AB} = 5$ bits, 32 levels). Each soft factor declares its level range,
+and the compiler checks the sum fits; if it does not, it coarsens the unit
+(losing resolution, corrected by MH) or moves a factor out of the planes into
+the MH correction. So in that kernel a new soft channel on tiles has a price in
+bits, and the compiler reports it next to the time cost.
+
+\paragraph{Any coarser level may speak to the tiles.} A parent-kind factor's
+offset may point to any ancestor lattice, not only $2h$: a block channel at
+$h = 8$ and a window channel at $h = 64$ both restrict to a tile site by
+reading their cell above it. The chain graph is unchanged (level $h$ is
+conditioned on everything above it, and the order is still a topological
+sort); the restriction just reads the ancestor at the right level.
+
+\paragraph{Double counting, and masks as part of a factor.} Summing is the
+right default for independent statements (an object's template and a density
+count), and wrong for two statements \emph{about the same thing}: the coordinate's
+texture term and an object's template both say what the tiles under a
+footprint look like, and summing counts the evidence twice (\texttt{dsl.md}
+\S6). This is a modelling fact, not a kernel problem, and it is expressed in
+the factor, not in the kernel: a factor may carry a \textbf{gate}, a view of
+some channel at some offset, and contributes only where the gate is open,
+\[
+  E(\ldots)\cdot \1\big[\gamma(z_{c'}(p + o'))\big].
+\]
+The coordinate's tile term is gated off under any footprint; the object's
+honour mask is gated on there. Precedence among channels is then authored, as
+a small ordered list, and compiled into gates. The kernel still sees a stack;
+some entries are zero at some sites. For a view that \emph{is} the gate
+(ownership), promotion already gives it a channel to live on.
+
+\paragraph{Joint satisfiability of hard stacks.} Two hard honour masks on one
+tile site AND together, and the meet can be empty: an object's template cell
+and a density count that cannot both hold. This is joint honourability at the
+tile level, and it is the checker's job (the union of a level's hard tables,
+Section~\ref{sec:hard}), not the kernel's: the kernel only requires
+never-empty, which holds when the state is consistent. A new channel whose
+honour mask can conflict with an existing one is caught at compile time, on
+small halos, before any sweep.
+
+\paragraph{Who knows what.} Three layers, each party seeing one:
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+layer & written by & known to \\
+\midrule
+views of a channel & the channel's author & anyone who couples to it \\
+tables over views (factors) & the author connecting two channels & the generic layer \\
+shapes (a kernel's input format) & the kernel's author & the generic layer \\
+\bottomrule
+\end{tabular}
+\end{center}
+An upper channel that constrains tiles writes a table over (its view, a tile
+view); it knows the tile channel's \emph{views} (port bytes, node bit, solid
+bit) and nothing about the tile kernel's shape, other channels, or how many
+of them act on tiles. The tile kernel knows its shape and nothing about
+levels or channels. The generic layer converts tables to shapes and stacks
+them. So the ``communication channel'' of the question is the pair
+(views published downward, tables written on them), and the format a kernel
+consumes is hidden behind the conversion. The only crossing of the line is a
+\emph{computed} factor (footprint overlap, a dependant test), which cannot be a
+stored table and must produce a shape directly: its author writes a producer
+for the shapes it supports, and the compiler refuses a kernel it does not.
+Those are few, and they are the hard structural rules of a channel type,
+written once with it.
+
+\paragraph{What still forces a kernel change.} Exactly two things. A factor in
+a shape the kernel cannot consume (a radius-2 soft pair term into the
+per-side bit-sliced kernel): then the compiler routes it to the MH correction
+or to the enumerated kernel, and the author may choose to extend the kernel
+instead. And a new structural device (a certificate whose validity does not
+fit the pluggable predicate of the field kernel, a block update of a new
+shape): then it is a new kernel, under the same contract, for that channel's
+block only. Neither touches an existing kernel.
+
+%-----------------------------------------------------------------------------
+\section{Open questions}
+\label{sec:open}
+
+\paragraph{Settled in this document (by argument, not experiment).}
+\begin{itemize}
+  \item Objects: ownership form on a block-level coordinate, with the object as
+        a promoted view $a$ coupled by $\nu$ (Sections~\ref{sec:objects},
+        \ref{sec:promote}). Interlocking is a different overlap table.
+  \item Connectivity: planned in the coordinate update through interfaces,
+        honoured hard by $a$, global half as the window promise
+        (Section~\ref{sec:plan}). The forest heuristic is replaced, not fixed.
+  \item Interface: channels expose views; factors are tables on views with
+        offsets; hard is a property of the table; a promise is a channel in a
+        honour factor (Sections~\ref{sec:views}, \ref{sec:hard}).
+  \item Hard factors live on small channels; promote a view when it does not
+        (Section~\ref{sec:promote}).
+  \item Each update block brings its own kernel under one invariance contract;
+        the generic layer delivers restricted factors in the kernel's shape
+        (Section~\ref{sec:kernels}).
+  \item Top-down only, as a rule of the model; soundness requires the hard
+        factors to contain $\mathrm{supp}\,F$ of the level below
+        (Section~\ref{sec:direction}).
+  \item Learned terms are the cluster expansion of the cumulative free energy
+        below, with self-play as the definition and counts, mean energy or
+        support as the practical estimators (Section~\ref{sec:ideal}).
+\end{itemize}
+
+\paragraph{Still open.}
+\begin{enumerate}
+  \item \textbf{The experiment.} Contact-mode macro at full scale with the
+        $(u, a)$ split and the interface seam factor: does planning openings in
+        $u$ remove the patchwork, and does $a \ne \alpha(u)$ ever leave a planned
+        opening unrealisable (the honourability question of Section~\ref{sec:plan})?
+  \item \textbf{The proposal set for $u$ given $a$.} Instances of $(k, \phi)$ in
+        the exemplar as a precomputed list, plus coherent shifts, parent and $k$
+        links; the MH reverse set where it depends on the current value.
+  \item \textbf{Factor shapes.} The concrete representation of a restricted
+        factor for each kernel (dense vector, level planes, callable, chain
+        tables, interval bounds) and the conversions between them; whether
+        quantised cross-channel terms into the bit-sliced kernel are corrected
+        by MH or accepted as truncation.
+  \item \textbf{Joint blocks.} The cap on a product domain and what the compiler
+        suggests when it is exceeded (promotion, a chain block, a partition
+        schedule).
+  \item \textbf{Calibration.} The measurement that sets sweeps and rates per
+        block (view autocorrelation, violation decay under a ramp) and how it is
+        run on finite windows.
+  \item \textbf{The honourability checker.} Enumeration on small halos over the
+        union of a level's hard tables; its cost as hard channels multiply, and
+        whether per-channel checks ever suffice.
+  \item \textbf{Self-play tooling.} Clamped two-cell runs of a corrected kernel
+        with the mean-energy proxy; when a refit is worth running.
+  \item \textbf{A coarser commitment to objects.} Whether a window-level cell
+        must promise objects it does not own (an envelope, a count), or whether
+        $\varnothing$ always being admissible plus the window promise is enough.
+\end{enumerate}
+
+\end{document}

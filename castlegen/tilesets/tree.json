@@ -1,0 +1,23 @@
+{
+  "name": "tree",
+  "sockets": ["wall", {"name": "face", "draw": "none"}],
+  "connects": [["face", "face"]],
+  "dangling": {},
+  "wall": {"unary": 8.0, "glyph": "#", "render": {"color": "#000000"}},
+  "gate": {"socket": "face", "render": {"color": "#c0392b"}},
+  "kinds": [
+    {"name": "sky", "glyph": " ", "sides": {"N": "face", "E": "face", "S": "face", "W": "face"},
+     "render": {"color": "#a9d4f0", "borders": false}},
+    {"name": "bark", "solid": true, "glyph": "|", "sides": {"N": "face", "E": "face", "S": "face", "W": "face"},
+     "render": {"color": "#5b3a22", "borders": false}},
+    {"name": "leaf", "solid": true, "glyph": "o", "sides": {"N": "face", "E": "face", "S": "face", "W": "face"},
+     "render": {"color": "#4f9a3a", "borders": false}},
+    {"name": "leaf_dark", "solid": true, "glyph": "O", "sides": {"N": "face", "E": "face", "S": "face", "W": "face"},
+     "render": {"color": "#2f6b2a", "borders": false}},
+    {"name": "grass", "solid": true, "glyph": "\"", "sides": {"N": "face", "E": "face", "S": "face", "W": "face"},
+     "render": {"color": "#6aa84f", "borders": false}},
+    {"name": "soil", "solid": true, "glyph": "%", "sides": {"N": "face", "E": "face", "S": "face", "W": "face"},
+     "render": {"color": "#8a6242", "borders": false}}
+  ],
+  "rules": []
+}

@@ -3,10 +3,17 @@ name = "castlegen"
 version = "0.0.1"
 description = "Fixed-budget hierarchical Boltzmann sampling of tile-grid castles (JAX)"
 requires-python = ">=3.10"
-dependencies = ["jax>=0.4.30", "numpy"]
+dependencies = ["jax>=0.4.30", "numpy", "scipy"]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+render = ["pillow"]
+dev = ["pytest", "pillow"]
+
+[tool.setuptools]
+packages = ["castlegen"]
+
+[tool.setuptools.package-data]
+castlegen = ["tilesets/*.json", "tilesets/img/*.png"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

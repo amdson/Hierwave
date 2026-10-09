@@ -1,9 +1,10 @@
-"""Base level: checkerboard Gibbs on tiles and the Jacobi step of the
-distance equality d_i = 1 + min over door-neighbours d_j.
+"""Base level: checkerboard Gibbs on tile signatures and the Jacobi step of
+the distance equality d_i = 1 + min over door-neighbours d_j.
 
-Every active site scores all 52 tiles as a dense (n, 52) tensor.  Doors are
-a fixed function of the two types (both facing bits set), so the energy is a
-plain pairwise table and no variables live on edges.
+Every active site scores all S signatures of the tile set as a dense (n, S)
+tensor.  Doors are fixed by the signatures' sockets, so every pairwise term
+(coupling across a door, contact, dangling doors) is folded offline into two
+tables Eh[left, right] and Ev[top, bottom]; nothing is modelled on edges.
 """
 from __future__ import annotations
 
@@ -12,116 +13,139 @@ from typing import NamedTuple
 import jax
 import jax.numpy as jnp
 
-from .core import BIT, DIRS, GATE, INF, N_TILES, N_TYPES, POP, WALL, gumbel, split_tile
+from .core import INF, gumbel
+from .tileset import TileSet
 
 
 class BaseParams(NamedTuple):
-    M: jnp.ndarray        # hard penalty, scalar
-    M_reach: jnp.ndarray  # penalty for a room tile with no door to a finite-d neighbour
-    A: jnp.ndarray        # (50, 50) soft adjacency, applies across a door
-    u_type: jnp.ndarray   # (50,)
-    u_wall: jnp.ndarray   # scalar
-    w_door: jnp.ndarray   # scalar, per door bit of the type (unary)
-    P: jnp.ndarray        # (8, 50) projection of the type histogram
+    M_reach: jnp.ndarray  # penalty for a room with no door to a finite-d neighbour
+    P: jnp.ndarray        # (8, S) projection of the signature histogram
     lam: jnp.ndarray      # pin weight (ramped by the schedule)
-    T: jnp.ndarray        # temperature
+    T: jnp.ndarray        # temperature (applies to energies, not to the base mass logz)
 
 
 def _pad(a, fill):
     return jnp.pad(a, 1, constant_values=fill)
 
 
-def base_logits(tiles, d, coords, block_of, g, p: BaseParams, gate_yx):
-    """Logits (n, 52) for the active sites.
+def _neighbours(tiles_p, d_p, ys, xs):
+    """(up, right, down, left) neighbour signatures and d at padded coords."""
+    return ([tiles_p[ys - 1, xs], tiles_p[ys, xs + 1], tiles_p[ys + 1, xs], tiles_p[ys, xs - 1]],
+            [d_p[ys - 1, xs], d_p[ys, xs + 1], d_p[ys + 1, xs], d_p[ys, xs - 1]])
 
-    tiles    : (S, S) int32 tile indices
-    d        : (S, S) int16 current distance field
+
+def base_logits(ts: TileSet, tiles, d, coords, block_of, g, p: BaseParams, gate_yx, enclose=True):
+    """Tempered logits (n, S) for the active sites; sample with argmax(L + Gumbel).
+
+    tiles    : (H, W) int32 signature ids
+    d        : (H, W) int16 distance field of the current tiles, relaxed from
+               scratch (d_relax), so finite d means a real path to the gate
     coords   : (n, 2) active site coordinates
-    block_of : (S, S) int32 level-1 block index per cell
+    block_of : (H, W) int32 level-1 block index per cell
     g        : (n_blocks, 8) pin gradient  Lambda (P hist_B - h_B)
-    gate_yx  : (2,) the pinned gateway cell
+    gate_yx  : (2,) the pinned gateway cell (off the grid for none)
+    enclose  : forbid rooms on the grid perimeter (off for coarse levels)
+
+    Connectivity, both terms with weight M_reach:
+      own       a room candidate needs a door to a neighbour with finite d that
+                is not one of this site's children;
+      children  a neighbour k with d_k = d_i + 1 and a door to the current tile
+                (i is a shortest-path parent of k) keeps its support only if the
+                candidate keeps the door to k and is itself supported.
+    Counting every parent (not only sole parents) is conservative, and it is
+    what makes simultaneous updates of one checkerboard colour safe: k's other
+    parents are active in the same step and protect k too.
     """
-    S = tiles.shape[0]
-    tiles_p = _pad(tiles, WALL)
-    d_p = _pad(d, INF)
+    t = ts.jt
+    H, W = tiles.shape
     ys, xs = coords[:, 0] + 1, coords[:, 1] + 1
-    n = coords.shape[0]
+    tiles_p = _pad(tiles, ts.WALL)
+    (up, rt, dn, lf), nd = _neighbours(tiles_p, _pad(d, INF), ys, xs)
+    cur = tiles_p[ys, xs]
+    di = d[coords[:, 0], coords[:, 1]].astype(jnp.int32)
 
-    # per-type unary, laid out over all 52 tiles (wall and gate filled below)
-    E = jnp.concatenate([p.u_type + p.w_door * POP[:N_TYPES], jnp.zeros(2, jnp.float32)])
-    E = jnp.broadcast_to(E[None, :], (n, N_TILES))
-    reach = jnp.zeros((n, N_TILES), jnp.float32)
-    A52 = jnp.zeros((N_TILES, N_TILES), jnp.float32).at[:N_TYPES, :N_TYPES].set(p.A)
-    for dy, dx, own, facing in DIRS:
-        nt = tiles_p[ys + dy, xs + dx]                                # (n,) neighbour tile
-        door = BIT[own][None, :] * BIT[facing][nt][:, None]           # (n, 52): a door would exist
-        E = E + A52[:, nt].T * door                                   # soft adjacency across doors
-        finite = (d_p[ys + dy, xs + dx] < INF).astype(jnp.float32)
-        reach = jnp.maximum(reach, door * finite[:, None])
-    E = E + p.M_reach * (1.0 - reach)
+    # candidate v at this site: above is (up, v), right is (v, rt), ...
+    E = t.Ev[up, :] + t.Eh[:, rt].T + t.Ev[:, dn].T + t.Eh[lf, :]
+    doors = (t.Dv[up, :], t.Dh[:, rt].T, t.Dv[:, dn].T, t.Dh[lf, :])        # (n, S) each
+    cur_doors = (t.Dv[up, cur], t.Dh[cur, rt], t.Dv[cur, dn], t.Dh[lf, cur])  # (n,) each
+    finite = [(dj < INF).astype(jnp.float32) for dj in nd]
+    child = [cd * f * (di < INF) * (dj.astype(jnp.int32) == di + 1)
+             for cd, f, dj in zip(cur_doors, finite, nd)]
+    reach = jnp.zeros_like(E)
+    for door, f, c in zip(doors, finite, child):
+        reach = jnp.maximum(reach, door * (f * (1.0 - c))[:, None])
+    E = E + p.M_reach * (1.0 - reach) * t.is_room[None, :]
+    for door, c in zip(doors, child):
+        E = E + p.M_reach * c[:, None] * (1.0 - door * reach)
 
-    pin = g[block_of[coords[:, 0], coords[:, 1]]] @ p.P               # (n, 50)
-    E = E.at[:, :N_TYPES].add(p.lam * pin)
-    E = E.at[:, WALL].set(p.u_wall)
+    pin = g[block_of[coords[:, 0], coords[:, 1]]] @ p.P               # (n, S)
+    E = E + p.lam * pin * t.plannable[None, :]
+    L = -E / p.T + t.logz[None, :]
 
-    L = -E
     big = jnp.float32(1e9)
     on_gate = (coords[:, 0] == gate_yx[0]) & (coords[:, 1] == gate_yx[1])
-    on_perim = (coords[:, 0] == 0) | (coords[:, 0] == S - 1) | (coords[:, 1] == 0) | (coords[:, 1] == S - 1)
+    on_perim = (coords[:, 0] == 0) | (coords[:, 0] == H - 1) | (coords[:, 1] == 0) | (coords[:, 1] == W - 1)
+    on_perim = on_perim & enclose
     below = (coords[:, 0] == gate_yx[0] + 1) & (coords[:, 1] == gate_yx[1])
-    room_cols = jnp.arange(N_TILES) < N_TYPES
-    L = jnp.where((on_gate | on_perim)[:, None] & room_cols[None, :], -big, L)   # enclosure
-    L = L.at[:, GATE].set(jnp.where(on_gate, big, -big))
-    L = L.at[:, WALL].set(jnp.where(on_gate | below, -big, L[:, WALL]))
-    L = jnp.where(below[:, None] & (BIT[0][None, :] == 0) & room_cols[None, :], -big, L)  # north door under the gate
+    L = jnp.where((on_gate | on_perim)[:, None] & t.is_room[None, :], -big, L)     # enclosure
+    L = L.at[:, ts.GATE].set(jnp.where(on_gate, big, -big))
+    L = jnp.where(below[:, None] & (t.Dv[ts.GATE, :] == 0)[None, :], -big, L)     # a door under the gate
     return L
 
 
-def sample_sites(logits, u, T):
-    """Gumbel-max over the 52 tiles; u are hashed uniforms of logits' shape."""
-    return jnp.argmax(logits / T + gumbel(u), axis=1)
+def sample_sites(logits, u):
+    """Gumbel-max over the signatures; u are hashed uniforms of logits' shape."""
+    return jnp.argmax(logits + gumbel(u), axis=1)
 
 
 def scatter_tiles(tiles, coords, new):
     return tiles.at[coords[:, 0], coords[:, 1]].set(new.astype(tiles.dtype))
 
 
-def _door_field(tiles):
-    """For each direction, (S, S) int: a door exists from this cell to that neighbour."""
-    S = tiles.shape[0]
-    _, mask, _, _, _ = split_tile(tiles)
-    mask_p = _pad(mask, 0)
-    out = []
-    for dy, dx, own, facing in DIRS:
-        nmask = mask_p[1 + dy: S + 1 + dy, 1 + dx: S + 1 + dx]
-        out.append(((mask >> own) & 1) & ((nmask >> facing) & 1))
-    return out
+def door_field(ts: TileSet, tiles):
+    """(up, right, down, left) float 0/1 grids: a door joins this cell to that neighbour."""
+    t = ts.jt
+    tp = _pad(tiles, ts.WALL)
+    up, dn, lf, rt = tp[:-2, 1:-1], tp[2:, 1:-1], tp[1:-1, :-2], tp[1:-1, 2:]
+    return t.Dv[up, tiles], t.Dh[tiles, rt], t.Dv[tiles, dn], t.Dh[lf, tiles]
 
 
-def d_step(d, tiles):
+def d_step(ts: TileSet, d, tiles):
     """One Jacobi step of d_i = 1 + min_{door-neighbours} d_j.
 
-    Can raise or lower a value; walls stay INF, the gateway stays 0.
+    Can raise or lower a value; non-rooms stay INF, the gateway stays 0.
     """
-    _, _, is_room, _, is_gate = split_tile(tiles)
-    S = d.shape[0]
-    d_p = _pad(d, INF)
+    dp = _pad(d, INF)
+    nds = (dp[:-2, 1:-1], dp[1:-1, 2:], dp[2:, 1:-1], dp[1:-1, :-2])
     best = jnp.full_like(d, INF)
-    for (dy, dx, own, facing), door in zip(DIRS, _door_field(tiles)):
-        nd = d_p[1 + dy: S + 1 + dy, 1 + dx: S + 1 + dx]
-        best = jnp.minimum(best, jnp.where(door == 1, nd, INF))
+    for door, nd in zip(door_field(ts, tiles), nds):
+        best = jnp.minimum(best, jnp.where(door > 0, nd, INF))
     new = jnp.minimum(best.astype(jnp.int32) + 1, jnp.int32(INF)).astype(jnp.int16)
-    return jnp.where(is_gate, jnp.int16(0), jnp.where(is_room, new, INF))
+    is_room = ts.jt.is_room[tiles]
+    return jnp.where(tiles == ts.GATE, jnp.int16(0), jnp.where(is_room, new, INF))
 
 
-def violations(d, tiles):
+def d_relax(ts: TileSet, tiles, n_iters: int):
+    """d from scratch: all INF but the gate, then n_iters Jacobi steps.  Values
+    only decrease, so a finite d_i is the length of a real door path (exact
+    for paths up to n_iters long; longer ones read INF)."""
+    d0 = jnp.where(tiles == ts.GATE, jnp.int16(0), INF)
+    return jax.lax.fori_loop(0, n_iters, lambda _, d: d_step(ts, d, tiles), d0)
+
+
+def total_energy(ts: TileSet, tiles):
+    """E(x) = sum of pair energies over neighbour pairs - sum of log base mass:
+    -log of the unnormalised probability at T = 1 (hard constraints excluded)."""
+    t = ts.jt
+    return (t.Eh[tiles[:, :-1], tiles[:, 1:]].sum() + t.Ev[tiles[:-1, :], tiles[1:, :]].sum()
+            - t.logz[tiles].sum())
+
+
+def violations(ts: TileSet, d, tiles):
     """Per-cell count of violated hard terms (d equality, enclosure)."""
-    _, _, is_room, _, is_gate = split_tile(tiles)
-    S = d.shape[0]
-    v = jnp.zeros_like(d, dtype=jnp.int32)
-    supported = d_step(d, tiles) == d
-    v = v + jnp.where(is_room & ~is_gate, (~supported).astype(jnp.int32), 0)
-    S1 = S - 1
-    perim = jnp.zeros_like(v, dtype=bool).at[0, :].set(True).at[S1, :].set(True).at[:, 0].set(True).at[:, S1].set(True)
-    v = v + jnp.where(perim & is_room, 1, 0)
-    return v
+    is_room = ts.jt.is_room[tiles]
+    H, W = d.shape
+    supported = d_step(ts, d, tiles) == d
+    v = jnp.where(is_room, (~supported).astype(jnp.int32), 0)
+    perim = jnp.zeros((H, W), bool).at[0, :].set(True).at[-1, :].set(True).at[:, 0].set(True).at[:, -1].set(True)
+    return v + jnp.where(perim & is_room, 1, 0)

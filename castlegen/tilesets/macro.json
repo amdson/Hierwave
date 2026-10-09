@@ -1,0 +1,15 @@
+{
+  "extends": "demo",
+  "kinds": [
+    {"name": "pyr_n", "tags": ["stone"], "solid": true, "unary": 8.0, "sides": {"N": "wall", "E": "wall", "S": "wall", "W": "wall"}, "glyph": "^", "render": {"color": "#f0d58c"}},
+    {"name": "pyr_e", "tags": ["stone"], "solid": true, "unary": 8.0, "sides": {"N": "wall", "E": "wall", "S": "wall", "W": "wall"}, "glyph": ">", "render": {"color": "#d9b866"}},
+    {"name": "pyr_s", "tags": ["stone"], "solid": true, "unary": 8.0, "sides": {"N": "wall", "E": "wall", "S": "wall", "W": "wall"}, "glyph": "v", "render": {"color": "#b89245"}},
+    {"name": "pyr_w", "tags": ["stone"], "solid": true, "unary": 8.0, "sides": {"N": "wall", "E": "wall", "S": "wall", "W": "wall"}, "glyph": "<", "render": {"color": "#e6c677"}},
+    {"name": "pyr_ridge", "tags": ["stone"], "solid": true, "unary": 8.0, "sides": {"N": "wall", "E": "wall", "S": "wall", "W": "wall"}, "glyph": "x", "render": {"color": "#8f6d2c"}},
+    {"name": "pyr_apex", "tags": ["stone"], "solid": true, "unary": 8.0, "sides": {"N": "wall", "E": "wall", "S": "wall", "W": "wall"}, "glyph": "A", "render": {"color": "#fff1b8"}},
+    {"name": "pillar", "tags": ["ornament"], "solid": true, "unary": 8.0, "sides": {"N": "court", "E": "court", "S": "court", "W": "court"}, "glyph": "o", "render": {"color": "#e8e4dc"}},
+    {"name": "fountain", "tags": ["ornament"], "solid": true, "unary": 8.0, "sides": {"N": "court", "E": "court", "S": "court", "W": "court"}, "glyph": "~", "render": {"color": "#4a90d9"}},
+    {"name": "altar", "tags": ["ornament"], "solid": true, "unary": 8.0, "sides": {"N": "hall", "E": "hall", "S": "hall", "W": "hall"}, "glyph": "+", "render": {"color": "#7a2f8f"}},
+    {"name": "brazier", "tags": ["ornament"], "solid": true, "unary": 8.0, "sides": {"N": "hall", "E": "hall", "S": "hall", "W": "hall"}, "glyph": "*", "render": {"color": "#e8742c"}}
+  ]
+}

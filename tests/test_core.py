@@ -1,10 +1,8 @@
-import collections
-
 import jax
 import jax.numpy as jnp
 import numpy as np
 
-from castlegen import base, core, schedule
+from castlegen import base, core, e2e, schedule, tileset
 
 
 def test_noise_is_chunk_invariant():
@@ -17,70 +15,45 @@ def test_noise_is_chunk_invariant():
     assert abs(u.mean() - 0.5) < 0.02
 
 
-def _exact_bfs(tiles, gate_yx):
-    S = tiles.shape[0]
-    typ, mask, is_room, _, is_gate = [np.asarray(a) for a in core.split_tile(tiles)]
-    d = np.full((S, S), int(core.INF), np.int32)
-    q = collections.deque([tuple(gate_yx)])
-    d[tuple(gate_yx)] = 0
-    while q:
-        y, x = q.popleft()
-        for dy, dx, own, facing in core.DIRS:
-            ny, nx = y + dy, x + dx
-            if not (0 <= ny < S and 0 <= nx < S):
-                continue
-            if not is_room[ny, nx]:
-                continue
-            if (mask[y, x] >> own) & 1 and (mask[ny, nx] >> facing) & 1 and d[ny, nx] == int(core.INF):
-                d[ny, nx] = d[y, x] + 1
-                q.append((ny, nx))
-    return d
-
-
-def _random_tiles(rng, S):
-    is_room = rng.random((S, S)) < 0.8
-    typ = rng.integers(0, core.N_TYPES, (S, S))
-    tiles = np.where(is_room, typ, core.WALL)
+def _random_tiles(ts, rng, S):
+    # mostly four-door tiles so the gate reaches a sizeable region
+    rooms = np.nonzero(ts.np_tables["is_room"])[0]
+    open_ = [s for s in rooms if ts.kinds[ts.sig_kind[s]].name == "hall_cross"]
+    pick = np.where(rng.random((S, S)) < 0.7, rng.choice(open_, (S, S)), rng.choice(rooms, (S, S)))
+    tiles = np.where(rng.random((S, S)) < 0.9, pick, ts.WALL)
     gy, gx = 0, S // 2
-    tiles[gy, gx] = core.GATE
-    # the cell under the gate: a type with a north door
-    north = [t for t in range(core.N_TYPES) if int(core.TILE_MASK[t]) & 1]
-    tiles[gy + 1, gx] = north[0]
-    return jnp.asarray(tiles, jnp.int32), (gy, gx)
+    tiles[gy, gx] = ts.GATE
+    tiles[gy + 1, gx] = open_[0]                # doors on all sides: joins the gate
+    return jnp.asarray(tiles, jnp.int32)
 
 
 def test_d_step_converges_to_bfs():
+    ts = tileset.load("demo")
     rng = np.random.default_rng(0)
-    tiles, gate = _random_tiles(rng, 32)
-    # the gateway tile carries no mask; treat it as having a south door in d_step
+    tiles = _random_tiles(ts, rng, 32)
     d = jnp.full((32, 32), core.INF, jnp.int16)
     for _ in range(32 * 32):
-        d_new = base.d_step(d, tiles)
+        d_new = base.d_step(ts, d, tiles)
         if bool(jnp.all(d_new == d)):
             break
         d = d_new
-    exact = _exact_bfs(tiles, gate)
+    exact = e2e.exact_bfs(ts, tiles)
     got = np.asarray(d).astype(np.int32)
-    _, _, is_room, _, _ = [np.asarray(a) for a in core.split_tile(tiles)]
+    is_room = ts.np_tables["is_room"][np.asarray(tiles)]
     assert np.array_equal(got[is_room], exact[is_room])
-    assert (exact < int(core.INF)).sum() > 3    # the gate actually reaches something
+    assert (exact < int(core.INF)).sum() > 20   # the gate actually reaches a region
 
 
 def test_base_run_smoke():
+    # no repair step: only the gateway and the enclosure are guaranteed
+    ts = tileset.load("demo")
     S = 32
-    schedule.SIZE = S
-    rng = np.random.default_rng(1)
-    A = jnp.asarray(rng.choice([-2.0, 0.0, 0.0, 0.0, 2.0], (50, 50)), jnp.float32)
-    A = (A + A.T) / 2
-    P = jnp.asarray(rng.normal(size=(8, 50)) / np.sqrt(50), jnp.float32)
-    n_blocks = (S // schedule.BLOCK) ** 2
-    h_plan = jnp.zeros((n_blocks, 8), jnp.float32)
-    Lam = 4.0 * jnp.eye(8, dtype=jnp.float32)
-    gate = jnp.array([0, S // 2])
-    tiles0, d0 = schedule.init_random(3, S, gate, schedule.Presets())
-    tiles, d = schedule.run_base(3, tiles0, d0, gate, A, P, h_plan, Lam, schedule.Presets())
-    v = base.violations(d, tiles)
-    assert int(v.sum()) == 0
-    assert int((tiles == core.GATE).sum()) == 1
-    _, _, is_room, _, _ = core.split_tile(tiles)
-    assert int(is_room.sum()) > 20            # not the degenerate all-wall castle
+    P, h_plan, Lam, gate = e2e.make_inputs(ts, size=S, seed=1)
+    pre = schedule.Presets(n_sweeps=20)
+    tiles0, d0 = schedule.init_random(ts, 3, S, gate, pre)
+    tiles, d = schedule.run_base(ts, 3, tiles0, d0, gate, P, h_plan, Lam, pre)
+    stats = e2e.check(ts, tiles, d)
+    assert stats["gateways"] == 1
+    t = np.asarray(tiles)
+    perim = np.concatenate([t[0], t[-1], t[:, 0], t[:, -1]])
+    assert not ts.np_tables["is_room"][perim].any()

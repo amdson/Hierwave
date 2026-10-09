@@ -1,0 +1,630 @@
+{
+ "tileset": "macro",
+ "size": [
+  128,
+  128
+ ],
+ "torus": true,
+ "sweeps": 600,
+ "T": 0.6,
+ "T_hot": 4.0,
+ "seed": 0,
+ "clean": true,
+ "connect": true,
+ "place": [
+  {
+   "room": "courtyard",
+   "at": [
+    4,
+    4
+   ],
+   "size": [
+    12,
+    14
+   ],
+   "gates": [
+    [
+     "S",
+     6
+    ],
+    [
+     "E",
+     4
+    ]
+   ]
+  },
+  {
+   "room": "great_hall",
+   "at": [
+    4,
+    26
+   ],
+   "size": [
+    10,
+    16
+   ],
+   "gates": [
+    [
+     "W",
+     4
+    ],
+    [
+     "S",
+     8
+    ]
+   ]
+  },
+  {
+   "room": "courtyard",
+   "at": [
+    34,
+    6
+   ],
+   "size": [
+    16,
+    20
+   ],
+   "gates": [
+    [
+     "N",
+     8
+    ],
+    [
+     "E",
+     8
+    ],
+    [
+     "S",
+     14
+    ]
+   ]
+  },
+  {
+   "room": "great_hall",
+   "at": [
+    40,
+    40
+   ],
+   "size": [
+    9,
+    12
+   ],
+   "gates": [
+    [
+     "W",
+     2
+    ],
+    [
+     "N",
+     5
+    ]
+   ]
+  },
+  {
+   "structure": "greenhouse",
+   "at": [
+    20,
+    30
+   ]
+  },
+  {
+   "structure": "greenhouse",
+   "at": [
+    54,
+    30
+   ]
+  },
+  {
+   "structure": "greenhouse",
+   "at": [
+    28,
+    52
+   ]
+  },
+  {
+   "path": "hallway",
+   "points": [
+    [
+     8,
+     18
+    ],
+    [
+     8,
+     25
+    ]
+   ]
+  },
+  {
+   "path": "hallway",
+   "points": [
+    [
+     14,
+     34
+    ],
+    [
+     26,
+     34
+    ],
+    [
+     26,
+     10
+    ],
+    [
+     16,
+     10
+    ]
+   ]
+  },
+  {
+   "path": "hallway",
+   "points": [
+    [
+     23,
+     31
+    ],
+    [
+     26,
+     31
+    ]
+   ]
+  },
+  {
+   "path": "hallway",
+   "points": [
+    [
+     26,
+     14
+    ],
+    [
+     33,
+     14
+    ]
+   ]
+  },
+  {
+   "path": "hallway",
+   "points": [
+    [
+     42,
+     26
+    ],
+    [
+     42,
+     39
+    ]
+   ]
+  },
+  {
+   "path": "hallway",
+   "points": [
+    [
+     50,
+     20
+    ],
+    [
+     58,
+     20
+    ],
+    [
+     58,
+     31
+    ],
+    [
+     57,
+     31
+    ]
+   ]
+  },
+  {
+   "path": "hallway",
+   "points": [
+    [
+     39,
+     45
+    ],
+    [
+     34,
+     45
+    ],
+    [
+     34,
+     53
+    ],
+    [
+     31,
+     53
+    ]
+   ]
+  },
+  {
+   "object": "pyramid",
+   "at": [
+    70,
+    6
+   ]
+  },
+  {
+   "path": "hallway",
+   "points": [
+    [
+     87,
+     14
+    ],
+    [
+     90,
+     14
+    ]
+   ]
+  },
+  {
+   "object": "pyramid",
+   "at": [
+    6,
+    72
+   ]
+  },
+  {
+   "path": "hallway",
+   "points": [
+    [
+     23,
+     80
+    ],
+    [
+     26,
+     80
+    ]
+   ]
+  },
+  {
+   "object": "pyramid",
+   "at": [
+    76,
+    78
+   ]
+  },
+  {
+   "path": "hallway",
+   "points": [
+    [
+     93,
+     86
+    ],
+    [
+     96,
+     86
+    ]
+   ]
+  },
+  {
+   "object": "pyramid",
+   "at": [
+    100,
+    40
+   ]
+  },
+  {
+   "path": "hallway",
+   "points": [
+    [
+     117,
+     48
+    ],
+    [
+     120,
+     48
+    ]
+   ]
+  },
+  {
+   "object": "pyramid",
+   "at": [
+    6,
+    104
+   ]
+  },
+  {
+   "path": "hallway",
+   "points": [
+    [
+     23,
+     112
+    ],
+    [
+     26,
+     112
+    ]
+   ]
+  },
+  {
+   "object": "temple",
+   "at": [
+    66,
+    36
+   ]
+  },
+  {
+   "path": "hallway",
+   "points": [
+    [
+     87,
+     46
+    ],
+    [
+     90,
+     46
+    ]
+   ]
+  },
+  {
+   "object": "temple",
+   "at": [
+    32,
+    74
+   ]
+  },
+  {
+   "path": "hallway",
+   "points": [
+    [
+     53,
+     84
+    ],
+    [
+     56,
+     84
+    ]
+   ]
+  },
+  {
+   "object": "temple",
+   "at": [
+    100,
+    98
+   ]
+  },
+  {
+   "path": "hallway",
+   "points": [
+    [
+     121,
+     108
+    ],
+    [
+     124,
+     108
+    ]
+   ]
+  }
+ ],
+ "objects": {
+  "pyramid": {
+   "size": [
+    17,
+    17
+   ],
+   "place": [
+    {
+     "grid": [
+      "rnnnnnnnnnnnnnnnr",
+      "wrnnnnnnnnnnnnnre",
+      "wwrnnnnnnnnnnnree",
+      "wwwrnnnnnnnnnreee",
+      "wwwwrnnnnnnnreeee",
+      "wwwwwrnnnnnreeeee",
+      "wwwwwwrnnnreeeeee",
+      "wwwwwwwrnreeeeeee",
+      "wwwwwwwwaeeeeeeee",
+      "wwwwwwwrsreeeeeee",
+      "wwwwwwrsssreeeeee",
+      "wwwwwrsssssreeeee",
+      "wwwwrsssssssreeee",
+      "wwwrsssssssssreee",
+      "wwrsssssssssssree",
+      "wrsssssssssssssre",
+      "rsssssssssssssssr"
+     ],
+     "at": [
+      0,
+      0
+     ],
+     "legend": {
+      "n": "pyr_n",
+      "e": "pyr_e",
+      "s": "pyr_s",
+      "w": "pyr_w",
+      "r": "pyr_ridge",
+      "a": "pyr_apex"
+     }
+    },
+    {
+     "room": "great_hall",
+     "at": [
+      6,
+      6
+     ],
+     "size": [
+      5,
+      5
+     ],
+     "gates": [
+      [
+       "S",
+       2
+      ]
+     ],
+     "interior": "clamp"
+    },
+    {
+     "cell": "altar",
+     "at": [
+      8,
+      8
+     ]
+    },
+    {
+     "cell": "hall_straight@0",
+     "at": [
+      16,
+      8
+     ]
+    },
+    {
+     "path": "hallway",
+     "points": [
+      [
+       11,
+       8
+      ],
+      [
+       15,
+       8
+      ]
+     ]
+    }
+   ]
+  },
+  "temple": {
+   "size": [
+    21,
+    21
+   ],
+   "place": [
+    {
+     "room": "courtyard",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      21,
+      21
+     ],
+     "gates": [
+      [
+       "S",
+       10
+      ]
+     ],
+     "interior": "clamp"
+    },
+    {
+     "room": "great_hall",
+     "at": [
+      2,
+      6
+     ],
+     "size": [
+      7,
+      9
+     ],
+     "gates": [
+      [
+       "S",
+       4
+      ]
+     ],
+     "interior": "clamp"
+    },
+    {
+     "cell": "altar",
+     "at": [
+      4,
+      10
+     ]
+    },
+    {
+     "cell": "brazier",
+     "at": [
+      4,
+      8
+     ]
+    },
+    {
+     "cell": "brazier",
+     "at": [
+      4,
+      12
+     ]
+    },
+    {
+     "cell": "hall_straight@0",
+     "at": [
+      9,
+      10
+     ]
+    },
+    {
+     "cell": "courtyard_gateway@0",
+     "at": [
+      10,
+      10
+     ]
+    },
+    {
+     "cell": "fountain",
+     "at": [
+      14,
+      10
+     ]
+    },
+    {
+     "cell": "tree",
+     "at": [
+      2,
+      2
+     ]
+    },
+    {
+     "cell": "tree",
+     "at": [
+      2,
+      18
+     ]
+    },
+    {
+     "cell": "pillar",
+     "at": [
+      11,
+      4
+     ]
+    },
+    {
+     "cell": "pillar",
+     "at": [
+      11,
+      16
+     ]
+    },
+    {
+     "cell": "pillar",
+     "at": [
+      14,
+      4
+     ]
+    },
+    {
+     "cell": "pillar",
+     "at": [
+      14,
+      16
+     ]
+    },
+    {
+     "cell": "pillar",
+     "at": [
+      17,
+      4
+     ]
+    },
+    {
+     "cell": "pillar",
+     "at": [
+      17,
+      16
+     ]
+    }
+   ]
+  }
+ }
+}

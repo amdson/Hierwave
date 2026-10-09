@@ -1,0 +1,40 @@
+{
+  "name": "cliffs",
+  "sockets": ["wall", {"name": "face", "draw": "none"}],
+  "connects": [["face", "face"]],
+  "dangling": {},
+
+  "wall": {"unary": 8.0, "tags": ["solid"], "glyph": "#", "render": {"color": "#4a4440"}},
+  "gate": {"socket": "face", "render": {"color": "#c0392b"}},
+
+  "kinds": [
+    {"name": "air", "tags": ["sky"], "glyph": " ",
+     "sides": {"N": "face", "E": "face", "S": "face", "W": "face"},
+     "render": {"color": "#a9d4f0", "borders": false}},
+    {"name": "stone", "tags": ["solid", "rock"], "solid": true, "unary": 0.6, "glyph": "#",
+     "sides": {"N": "face", "E": "face", "S": "face", "W": "face"},
+     "render": {"color": "#7d7a78"}},
+    {"name": "soil", "tags": ["solid", "earth"], "solid": true, "unary": 0.8, "glyph": "%",
+     "sides": {"N": "face", "E": "face", "S": "face", "W": "face"},
+     "render": {"color": "#8a6242"}},
+    {"name": "turf", "tags": ["solid", "earth", "grass"], "solid": true, "unary": 1.0, "glyph": "\"",
+     "sides": {"N": "face", "E": "face", "S": "face", "W": "face"},
+     "render": {"color": "#5f9a3c"}},
+    {"name": "ore", "tags": ["solid", "rock", "ore"], "solid": true, "unary": 3.0, "glyph": "*",
+     "sides": {"N": "face", "E": "face", "S": "face", "W": "face"},
+     "render": {"color": "#c9a13b"}}
+  ],
+
+  "rules": [
+    {"a": "sky",   "b": "sky",   "when": "contact", "energy": -1.0},
+    {"a": "solid", "b": "solid", "when": "contact", "energy": -0.8},
+    {"a": "rock",  "b": "rock",  "when": "contact", "energy": -0.3},
+    {"a": "earth", "b": "earth", "when": "beside",  "energy": -0.4},
+    {"a": "earth", "b": "rock",  "when": "above",   "energy": -0.4},
+    {"a": "rock",  "b": "earth", "when": "above",   "energy":  0.6},
+    {"a": "sky",   "b": "grass", "when": "above",   "energy": -1.4},
+    {"a": "solid", "b": "grass", "when": "above",   "energy":  3.0},
+    {"a": "grass", "b": "soil",  "when": "above",   "energy": -0.4},
+    {"a": "ore",   "b": "ore",   "when": "contact", "energy":  0.8}
+  ]
+}

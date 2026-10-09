@@ -1,0 +1,372 @@
+# Channels demo: ground + roots on one tile kernel
+
+Plan for the first test of the interface in `notes/channels.tex` (sections
+7, 10, 16): two channel sets written separately against a generic layer, then
+combined by taking the union of their factors, with no edit to the kernel.
+Numba kernel, not the bit sampler.
+
+## Demo
+
+Side view, 2D grid of tiles.  Four channels:
+
+| channel  | level | domain                              | kernel                       |
+|----------|-------|-------------------------------------|------------------------------|
+| `surf`   | 8     | rows of the chunk under the surface, 0..8 | designed: value-noise heightmap, sampled once |
+| `tile`   | 1     | signatures of the tile set          | generic Gibbs (numba)        |
+| `cert`   | 1     | d in {0..D} + INF                   | joint with `tile` at each site (certificate predicate) |
+| (root exemplar) | 1 | enters as counted tables, not as a variable | — |
+
+Ground set (`castlegen/channels/ground.py`):
+
+- `surf` channel: 1D value noise over chunk columns gives the surface height;
+  the chunk value is how many of its 8 rows lie under the surface.  Honourable
+  under support by construction (a chunk above a non-full chunk is empty).
+- hard seam factor on the tile view `solid`, vertical: solid needs solid below
+  (the support rule of `generic.support_rule`); below the map counts as solid.
+- soft honour factor `count`: the number of solid tiles in a chunk against
+  8 * surf, a quadratic table.
+- soft pair tables over the view `ground` (sky / soil / stone; root kinds read
+  as soil), from the tile set's rules.
+
+Root set (`castlegen/channels/roots.py`):
+
+- view `root` (none / earth / trunk / r1 / r2 / r3), view `mass`
+  (0 / 0 / 3 / 1 / 2 / 3), view `trunk`.
+- soft pair tables over `root` counted from a hand-painted ASCII exemplar
+  (negative PMI, smoothed) plus a unary from its marginal.
+- hard contact factor: a root or trunk tile never touches sky, except the
+  trunk's north side, which must be sky (the trunk stands at the surface).
+- certificate `cert`: d per cell.  Valid at p iff mass_p = 0, or p is a trunk
+  with d_p = 0, or some 4-neighbour q has mass_q >= mass_p > 0 and d_q < d_p
+  < INF.  The tree rule of channels.tex section 14 with mass in place of the
+  join bits.  Drawn jointly with the tile at each site by enumerating (t, d),
+  the neighbours' validity included (dependants), as blockfield does with its
+  (g, d) field.  A small cost DELTA * d keeps chains short.
+
+Combination (`notes/experiments/chan_combined.py`): the union of the two
+factor lists on one tile channel whose views are the union of the views.
+Expected to need no new code beyond the script; knob changes only if the two
+sets fight (e.g. the root tables pulling density away from `surf`).
+
+## Generic layer (`castlegen/channels/core.py`, `kernel.py`)
+
+- `Channel(name, h, D, views)`: grid `(H / h, W / h)` int32; `views[name]`
+  is a `(D,)` int array (a view of the domain).
+- `Factor`: a table over views.  Kinds:
+  - `pair`: `(a: chan, view) at p` with `(b: chan, view) at q`, `q = (p * h_a)
+    // h_b + off` in b's cells.  Same-level neighbours (`off = (0, 1)`) and
+    parent reads (`b` coarser) alike.  `pad`: b's view value off the grid,
+    or -1 to skip the term there.
+  - `count`: `(a: chan, view) at p` with the SUM of view `b` over the finer
+    channel's cells inside the block of p.  Homed on the fine channel.
+  - `unary`: a table over one view.
+  - hard = entries of `inf`.  No separate type.
+- `Certificate(tile_chan, mass_view, root_view, cert_chan, D, delta)`: the one
+  computed factor; the kernel has a branch for it.  (channels.tex section 16:
+  a computed factor produces its shape directly.)
+- `Model(channels, factors, certs)`: `compile()` packs every channel grid into
+  one buffer, every view into one buffer, every table into one buffer, and
+  each factor into a descriptor row.  For a channel being updated it lists
+  the factors homed on it plus the reflections of same-level pair factors
+  (transposed table, negated offset).  Factors homed below a channel are
+  ignored when that channel is updated: top-down only (section 12).
+  Colouring: radius = max offset (+1 with a certificate, dependant reads);
+  2 colours at radius 1, 5 at radius 2 as `(x + 2 y) mod 5`.
+- `kernel.sweep`: one sweep of a level-1 channel, colour by colour, each site
+  drawing its value from the exact conditional over all D candidates (Gumbel
+  over finite energies; a site with no finite candidate keeps its value and
+  is counted as a violation).  With a certificate, candidates are (t, d).
+- Designed channels (`surf`) write their grid themselves and have no kernel.
+- Schedule: hand-declared in the scripts (levels top-down, N sweeps at level
+  1).  No ramps, T = 1, fixed sweep counts.
+
+## Order of work
+
+1. core + kernel, with a test: a pair MRF on a small torus reproduces
+   `bitgibbs.exact`-style conditionals (or simply: support never violated,
+   count honoured).
+2. ground alone: `notes/experiments/chan_ground.py` -> `images/chan_ground.png`.
+3. roots alone on a flat clamped ground: `chan_roots.py` -> `images/chan_roots.png`.
+4. combined: `chan_combined.py` -> `images/chan_combined.png`; report which
+   knobs, if any, had to move.
+
+## Results (2026-10-06)
+
+Code: `castlegen/channels/{core,kernel,ground,roots}.py`, tests in
+`tests/test_channels.py`, scripts `notes/experiments/chan_{ground,roots,combined}.py`,
+images `images/chan_{ground,roots,combined}.png`.
+
+Ground alone (128 x 256, 60 sweeps, 7 ms/sweep): 0 unsupported cells, chunk
+solid count within 0.9 of 8 * surf on average, 92% of chunks exact.
+
+Roots alone (64 x 192, flat ground, 1000 sweeps, 8 ms/sweep, 4 trunks): 0
+rule violations, 0 dangling ports, 0 root-sky contacts, 120 root cells,
+mass 65 / 34 / 21 thin to thick, degree 6 / 100 / 14 tips / chains / forks.
+Two design changes were forced on the way and are in the module docstrings:
+  - roots as plain mass cells with pairwise attraction fill blobs (a blob
+    has more good pairs than a chain), so roots became port tiles with join
+    bits in the certificate, as channels.tex section 14 says;
+  - single-site Gibbs cannot nucleate a port pair, so the port seam is soft
+    (`dangle`), and the exemplar's mass / degree statistics are counted as
+    marginals, since its tips are all mass 1 and the joint table priced
+    the thick tip every growing root passes through at ~8.
+  The certificate d uses Dmax 4096 with delta 0.05: with a geometric draw
+  the d-sum over a chain of n cells is prod 1 / (exp(delta i) - 1), neutral
+  while delta * depth < 1, and the range must hold depth / delta.
+
+Combined (96 x 256, 1500 sweeps, 25 ms/sweep): the union of the factor
+lists on one tile channel, no kernel edit, no new code beyond the script.
+0 unsupported, 0 certificate violations, 4 of 4 trunks at the surface, 75
+root cells.  One knob moved: `grow` 1.0 -> 1.5, because the ground's
+texture term sees root cells as earth and in fine-grained stone they lose
+the rock cohesion.  Gating the texture off root kinds entirely (a zero row
+in the ground view) was tried and is wrong: the trunk then loses the solid
+cohesion every surface cell has and is never placed.  The right gate is
+narrower than "transparent": roots are earth-like solids to the ground.
+
+Trenches: with the tile level started blank, the ground rose for ~50
+sweeps and a trunk was placed as soon as the rising ground entered its
+marked chunk, at that chunk's bottom row; the hard sky-above-trunk rule and
+the support rule then locked a one-wide shaft above it while the ground
+rose up to 7 more rows.  Fixed by starting level 1 as a consistent
+refinement of surf (`ground.init_tiles`, as promise.py's child
+initialisation): trunk depth below the neighbouring surface went from 8
+to 0..2 cells, the residual being the surface's own fluctuation.
+
+Not yet good: the soil / stone texture is salt-and-pepper at T = 1 with
+these pair energies, and root systems are modest (about 20 cells per
+trunk in the combined run) and grow slowly, one tip cell per sweep at
+best, since every extension passes a dangling port.
+
+## Results, second pass: masked exemplar coordinates (2026-10-06)
+
+The thin wiry roots of the first pass were the pair statistics' fault:
+pair terms carry no shape, and the exemplar was itself a one-cell-wide
+skeleton.  `castlegen/channels/coord.py` adds the coordinate channel of
+channels.tex sections 5 and 9: each cell holds an index into a thick,
+masked ASCII exemplar; the view `alpha` is FREE (masked out: the ground's
+cell, no root allowed), EARTH (the ring below the surface around the
+roots: any earth tile) or a specific root / trunk tile; one pair factor at
+offset (0, 0) couples tile to alpha(u) at cost nu per mismatch.  The
+certificate, port seam and contact rules are unchanged and keep acting on
+the tiles; the counted tables are switched off (`roots.factors(counted=False)`).
+
+Kernel: (u, t, d) are drawn jointly per site (`coord.joint_sweep`), using
+the tile kernel's factor energies and certificate weights (factored out
+as `kernel.site_weights`).  Separate u and t sweeps could not nucleate:
+the coordinate and the tile must change together, and with 45 root kinds
+against one soil, label entropy beat any mismatch cost small enough to
+let them change in turn.  Coordinate energy: lam per incoherent
+neighbour, except that two FREE cells owe each other nothing, so a
+verbatim copy of the exemplar's masked region surrounded by FREE
+continuations is the energy minimum.  Candidates per site: the current
+value, the four coherent continuations, KR random coordinates, KT
+coordinates whose alpha equals the current tile (how a placed trunk
+finds its coordinate).  KR = 8 gave blobs: inside a thick band every
+interior coordinate matches, so jumps turn the copy into a patchwork.
+KR = 0 copies verbatim; KR = 1 keeps the shape with variation (a doubled
+taproot, a jagged crown).  Knobs: nu 6, lam 1, dangle 1 (ports now only
+mark an unfinished copy), KR 1, KT 1.
+
+Roots alone (64 x 192, 300 joint sweeps, 15 ms/sweep, 4 trunks): 0 rule
+violations, 414 root cells, mass 28 / 102 / 284 thin to thick, 683
+coordinate cells in the mask, 5 mismatches.  images/chan_roots2.png.
+
+Combined with the ground (96 x 256, 400 joint sweeps, 39 ms/sweep): no
+knob moved from the roots-only run.  0 unsupported, 0 certificate
+violations, 3 of 3 trunks, 227 root cells, 7 mismatches.  One exemplar
+fix on the way: the earth ring must start below the trunk's row, or the
+exemplar asks for earth beside the trunk where the real surface has sky,
+and the trunk flickers.  images/chan_combined2.png.
+
+Tree certificate (2026-10-06): the copies looped because the certificate
+only asked for at least one parent, and the exemplar's thick bands were
+grids of joins.  `Certificate(tree=True)` makes the join graph a forest:
+each root cell has exactly one parent (joined, mass >=, smaller d) and
+every other join is to a child (mass <=, larger d, no parent but this
+cell); a trunk's joins are all children.  `coord.parse_exemplar(tree=True)`
+derives the exemplar's ports from a breadth-first spanning tree over
+mass-non-increasing adjacencies, so a band becomes a comb and the
+exemplar itself satisfies the rule.  Roots alone, 300 sweeps: extra
+joins 308 -> 0, cells with more than one parent 205 -> 0, violations 0,
+477 root cells.  Combined, 400 sweeps: 0 / 0 / 0, 3 of 3 trunks, 190
+root cells, 0 coordinate mismatches.  Cost: 26 and 56 ms per sweep (was
+15 and 39), the tree interval needing the two smallest joined d's.
+
+Large exemplar (2026-10-06): `coord.EXEMPLAR_BIG`, 40 x 84, 504 root
+cells, painted from strokes by `notes/experiments/paint_big.py` (a 3-wide
+taproot thinning to mass 1, two main laterals with drops and twigs,
+mid-depth laterals, lower twigs); `EX=big` in both scripts.  Roots alone
+(96 x 360, 600 sweeps, 66 ms/sweep, 4 trunks): 1214 root cells, 0
+violations, 0 extra joins, still growing.  Combined (128 x 384, 800
+sweeps, 107 ms/sweep): 510 root cells, 4 of 4 trunks, 0 / 0 / 0.
+
+The ground gate, third try: with OTHER mapped to earth the copies in the
+ground stalled at 411 cells (a root cell in fine-grained stone pays the
+lost rock cohesion); with OTHER as a zero row nothing grew at all (a root
+cell loses the solid cohesion every solid gets, about 3 per cell).  The
+gate that works is a wildcard: OTHER takes the (x, x) texture term
+against a neighbour of kind x, the solid term against sky, and the mean
+solid unary, so a root cell is texture-neutral wherever it stands.  That
+is the marginalised form of the section 16 gate: the ground says nothing
+about cells it does not own but keeps its statements about their
+neighbours.  What still clips the copies in the ground is the terrain
+itself: laterals that would rise above the local surface cannot be copied
+(roots never touch sky), so systems under a slope come out one-sided.
+
+## Fixed budget: a coarse coordinate channel (2026-10-06)
+
+The sequential growth was the seeding, not the exemplar: every fine cell
+took its coordinate from a neighbour, so a copy spread from the trunk at
+one cell per sweep.  `coord.Coarse` adds the parent: a level-8 channel
+holding one exemplar window per chunk (its top-left exemplar cell) or
+FREE, sampled by the generic tile kernel with
+  - coherence: a neighbour's window is this one's shifted by 8, hard
+    between two windows (lam8 = inf), a small cost f per view for a
+    window beside FREE (the copy's perimeter);
+  - a hard surface rule against surf: every root cell of the window lies
+    below the chunk's first solid row, a trunk sits on it, and a trunk on
+    the window's top row needs an empty chunk above (a second factor at
+    offset (-1, 0));
+  - a unary bonus on the trunk window and on every masked window (the
+    density knob);
+  - the certificate at level 8 (the same kernel code, joins = coherent
+    neighbours, mass 1 on masked windows, trunk windows the roots): no
+    headless fragments.
+Then a consistent refinement: every cell of a placed window takes its
+exemplar coordinate, its tile, and its certificate depth from the
+exemplar's own tree, with subtrees whose path to the trunk leaves the
+placed windows pruned back to ground.  The joint kernel then runs a few
+sweeps with a soft parent-honour term (mu per cell off its refinement).
+
+128 x 512, big exemplar, 30 coarse sweeps (1 s) + 30 fine joint sweeps
+(0.18 s each): 9 trunks, 169 windows, 2936 root cells, 7% of the solid
+ground (the exemplar is 40 deep, the ground about 77), 0 support, 0
+certificate, 0 loop violations, 0 sites without a candidate, 18
+coordinate mismatches.  Against the sequential version: 510 cells after
+800 sweeps.  images/chan_combined3.png.  Two refinements were needed on
+the way: the surface rule first forbade windows whose earth ring rose
+above the surface (copies came out a third complete; the ring is the
+fine level's business) and the refinement first placed root cells whose
+parent lay in an unplaced window (orphan subtrees that only a tip-by-tip
+dissolution could remove).
+
+## Soft coherence, hard seams (2026-10-06, time-boxed)
+
+Recombination at window seams: coarse coherence (exact shift) made soft
+(lam8 = 1), and inter-block compatibility made hard through edge
+signatures: per window side, the (position, mass, parent-ward) of every
+port crossing the edge, parent-ward meaning the cell's exemplar-tree
+parent lies across it.  Two windows may sit side by side iff their facing
+signatures agree with parent-ward flipped; a child crossing against FREE
+is a cut root (soft), a parent crossing against FREE is forbidden; the
+level-8 certificate's witnesses lie parent-ward.  Monotonicity stays hard
+at the tile level, with certificate depth recomputed over the stitched
+port tree at refinement and unreached root tiles pruned.  Sheet = the big
+system and its mirror image (EXEMPLAR_SHEET, 1008 root cells, 1115
+signatures).
+
+128 x 512: 142 windows, 9 trunks, 28 recombined seams, 2233 root cells,
+0 pruned, 0 / 0 / 0 violations, 21 coordinate mismatches, same budget as
+before.  Two attempts were needed: signatures without direction let 43%
+of placed root cells be pruned (a thin crossing led into a thick band, or
+into a piece whose parent was cut); with direction but symmetric
+witnesses still 32% (a window connected only through a child could keep
+its parent cut).  Direction and parent-ward witnesses fixed both, at the
+price of 100 coarse sites with no legal move (parent cuts forbidden).
+Diversity is modest: 28 of the seams recombine, and visibly only where
+the mirrored copy offers a matching edge.  A sheet of several distinct
+systems is what the mechanism needs; the mechanism itself is in place.
+
+## The sugar test: a learned free-energy correction (2026-10-06)
+
+`castlegen/channels/sugar.py`, `notes/experiments/learn_sugar.py`.  Fine
+level: water, sugar, stone; sugar needs water on all four sides (hard),
+unary mu on sugar, nothing else.  Coarse: one 4 x 4 stone rectangle per
+8 x 8 block at 25 offsets or absent (never overlapping, touching only
+across block edges).  Given the objects the fine level is a hard-square
+lattice gas with stone and its ring excluded; abutting rectangles share
+ring cells, so the ideal joint clusters objects by counting alone.
+
+Ideal: two-way sampler, tile Gibbs alternating with collapsed object
+moves (the block's tiles integrated out by a column transfer matrix,
+256 states, then redrawn by forward-filter backward-sample).  Forward:
+objects by the generic kernel with a learned presence unary and learned
+pair tables over adjacent offsets, then tiles.  Fit: persistent moment
+matching, pair tables on the conditional both-present distribution,
+presence and mu on their own statistics; 300 steps, 15 s.  Ideal 6 x 6
+blocks (400 sweeps, 14 s), forward 12 x 12.
+
+| horizontal pairs of present neighbours | full side | partial | corner | apart | present | sugar |
+|---|---|---|---|---|---|---|
+| ideal | 0.047 | 0.115 | 0.002 | 0.836 | 0.352 | 0.190 |
+| forward, untrained | 0.010 | 0.027 | 0.003 | 0.960 | 1.000 | 0.153 |
+| forward, trained | 0.049 | 0.134 | 0.000 | 0.817 | 0.313 | 0.190 |
+
+Vertical pairs fit less well (partial 0.081 trained against 0.113 ideal);
+the forward statistics are a few hundred objects per evaluation and the
+trace is noisy.  Learned table at the shared edge: -1.7 to -1.8 at full
+side contact and misalignment 1, -1.3 at 2, -0.6 at 3, -0.1 one cell
+apart.  Checks: two 4 x 4 rectangles abutting on a side regain 10 ring
+cells for the lattice gas at about 0.19 nats per site at z = 0.74, so
+about 1.9 nats; and the presence unary moved from +6 to -4.3, about 10.3
+nats, against 36 excluded sites at 0.19 plus log 25 for the offset
+entropy, about 10.  Both learned numbers are the free-energy quantities
+they should be.  mu stays at 0.29 through the fit, as it should: given
+the objects the two fine levels are the same distribution.
+
+Two earlier attempts failed.  The ideal at mu 0.7 placed 5% objects
+(statistics on two or three rectangles) and the pair tables were fitted
+on all entries, so the absent-absent gap swamped the step; fixed by a
+denser ideal and the conditional fit.  Then stone had energy 0 on free
+cells, so the tile sweeps grew stone blobs over about half the plane;
+the ideal's tile Gibbs and its collapsed object moves (which integrate
+over water and sugar only) targeted different distributions, and the
+fit dragged mu to -0.28 to cover the mismatch.  Fixed by an infinite
+unary on stone (the painted rectangles are fixed cells, which the
+kernel skips).  images/learn_sugar.png: ideal, untrained, trained.
+
+## Fitting the hand-tuned knobs (2026-10-06)
+
+`notes/experiments/learn_knobs.py`.  A recovery test: can moment matching
+replace the tuning session of chan_combined3?  Nine soft knobs, each a
+linear multiplier on a statistic: level 8 lam8, f, cut, bonus, win_bonus
+(statistic = finite energy change of u8 with the knob raised by one, so
+exactly the multiplied count), level 1 nu, lam, mu, dangle (mismatches,
+incoherent coordinate pairs, cells off the refinement, dangling ports).
+Targets: the hand-tuned procedure's averages over 6 seeds.  Start: every
+knob at 1.  The model is the budgeted procedure.  Level 8 fitted first
+(150 steps, 6 min), then level 1 on it (100 steps, 11 min).  Evaluation
+on 4 fresh seeds.
+
+| | lam8 | f | cut | bonus | win_bonus | nu | lam | mu | dangle |
+|---|---|---|---|---|---|---|---|---|---|
+| hand-tuned | 1.00 | 0.10 | 2.00 | 4.00 | 2.00 | 6.00 | 1.00 | 2.00 | 1.00 |
+| fitted | 0.86 | 0.02 | 1.87 | 2.71 | 1.70 | 5.77 | 0.92 | 1.97 | 1.04 |
+
+| held out | windows | trunk windows | seams | root cells | trunks | pruned, violations, no-candidate |
+|---|---|---|---|---|---|---|
+| hand-tuned | 176 | 11.8 | 37 | 2887 | 12.5 | 0 |
+| all knobs 1 | 0 | 0 | 0 | 6134 | 244 | 0 |
+| fitted | 194 | 12.5 | 40 | 3188 | 13.0 | 0 |
+
+Level 1 recovers the hand values to within noise.  Level 8 matches its
+statistics but not all its values: f fell to about 0 and the bonuses sit
+lower, a cheaper perimeter paying for smaller bonuses; bonus was still
+drifting up (2.65 to 3.04 over the last 50 steps), so that direction is
+flat and slow, not converged.  Per-seed statistics vary by a factor of two
+(the surface), which is most of the noise.  images/learn_knobs.png:
+hand-tuned, all knobs 1 (a mat of roots along the surface: no windows,
+nothing holding the tiles to the exemplar), fitted.  Indistinguishable
+from the hand-tuned run by eye.
+
+What this does not do: it rescales table shapes designed by hand, with
+targets from the hand-tuned run.  The tables the fine level implies (a
+per-window unary, soft pair tables over compatible edge signatures) are
+not learned here; that is the sugar test's job at scale.
+
+## What this does not test
+
+Promotion of a coordinate view, exemplar coordinates (the roots use counted
+pair tables, not `generic.py`'s coordinates), the bit sampler, the
+honourability checker, calibration.  Those are later.

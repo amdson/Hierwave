@@ -1,0 +1,29 @@
+{
+  "tileset": "wilds", "size": [64, 64], "torus": true,
+  "sweeps": 600, "T": 0.6, "T_hot": 4.0, "seed": 0,
+  "clean": true, "flow": true, "connect": {"tag": "road", "void": "lake"},
+  "place": [
+    {"stroke": "river", "points": [[20, 0], [20, 18], [36, 18], [36, 46], [20, 46], [20, 63]], "width": 3},
+    {"stroke": "river", "points": [[0, 56], [63, 56]], "width": 2},
+    {"disc": "lake", "at": [52, 24], "radius": 4},
+    {"disc": "lake", "at": [8, 36], "radius": 3},
+
+    {"path": "bridge", "points": [[19, 10], [21, 10]]},
+    {"cell": "landing@180", "at": [18, 10]}, {"cell": "landing@0", "at": [22, 10]},
+    {"path": "bridge", "points": [[28, 17], [28, 19]]},
+    {"cell": "landing@90", "at": [28, 16]}, {"cell": "landing@270", "at": [28, 20]},
+    {"path": "bridge", "points": [[35, 30], [37, 30]]},
+    {"cell": "landing@180", "at": [34, 30]}, {"cell": "landing@0", "at": [38, 30]},
+    {"path": "bridge", "points": [[8, 55], [8, 56]]},
+    {"cell": "landing@90", "at": [8, 54]}, {"cell": "landing@270", "at": [8, 57]},
+
+    {"structure": "village", "at": [6, 4]},
+    {"structure": "village", "at": [26, 26]},
+    {"structure": "village", "at": [44, 6]},
+    {"structure": "village", "at": [54, 40]},
+    {"path": "road", "points": [[8, 5], [12, 5], [12, 10], [17, 10]]},
+    {"path": "road", "points": [[28, 27], [31, 27], [31, 30], [33, 30]]},
+    {"path": "road", "points": [[46, 7], [50, 7], [50, 12]]},
+    {"path": "road", "points": [[56, 41], [60, 41]]}
+  ]
+}
