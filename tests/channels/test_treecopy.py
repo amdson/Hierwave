@@ -6,8 +6,9 @@ from castlegen.channels.treecopy import KINDS, TreeCopy, parse_tree, procedural_
 
 def test_exemplar_parse_satisfies_certificate():
     A = procedural_tree()
-    alpha, mass, mask, (ty, tx), n_ground = parse_tree(KINDS, A)
+    alpha, mass, mask, trunks, n_ground = parse_tree(KINDS, A)
     assert coord.check_exemplar(KINDS, alpha, np.where(mass > 0, mass, 0)) == 0
+    (ty, tx), = trunks
     assert alpha[ty, tx] == 2 + KINDS.index("trunk") and n_ground == ty
     assert (alpha[:n_ground] == coord.FREE).all()                      # the ground is the ground's
     depth = coord.exemplar_depth(KINDS, alpha)
@@ -43,3 +44,17 @@ def test_sequential_growth_valid():
     tc.sweep(30)
     m = tc.metrics()
     assert m["rule_violations"] == 0 and m["attached_frac"] == 1.0 and m["trunks"] == 1 and m["in_ground"] == 0
+
+
+def test_sheet_parse_and_copy():
+    from castlegen.channels.treecopy import sheet
+    A = sheet(seeds=(0, 1), mirror=True)
+    alpha, mass, mask, trunks, n_ground = parse_tree(KINDS, A)
+    assert len(trunks) == 4 and all(t[0] == n_ground for t in trunks)
+    assert coord.check_exemplar(KINDS, alpha, np.where(mass > 0, mass, 0)) == 0
+    tc = TreeCopy(128, [40, 104], A=A, seed=3)
+    assert len(tc.trunk_win) == 4 * 8                                   # every trunk at every column of a chunk
+    tc.seed_coarse(40)
+    tc.sweep(5, mu=2.0)
+    m = tc.metrics()
+    assert m["rule_violations"] == 0 and m["attached_frac"] == 1.0 and m["trunks"] == 2 and m["in_ground"] == 0

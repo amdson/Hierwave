@@ -250,6 +250,19 @@ whose signatures match nothing else (105-391 cells pruned, 1266-1979
 cells against 2342 verbatim).  Recombination needs more material at
 each height than one tree offers.
 
+The sheet (`treecopy.sheet`, the script's default): four procedural trees
+of different seeds and their mirror images on one ground line, 584
+columns, 8 trunks, 3634 tree cells; `parse_tree` takes one trunk per
+component that reaches the ground row, and each world trunk draws which
+exemplar trunk it copies.  Verbatim (lam8 hard): five different complete
+trees (2253 cells, 0 pruned, diversity 0.57, every guarantee, 9 s).
+Recombination on top: 7 / 18 / 22 seams at lam8 2 / 1 / 0.5, with 2-7
+source trees per copy and diversity 0.69-0.77, but 140-551 cells pruned
+(1145-1386 cells): mixed crowns next to bare forks.  The seams are the
+limit, not the material: a window is kept only where its signature
+matches a neighbour's, and a crown cut at a seam loses its outer part.
+images/tree_exemplar_sheet.png (verbatim, then lam8 2, 1, 0.5).
+
 Not learned, copied: the soft terms are the coordinate coupling and
 coherence as in the roots second pass; a learned potential on top of the
 copy is the same open item as for the limbs.

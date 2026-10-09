@@ -28,6 +28,11 @@ order I would do them.  Each item names its source.
       exemplar itself copies with guarantees through the coordinate
       pipeline (`trees_test.md` stage C); the counted limb set is the
       stand-in where a copy is not wanted.
+- [ ] **Recombination without pruning** (stage C): a recombined copy is
+      cut wherever a window's signature matches nothing at a seam; the
+      refinement prunes the outer part.  Either let the joint kernel grow
+      the cut subtree back (it does not, at 60 sweeps), or choose windows
+      whose crossings into FREE are tips only (a signature-aware bonus).
 - [ ] **Learning on top of a copied structure** (stage C): the copy's soft
       terms are coordinate coupling and coherence; nothing is fitted.  The
       induced free energy of a copied crown on the terrain or the slot is

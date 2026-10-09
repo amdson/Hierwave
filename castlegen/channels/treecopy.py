@@ -82,6 +82,25 @@ def procedural_tree(m=64, seed=0, depth=5):
     return A
 
 
+def sheet(seeds=(0, 1, 2, 3), mirror=True, gap=8, m=64, depth=5):
+    """Several procedural trees on one ground line, side by side with `gap`
+    columns between them, each followed by its mirror image when `mirror`."""
+    pics = []
+    for sd in seeds:
+        A = procedural_tree(m, sd, depth)
+        pics.append(A)
+        if mirror:
+            pics.append(A[:, ::-1])
+    g = int(m * 0.86)
+    col = np.full((m, gap), SKY, np.int32)
+    col[g:] = SOIL
+    col[g:g + 2] = GRASS
+    out = [col]
+    for A in pics:
+        out += [A, col]
+    return np.concatenate(out, 1)
+
+
 # ------------------------------------------------------------------ kinds
 def make_kinds():
     names = ["air", "grass", "soil", "trunk"]
@@ -117,26 +136,37 @@ def tile_channel(kinds=KINDS, name="tile"):
 
 # --------------------------------------------------------------- exemplar
 def parse_tree(kinds, A, ring=1):
-    """(alpha, mass, mask, trunk (y, x), n_ground) in the flipped frame:
-    the ground is rows [0, n_ground), the trunk on row n_ground."""
+    """(alpha, mass, mask, trunks [(y, x)], n_ground) in the flipped frame:
+    the ground is rows [0, n_ground), every trunk on row n_ground.  One
+    tree per 4-connected component of tree cells that reaches the ground
+    row; its trunk is the bark cell on that row nearest the component's
+    centre; components off the ground (leaf specks) become air."""
     A = A[::-1]
     my, mx = A.shape
     treeish = (A == BARK) | (A == LEAF) | (A == DARK)
     bark = A == BARK
     lab, n = ndimage.label(treeish)
     ty = int(np.nonzero(bark.any(1))[0].min())
-    xs = np.flatnonzero(bark[ty])
-    tx = int(xs[np.argmin(np.abs(xs - mx / 2))])
-    keep = lab == lab[ty, tx]
+    trunks = []
+    for c in range(1, n + 1):
+        comp = lab == c
+        xs = np.flatnonzero(comp[ty] & bark[ty])
+        if len(xs) == 0:
+            continue
+        cx = np.nonzero(comp)[1].mean()
+        trunks.append((ty, int(xs[np.argmin(np.abs(xs - cx))])))
+    keep = np.isin(lab, [lab[t] for t in trunks])
     solid = bark.copy()
     solid[:ty] = True                                            # the ground counts as solid for the thickness
     thick = ndimage.distance_transform_cdt(solid, metric="taxicab")
     mass = np.where(keep & bark, np.clip(thick, 1, 3), np.where(keep, 1, 0)).astype(np.int64)
     seen = np.zeros((my, mx), bool)
     ports = np.zeros((my, mx, 4), bool)
-    seen[ty, tx] = True
-    mass[ty, tx] = 3
-    queue = [(ty, tx)]
+    queue = []
+    for t in trunks:
+        seen[t] = True
+        mass[t] = 3
+        queue.append(t)
     while queue:
         y, x = queue.pop(0)
         for i, (dy, dx) in enumerate(DIRS4):
@@ -147,12 +177,15 @@ def parse_tree(kinds, A, ring=1):
                 ports[y, x, i] = ports[ny, nx, (i + 2) % 4] = True
                 queue.append((ny, nx))
     assert (keep == seen).all()
+    is_trunk = np.zeros((my, mx), bool)
+    for t in trunks:
+        is_trunk[t] = True
     alpha = np.full((my, mx), coord.FREE, np.int64)
     for y in range(my):
         for x in range(mx):
             if not keep[y, x]:
                 continue
-            if (y, x) == (ty, tx):
+            if is_trunk[y, x]:
                 alpha[y, x] = 2 + kinds.index("trunk")
                 continue
             ps = "".join(s for s, on in zip(SIDES, ports[y, x]) if on)
@@ -168,7 +201,7 @@ def parse_tree(kinds, A, ring=1):
         mask = d
     mask[:ty] = False
     alpha[mask & ~keep] = coord.EARTH
-    return alpha, mass, mask, (ty, tx), ty
+    return alpha, mass, mask, trunks, ty
 
 
 # ---------------------------------------------------------------- factors
@@ -215,7 +248,8 @@ class TreeCopy:
                  delta=0.05, lam8=INF, f8=0.1, cut=2.0, align=True):
         self.kinds = KINDS
         self.A = procedural_tree() if A is None else A
-        self.alpha, self.mass, self.mask, self.trunk, self.n_ground = parse_tree(self.kinds, self.A, ring)
+        self.alpha, self.mass, self.mask, self.trunks, self.n_ground = parse_tree(self.kinds, self.A, ring)
+        self.trunk = self.trunks[0]
         self.depth = coord.exemplar_depth(self.kinds, self.alpha)
         self.H, self.W = self.A.shape[0], W
         assert self.H % CH == 0 and W % CH == 0
@@ -247,11 +281,19 @@ class TreeCopy:
             f8s.append(Factor.pair(("u8", "ey"), ("row8", "val"), (0, 0), tab, name="align"))
             chans8.append(self.row8)
         self.m8 = Model(self.H, W, chans8, f8s, [self.coarse.certificate()])
-        ty, tx = self.trunk
-        wins = [w for w in range(1, self.coarse.D) if self.coarse.has_trunk[w]
-                and self.coarse.wins[w][0] == ty - (ty % CH) and self.coarse.wins[w][1] <= tx < self.coarse.wins[w][1] + CH]
-        self.trunk_win = {w: int(tx - self.coarse.wins[w][1]) for w in wins}   # window -> trunk column in the chunk
+        tcode = 2 + self.kinds.index("trunk")
+        my, mx = self.alpha.shape
+        self.trunk_win = {}                                              # window -> (trunk column in the chunk, coordinate)
+        for w in range(1, self.coarse.D):
+            if not self.coarse.has_trunk[w]:
+                continue
+            ey, ex = self.coarse.wins[w]
+            ts = np.argwhere(self.alpha[ey:ey + CH, ex:ex + CH] == tcode)
+            if len(ts) == 1 and ey == self.n_ground - (self.n_ground % CH) and ts[0][0] + ey == self.n_ground:
+                y, x = ts[0][0] + ey, ts[0][1] + ex
+                self.trunk_win[w] = (int(x - ex), int(y * mx + x))
         self.seed = seed
+        self.rng = np.random.default_rng(seed)
         self.uref = None
         self.reset()
 
@@ -277,23 +319,28 @@ class TreeCopy:
             self.row8.grid[:] = np.arange(self.H // CH)[:, None]
             self.row8.fixed[:] = True
         self.uref = np.full((self.H, self.W), -1, np.int64)
-        self._fix_trunks()
+        self._fix_trunks(choose=True)
 
-    def _fix_trunks(self):
+    def _fix_trunks(self, choose=False):
+        """Trunk tiles, their coordinates and their trunk windows fixed.
+        choose: draw which exemplar trunk each site copies (the windows
+        whose trunk sits at the site's column within the chunk)."""
         k, G = self.kinds, self.n_ground
-        my, mx = self.alpha.shape
-        ty, tx = self.trunk
+        if choose or not hasattr(self, "_site_win"):
+            self._site_win = {}
+            for x in self.trunk_xs:
+                c = x % CH
+                ws = [w for w, (col, _) in self.trunk_win.items() if col == c]
+                assert ws, f"no trunk window with the trunk at column {c}"
+                self._site_win[x] = ws[self.rng.integers(len(ws))]
         for x in self.trunk_xs:
+            w = self._site_win[x]
             self.tile.grid[G, x] = k.index("trunk")
             self.tile.fixed[G, x] = True
-            self.u.grid[G, x] = ty * mx + tx
+            self.u.grid[G, x] = self.trunk_win[w][1]
             self.u.fixed[G, x] = True
             self.cert.grid[G, x] = 0
-            # the trunk window whose trunk column matches x within the chunk
-            c = x % CH
-            w = [w for w, col in self.trunk_win.items() if col == c]
-            assert w, f"no trunk window with the trunk at column {c}"
-            self.u8.grid[0, x // CH] = w[0]
+            self.u8.grid[0, x // CH] = w
             self.u8.fixed[0, x // CH] = True
             self.d8.grid[0, x // CH] = 0
 
