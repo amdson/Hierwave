@@ -1,6 +1,6 @@
 # Channels demo: ground + roots on one tile kernel
 
-Plan for the first test of the interface in `notes/channels.tex` (sections
+Plan for the first test of the interface in `notes/history/channels.tex` (sections
 7, 10, 16): two channel sets written separately against a generic layer, then
 combined by taking the union of their factors, with no edit to the kernel.
 Numba kernel, not the bit sampler.
@@ -38,7 +38,7 @@ Root set (`castlegen/channels/roots.py`):
   trunk's north side, which must be sky (the trunk stands at the surface).
 - certificate `cert`: d per cell.  Valid at p iff mass_p = 0, or p is a trunk
   with d_p = 0, or some 4-neighbour q has mass_q >= mass_p > 0 and d_q < d_p
-  < INF.  The tree rule of channels.tex section 14 with mass in place of the
+  < INF.  The tree rule of history/channels.tex section 14 with mass in place of the
   join bits.  Drawn jointly with the tile at each site by enumerating (t, d),
   the neighbours' validity included (dependants), as blockfield does with its
   (g, d) field.  A small cost DELTA * d keeps chains short.
@@ -62,7 +62,7 @@ sets fight (e.g. the root tables pulling density away from `surf`).
   - `unary`: a table over one view.
   - hard = entries of `inf`.  No separate type.
 - `Certificate(tile_chan, mass_view, root_view, cert_chan, D, delta)`: the one
-  computed factor; the kernel has a branch for it.  (channels.tex section 16:
+  computed factor; the kernel has a branch for it.  (history/channels.tex section 16:
   a computed factor produces its shape directly.)
 - `Model(channels, factors, certs)`: `compile()` packs every channel grid into
   one buffer, every view into one buffer, every table into one buffer, and
@@ -93,7 +93,7 @@ sets fight (e.g. the root tables pulling density away from `surf`).
 ## Results (2026-10-06)
 
 Code: `castlegen/channels/{core,kernel,ground,roots}.py`, tests in
-`tests/test_channels.py`, scripts `notes/experiments/chan_{ground,roots,combined}.py`,
+`tests/channels/test_channels.py`, scripts `notes/experiments/chan_{ground,roots,combined}.py`,
 images `images/chan_{ground,roots,combined}.png`.
 
 Ground alone (128 x 256, 60 sweeps, 7 ms/sweep): 0 unsupported cells, chunk
@@ -105,7 +105,7 @@ mass 65 / 34 / 21 thin to thick, degree 6 / 100 / 14 tips / chains / forks.
 Two design changes were forced on the way and are in the module docstrings:
   - roots as plain mass cells with pairwise attraction fill blobs (a blob
     has more good pairs than a chain), so roots became port tiles with join
-    bits in the certificate, as channels.tex section 14 says;
+    bits in the certificate, as history/channels.tex section 14 says;
   - single-site Gibbs cannot nucleate a port pair, so the port seam is soft
     (`dangle`), and the exemplar's mass / degree statistics are counted as
     marginals, since its tips are all mass 1 and the joint table priced
@@ -143,7 +143,7 @@ best, since every extension passes a dangling port.
 The thin wiry roots of the first pass were the pair statistics' fault:
 pair terms carry no shape, and the exemplar was itself a one-cell-wide
 skeleton.  `castlegen/channels/coord.py` adds the coordinate channel of
-channels.tex sections 5 and 9: each cell holds an index into a thick,
+history/channels.tex sections 5 and 9: each cell holds an index into a thick,
 masked ASCII exemplar; the view `alpha` is FREE (masked out: the ground's
 cell, no root allowed), EARTH (the ring below the surface around the
 roots: any earth tile) or a specific root / trunk tile; one pair factor at

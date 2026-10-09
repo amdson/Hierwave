@@ -1,0 +1,79 @@
+Hierwave todo (rewritten 2026-10-06)
+
+Status: history (G2). Superseded by notes/dsl_updates.md + castlegen/channels. Kept for the record.
+
+The one research risk is calibration between interacting channel sets
+(notes/channels_system.tex, "The risk that stays"; research question 1).
+Everything under LATER is engineering with a known path.  Work the risk
+first; don't start 3D until NOW is answered.
+
+Terms: designed coarse interactions are allowed; coarse interactions the
+lower levels induce (table entries, free-energy corrections) are learned.
+Knobs = one multiplier on a designed statistic (requests beta, health
+terms); tables = entries whose shape the fine level decides.  The
+two-way ideal is the current convenient fitting route, not the only one.
+
+NOW: learned coarse tables for ground + roots
+  [ ] Per-entry residual check on the knob fit (learn_knobs.py): with the
+      knobs at their fitted values, compare model vs target moments per
+      window and per edge-signature pair.  Systematic gaps = a table to
+      unlock; noise = the designed shape is enough.  Also explains (or
+      not) the level-8 flat direction (f -> 0, bonus drifting).
+  [ ] Targets for the tables, by one of:
+      - a two-way ideal for ground + roots (fine joint sweeps alternating
+        with u8 moves given the fine state, scored by the mu coupling and
+        the level-8 factors; small windows), or
+      - direct free-energy estimates: sample/integrate the fine level per
+        window and per window pair, read off delta log Z.
+  [ ] Learn a per-window unary (~4000 entries) and soft pair tables over
+      compatible edge signatures; start from the knob values.  Check
+      whether they move off flat at all.
+  [ ] Separate beta from theta: requests (e.g. trees per area) as
+      multipliers in the joint; chain tables/health knobs fitted to the
+      joint's own moments so untargeted features don't drift
+      (notes/channels_system.tex, "What requesting a statistic means").
+
+NEXT: settle research question 1
+  [ ] Add a third channel set to ground + roots with zero hand tuning;
+      only the fit.  Success = no tuning session needed.
+  [ ] Built-in ablation and per-factor energy breakdown in the compiler.
+
+THEN: remaining research questions (notes/channels_system.tex)
+  [ ] Q2 promotion: edge signature as a promise channel, smoothed
+      -log p(v|u) above, hard honour below; measure stuck chunks, pruned
+      cells, seam quality against the hard version.
+  [ ] Q3 joint blocks: rule for which variables a kernel must draw
+      jointly, inferred from the factor graph under a product-domain cap.
+  [ ] Q4 diversity: sheet of several painted systems; distinct seams vs
+      validity curve.
+  [ ] Q5 chunking: run the pipeline chunk by chunk with halos and compare
+      to the global run (constitution 6-7: fixed local budgets, no
+      global checks).
+
+LATER: engineering with a known path
+  [ ] Fast kernel: bitgibbs.c / port-factorized bit-sliced Gibbs
+      (notes/history/port_gibbs.md), then GPU.  Numba kernel stays the reference
+      until the bit sampler is trusted.
+  [ ] 3D via Luanti (singlenode mapgen, FFI into the C sampler,
+      chunksize 4).
+  [ ] Library of computed factors (support, attachment, connectivity,
+      non-overlap, flow) so new hard structure stops changing the kernel.
+  [ ] Content tooling: existing voxel builds as exemplars with footprint
+      masks; stroke painters (paint_big.py).
+
+PARKED threads (notes exist, not scheduled)
+  - macro objects: hard/soft update decoupling, door matching, contact
+    connectivity (notes/history/macro_objects.md; macro-castle worktree).
+  - structure DSL / unified HMRF (notes/history/dsl.md).
+  - joint sampler over exemplar coordinates and promises
+    (notes/history/joint_sampler.md); generic sampler open questions
+    (notes/history/generic.md section 5).
+
+DONE recently
+  [x] Sugar test: learned pair table (-1.8 nats at side contact) and
+      presence shift (10.3 nats) match the fine level's free energy; fixed
+      free stone on unfixed cells (notes/channels_demo.md).
+  [x] Knob recovery: nine knobs of chan_combined3 fitted from all-ones by
+      moment matching; level 1 recovers the hand values, level 8 matches
+      its statistics on a flat direction (learn_knobs.py).
+  [x] Reading list: notes/reading.md.

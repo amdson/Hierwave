@@ -165,7 +165,7 @@ def field_tables(ts, tabs):
 def site_exits(lab9s, tabs, k):
     """(H W, NW) exits per site of a map of blocks with labs (R, C, 9):
     openings on class ports, and nodes at a sink block's root cell."""
-    from castlegen.blockconn import MLAB
+    from castlegen.legacy.blockconn import MLAB
     node, _, _, sock = tabs
     R, C, _ = lab9s.shape
     S = len(node)

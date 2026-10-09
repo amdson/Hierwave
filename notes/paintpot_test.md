@@ -93,7 +93,7 @@ Code: `castlegen/channels/paintpot.py` (features / fit / energy /
 materialise / canonical), with hooks appended to `induce_circles.py`
 (`paint_region_mid`, `mid_window_F`, `paint_single_mid`, `paint_pair_mid`,
 `paint_region_top`, `paint_single_top`, `paint_pair_top`; 5 x 5 coarse
-canvas, centre (2, 2)).  Tests in `tests/test_paintpot.py` (6 pass):
+canvas, centre (2, 2)).  Tests in `tests/channels/test_paintpot.py` (6 pass):
 - features match a brute-force loop;
 - energy = features . theta;
 - an exact fit recovers a planted theta on exhaustive 3 x 3 binary windows;

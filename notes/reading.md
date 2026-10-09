@@ -86,3 +86,32 @@ closest analogue of the sugar test.
   implied by the fine level".
 - Mehta & Schwab (2014), "An exact mapping between the variational
   renormalization group and deep learning", arXiv.
+
+## Inverse MCRG and compatible Monte Carlo (read 2026-10-08)
+
+Brandt & Ron, "Renormalization multigrid (RMG)", J. Stat. Phys. 102
+(2001), wisdom.weizmann.ac.il/~achi/LOP100.pdf.  The method behind Ron,
+Swendsen & Brandt PRL 89 (2002) (paywalled; not read).  What matters here:
+- Coarse model = P+ table of conditional probabilities of a site given
+  its neighbourhood, counted from blocked samples; neighbourhoods grown
+  adaptively where statistics show a significant change.  No energy, no
+  partition function.  Consistency condition on pairs of sites stated,
+  necessary and sufficient for a joint to exist, used as a diagnostic.
+- Compatible Monte Carlo: fine sweeps that never change the block values;
+  autocorrelation time ~1; 4-8 passes; error flat in L up to 512.  "If
+  (and only if) the CMC autocorrelation time is not short, then the
+  definition chosen for the block variables has been inadequate."
+- Post-relaxation: a few unconstrained sweeps after CMC repair local
+  scales when the coarse table is inaccurate; disturb coarse-fine
+  compatibility.
+- Trivial CFE: same Hamiltonian at every level + post-relaxation already
+  gives good equilibria at a critical fixed point (does not transfer to
+  us: our levels are not copies of one model).
+- Ron, Brandt & Swendsen arXiv:1703.02430, 2011.05567: soft block-spin
+  rule P(s') ~ exp(w s' sum s), w tuned per exponent; = soft honour as a
+  convergence knob.  Ron & Swendsen PRE 66 (2002): multispin couplings
+  matter in the renormalised Hamiltonian.  2002 PRL: 7 couplings (2D),
+  17 (3D), 4^3 -> 128^3 at criticality.
+Consequences recorded in dsl_updates.md: C1 criterion and
+post-relaxation; C2 two admissible forms, pseudo-likelihood estimator,
+adaptive features, support-only baseline.

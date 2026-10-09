@@ -1,0 +1,24 @@
+Status: history (G1). Superseded by notes/dsl_updates.md + castlegen/channels. Kept for the record.
+
+
+if we had an infinitely fast sampler, we could do this perfectly with one of several monte carlo methods. for instance, we could simply use rejection sampling on texture synthesis against attribute validity. we could also sample a texture conditional on consistent block attributes, then transition forward backward between set block attribute using mcmc on texture energy. each of these approaches is obviously laughably intractable. 
+
+suppose we relax the global self-consistency requirement at early stages of sampling, especially at the highest levels of the hierarchy. let's say we're running on 16 px blocks first, and we do a round of sampling from the exemplar. then, we sample mean heights across the blocks conditional on the textures. in each case, we could use alternating checkerboard gibbs for the sampling. so sample texture coordinates in a block conditional on neighboring textures and attributes, then sample attributes conditional on 
+
+
+during sampling, from the perspective of a patch, we have 
+A) neighboring texture coords
+B) neighboring attributes
+C) current texture coords
+D) current attributes
+
+we have A -> C and C -> D. we don't have 
+
+we currently have functions that can sample from curr coord conditional on neighboring coords, and we can pretty reasonably sample from current attributes conditional on current coords. we have trouble sampling from attributes conditional on both neighboring texture coords and neighboring attributes, either with or without info about the current coords. 
+
+but in principle, I think this is possible. the rejection sampling idea I mentioned earlier would work. we could simply keep resampling texture coords until the associated attributes are consistent with the neighborhood. this would give us a true sample from the distribution. so we could either sample repeatedly until the system is consistent, calculate a relaxed error to add to the system energy based on a predicted distribution for column heights, or build a method to sample directly from the set of attributes, constrainted to be valid with neighbors. 
+
+
+if we had a predictor for column heights conditional on neighbors, we could sample from that, then sample from texture coords conditional on that, 
+say we associated each set of texture coords with a distribution of column heights. we could use that to define a likelihood 
+

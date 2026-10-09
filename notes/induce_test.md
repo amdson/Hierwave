@@ -4,7 +4,7 @@ The project is a DSL for simple HMRFs (channel sets) plus an algorithm for
 combining them.  Sets interact only by competing for shared children, so
 combining them correctly means one thing: for every coarse channel,
 estimate the free energy the levels below induce on it and hand it to the
-forward kernel as a potential (channels.tex, "Direction, and the free
+forward kernel as a potential (history/channels.tex, "Direction, and the free
 energy of the level below").  This note specifies that estimator as a
 generic algorithm, `castlegen/channels/induce.py`, and its test on the
 circles toy (`notes/circles_test.md`), where the exact answer is known.
@@ -117,7 +117,7 @@ Outputs `images/induce_circles_*` (tables figure with reference / exact-fit
 Code: `castlegen/channels/induce.py` (generic: `ais_log_z`, `ais_se`,
 `windows`, `fit_tables`, `materialise`), `castlegen/channels/induce_circles.py`
 (the circles hooks `MidWindows`, `TopWindows`, `reference_halos`), tests
-`tests/test_induce.py`.  Run: `notes/experiments/induce_circles.py` (stages A-E,
+`tests/channels/test_induce.py`.  Run: `notes/experiments/induce_circles.py` (stages A-E,
 output `images/induce_circles.json`, log `images/induce_circles_log.txt`),
 `notes/experiments/induce_circles_report.py` (these tables, figures),
 `notes/experiments/induce_circles_edge.py` (the edge diagnostic below).

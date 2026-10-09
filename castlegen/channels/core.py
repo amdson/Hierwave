@@ -15,7 +15,7 @@ Factor: a table over views.
            E[pad] (pad >= 0) or nothing.  Same-level only.
 Hard entries are inf.  A factor is homed on its a side, which is the finer
 (or equal) level: top-down only, a coarser channel never reads a finer one.
-Certificate: the one computed factor (the tree rule of channels.tex, 14):
+Certificate: the one computed factor (the tree rule of notes/history/channels.tex, 14):
 every cell of the tile channel with mass > 0 holds d < INF and is either a
 trunk with d = 0 or has a 4-neighbour q with mass_q >= mass_p and d_q < d_p.
 
@@ -25,7 +25,7 @@ offset), and nothing homed below it.  compile(chan, below=True) also packs
 the factors homed on strictly finer channels that read `chan` (pairs at
 offset (0, 0) and counts), so the candidate energies are the full
 conditional of the joint (bidirectional).  Kinds is a tiny tile-set stand-in
-(name, tags, colour) so the demo does not depend on castlegen.tileset."""
+(name, tags, colour) so the demo does not depend on castlegen.legacy.tileset."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -190,6 +190,7 @@ class Packed:
     src: np.ndarray = None        # (F,) int64
     transposed: np.ndarray = None  # (F,) bool
     convs: tuple = None           # flat float64 convpot vectors (kind 5); (zeros(1),) when none
+    nhard: int = 0                # compile(hard_first=True): rows [0, nhard) hold a +inf entry
 
 
 # ------------------------------------------------------------------ model
@@ -243,7 +244,9 @@ class Model:
             assert c.ports is None or all(p in t.views for p in c.ports), c
 
     # ----------------------------------------------------------- packing
-    def compile(self, home: str, below: bool = False) -> Packed:
+    def compile(self, home: str, below: bool = False, hard_first: bool = False) -> Packed:
+        """hard_first: rows whose table holds +inf first (stable), nhard of
+        them; the order kernel.sweep_cap relies on.  Off: today's order."""
         hc = self.chan(home)
         cidx = {c.name: i for i, c in enumerate(self.channels)}
         vidx, views = {}, []
@@ -317,12 +320,17 @@ class Model:
         else:
             colours, ncol = np.zeros_like(yy), 1          # sequential: still a valid Gibbs chain
         fac = np.array(rows, np.int64).reshape(-1, 8)
+        nhard = 0
+        if hard_first and len(rows):
+            hard = np.array([r[0] != CONVPOT and bool(np.isposinf(tabs[r[7]]).any()) for r in rows])
+            order = np.concatenate([np.flatnonzero(hard), np.flatnonzero(~hard)])
+            fac, src, transp, nhard = fac[order], [src[i] for i in order], [transp[i] for i in order], int(hard.sum())
         return Packed(cidx[home], tuple(np.ascontiguousarray(c.grid, np.int32) for c in self.channels),
                       np.array([c.h for c in self.channels], np.int64), tuple(views), fac,
                       tuple(tabs) if tabs else (np.zeros((1, 1)),), np.ascontiguousarray(hc.fixed),
                       np.ascontiguousarray(colours, np.int64), ncol, cert, np.ascontiguousarray(joins),
                       float(delta), radius, np.array(src, np.int64), np.array(transp, np.bool_),
-                      tuple(convs) if convs else (np.zeros(1),))
+                      tuple(convs) if convs else (np.zeros(1),), nhard)
 
     # ---------------------------------------------------------- sampling
     def sweep(self, home: str, n: int, seed: int = 0, T: float = 1.0, below: bool = False):
