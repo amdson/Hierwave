@@ -370,3 +370,36 @@ not learned here; that is the sugar test's job at scale.
 Promotion of a coordinate view, exemplar coordinates (the roots use counted
 pair tables, not `generic.py`'s coordinates), the bit sampler, the
 honourability checker, calibration.  Those are later.
+
+## Towers of counted rooms: a negative result (2026-10-06)
+
+`castlegen/channels/tower.py`, `notes/experiments/tower_windows.py`.  Target:
+2D towers with 10..15 floors, five rooms per floor, one stair room per floor
+to the next; floor pitch 6 and room pitches 6 / 7 / 9 against B = 8.
+Method: the chan_combined3 pipeline with nothing tower-specific in the
+sampler.  A regenerable sheet of towers whose tiles carry hidden labels
+(floor L, room r, stair state pre / stair / post / top, row dy, stair cell
+position); pairs never seen in the sheet are forbidden, which makes the
+local language exact (the sheet passes, and any seam-consistent tiling is
+a set of valid towers).  Level 8: every distinct window (17k for six
+towers), seams = the tile rule on the 8 pairs across each edge, an unseen
+tower-sky pair a soft cut, soft coherence, a window bonus, a hard flat
+ground.
+
+| start | knobs | result |
+|---|---|---|
+| blank | cut 1 / pair | nothing grows (an open edge costs 8) |
+| blank | cut 0.1-0.25, bonus 2-4 | a gas of ~450 isolated labelled fragments, 0 complete |
+| copy of 2 sheet towers | cut 1, lam8 0 or 1 | both stay valid; 0 tiles change in 200 sweeps |
+| blank + level-8 attachment certificate | cut 0.25-1, bonus 2-6, 200 sweeps | towers grow from the ground, roofs only at 10..12 floors, 0 hard violations, 0 complete: one-block strips with open sides that cannot be bridged |
+
+Diagnosis: every count here is a cumulative label shared over a region
+larger than a block, so (a) a single-site move can never change a count or
+move a stair or a wall that crosses a block edge (copies freeze); (b) from
+blank, label entropy (log 17k windows) beats any seam cost small enough to
+nucleate; (c) with attachment, strips grown independently carry
+incompatible r / stair labels and only dissolution can join them (the WFC
+contradiction).  Not patched.  A principled fix needs a variable at a level
+where the tower is one cell (an object channel holding the count), or a
+kernel that draws a whole row / column of windows jointly; both are new
+machinery.  images/tower_{blank,copy_lam1,cert,sheet}.png.

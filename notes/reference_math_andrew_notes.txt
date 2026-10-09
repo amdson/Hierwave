@@ -1,0 +1,8 @@
+- Should pair energies be over arbitrary pairs? or should we restrict them to be neighborhood interactions. E.g. force the sum to be over p in Neighbors()
+- why is the pair term defined as a summation over p in grid a, with delta fixed? 
+- we might want to forbid parent "reads" and stick to writes instead
+- aren't all factors honour? I guess you're calling them honour when a specific value for the final channel is requested, but that feels like it needlessly singles out a case. this might be made moot if we integrate the write based additive communication from parent to child
+- certificate is "the one computed factor"? what does that mean? why would there only be one? and why are we restricting factors to be table entries anyways? it's not like they're learnable
+- we should update the painted channels paragraph to reflect the additive communication idea. we should also define clear rules for what channels in which blocks are allowed to communicate, and the directions for that communication
+- what are the use cases for promotion again? i forget why we sould do this. is this the term you picked for decoupling cheaply updated hard variables from expensively updated soft ones? 
+- 

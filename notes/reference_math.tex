@@ -69,6 +69,8 @@ neighbour is a child ($m_q \le m_p$, $d_q > d_p$).
 $h_w < h_c$, writes a fine channel $w$ deterministically from $z_c$ (fixed everywhere). Honour
 factors read $w$ by position-free pair tables; position dependence lives in $\pi_c$.
 
+% [NOTE:  it made more sense to make it an operation done to the tiles by a communication channel. for instance tiles would expose an energy biasing vector, and higher latents would be able to add to that mask. adopt the bias field as the DSL's communication primitive, treat painted alphabets as its compression, and let the learned potential take the field as input. ]
+
 \paragraph{Promotion.} For a view $\alpha$ of a large channel $u$, add a channel $w$ with
 $\Dom_w = \mathrm{range}(\alpha)$, move the factors that read $\alpha(z_u)$ to read $w$, and add
 \begin{equation}
