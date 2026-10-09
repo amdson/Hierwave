@@ -129,7 +129,9 @@ paint `v` alone in its block's frame and take the indicator over
 to the stencil geometry this is the paint potential of
 `reference_math` section 4 over coarse values, exact on held-out pairs;
 one-hot and learned features were not (`convpot_test.md`).  The stamp is
-one option, not the design.
+one option, not the design; but see Q1: under the bootstrap trainer the
+derived feature is exact and the learned one is not, and a value the
+forward never visits has no learned potential at all.
 
 *Training: bootstrap from `q` toward `p*`.*  Level by level from the
 tiles up, with the level below already installed.  At level `l`:
@@ -331,8 +333,17 @@ enumerating combinations of writers.  Kept here for then.
 
 ## Open
 
-- Q1. Per channel: learned, derived, or mixed features?  Start derived
-  and small, grow adaptively (C2); decide on circles + Potts first.
+- Q1. Resolved on circles (stage 4c): derived features wherever a value
+  asks something definite of the level below.  The stamp is exact on
+  held-out pairs (0.0005) and on a family never seen in training
+  (0.0015); learned embeddings at k = 4-16 reach 0.74-0.94 correlation
+  on unseen pairs among seen values but errors of 0.2-0.8 nats, and
+  learn nothing for values the forward never visits (no gradient).
+  Mixed features match the stamp on seen values and leak the unvisited
+  values' random rows into the unary unless those rows are pinned to
+  zero.  So: derived by default; learned embeddings only for a latent
+  with no painter, at ~0.3-nat accuracy, with every value visited in
+  training; mixed only with unvisited rows pinned.
 - Q4. Measured where exact targets exist: AIS targets equal the exact
   hook within noise, the recursion costs nothing on circles and 0.15 of
   the top contrast on Potts at kappa 1, `K` buys nothing.  Still open on

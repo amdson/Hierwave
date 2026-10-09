@@ -1643,3 +1643,204 @@ passing it from `Forward`) is safe once those runs are done.  The machine
 was loaded (load average 6-8) during the timed run; the old/adm comparison
 is interleaved and fair, the absolute numbers are ~10-20% above an idle
 machine.
+
+# Biome circles, stage 4c: feature sets
+
+Follows the "Stages 4-5: the bootstrap fit" section of `circles_biome_test.md`.
+The question: does the mid potential need the derived stamp features, or do
+learned value embeddings generalise across values too (dsl_updates.md C2
+"Feature set", Open Q1)?
+
+### Stage 4c: feature sets
+
+Script `notes/experiments/circles_biome_feats.py`, module
+`castlegen/channels/embed_fit.py`, tests `tests/test_embed_fit.py`.
+Outputs `images/cbio_stage4c.json`, `images/cbio_feats.png`, and the log
+`images/cbio_stage4c_log.txt`.  Wall time 1046 s for every row below,
+single core.
+
+Config: the stage 4 setup.  `CirclesBiome(6, 6)` with default dials.
+Contexts come from the forward chain (old path, `S = 30/30/20`) at the
+current fit's installed tables.  Targets are `ExactTargets(Oracle.mid_probs)`.
+Fit settings: `K = 0`, `iters = 5`, `n_contexts = 8`, holdout 0.1,
+`l2 = 1e-4`, seed 0.  Every row is evaluated three ways:
+
+- `KL held`: on the row's own held-out records.
+- `KL test`: on a common test set.  It has 64 records from 4 fresh forward
+  contexts (seed 50) at the stamp fit's tables, with every active site that
+  has more than one candidate.
+- Held-out pairs: the materialised tables against `reference()`,
+  double-centred over finite entries, on present pairs never seen as
+  (candidate, neighbour value) in a record (`Bench.seen`).  Slope and corr
+  are pooled over the four offsets.
+
+The strict never-seen-family holdout matches stage 4: biomes are forced to
+admit one family, and the other family's 16 values never occur.  Its
+columns show disc-only / bar-only.
+
+The rows:
+
+- **tabular**: `train.fit` + `train.tabular_feats(obj_h, obj_v, obj_d1,
+  obj_d2, obj_u)`, pad -1.  The tables are folded into materialise's gauge
+  (`u[0] = 0`, absent rows folded out) before comparing.
+- **stamp**: `train.fit` + `Bench.mid_feats`.  This is the stage 4 control.
+- **embed k**: `psi(c) = u[c] + sum_j e(c)^T B_j e(nb_j)`, with
+  `B_j = A_d` for the forward neighbour slots and `A_d^T` for the reflected
+  ones.  So the tables are `g_d = E A_d E^T` with the kernel's orientation
+  (t at p, t' at p + d).
+  - The absent embedding `e(0)` is learned.  Off-grid neighbours read a zero
+    row.
+  - Loss: `train.kl_loss` (mean KL) + `l2 |E, A|^2`.  `u` gets no ridge (see
+    deviations).
+  - Fit: Adam (2000 steps, lr 0.03, cosine decay) then an L-BFGS polish
+    (2000 iterations).
+  - Starts: the previous iteration's optimum, plus 3 random restarts at the
+    first and last iterations.  The family-holdout fits use 1 random
+    restart at the last iteration.  Intermediate iterations run half the
+    steps.
+  - The loop is `embed_fit.bootstrap`, which is `train.fit`'s loop without
+    the consistency probes.
+- **mixed**: stamp features (theta initialised from the stamp fit; in the
+  family holdout, from that holdout's own stamp fit) plus the k = 4
+  bilinear term and `u`, all fitted together.
+- **mlp**: `psi = u[c] + e(c) . h`, with `h = W2 relu(W1 [e(nb_1..8)] + b1) + b2`,
+  32 hidden units, k = 8.  This is not a joint potential, so it has no
+  tables.  Its contexts come from installing its pairwise projection
+  (`psi` with one neighbour present, the rest absent).
+
+| feature set | params | records | KL train | KL held | KL test | held-out pairs n | held-out max err / slope / corr | ref max \|.\| on them | all-pairs max err | obj_u err | never-seen family: pair max err | never-seen family: obj_u err | never-seen family: KL test | s (main / with holdouts) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| tabular | 4389 | 692 | 0.025 | 0.062 | 0.061 | 209 | 1.576 / 0.09 / 0.23 | 1.79 | 1.576 | 0.200 | 2.61 / 2.52 | 5.71 / 4.73 | 2.71 / 1.40 | 8 / 18 |
+| **stamp** | 68 | 692 | 2.4e-6 | 6.8e-6 | 3.0e-7 | 200 | **0.0005** / 1.000 / 1.000 | 1.70 | 0.001 | 0.0003 | 0.0003 / 0.0015 | 0.032 / 0.040 | 0.0002 / 0.006 | 19 / 66 |
+| embed k=4 | 229 | 692 | 0.078 | 0.095 | 0.088 | 211 | 0.794 / 1.04 / 0.74 | 0.73 | 1.835 | 0.480 | 2.47 / 2.52 | 5.79 / 6.54 | 2.80 / 1.74 | 14 / 88 |
+| embed k=8 | 553 | 692 | 0.012 | 0.018 | 0.020 | 139 | 0.242 / 1.06 / 0.94 | 0.52 | 2.636 | 0.140 | 2.58 / 2.52 | 4.60 / 6.20 | 2.38 / 1.65 | 17 / 93 |
+| embed k=16 | 1585 | 692 | 0.0015 | 0.0043 | 0.0019 | 156 | 0.589 / 0.80 / 0.93 | 1.69 | 0.933 | 0.052 | 2.58 / 2.50 | 4.55 / 6.11 | 2.49 / 1.63 | 21 / 126 |
+| mixed (stamp + k=4) | 297 | 692 | 2.7e-6 | 5.0e-6 | 5.0e-7 | 287 | 0.0007 / 1.000 / 1.000 | 1.72 | 0.001 | 0.001 | 0.0005 / 0.0013 | 0.36 / 0.45 | 0.029 / 0.035 | 44 / 346 |
+| mlp k=8 (h 32) | 2641 | 692 | 0.0074 | 0.030 | 0.028 | n/a | (projection: max err 1.02) | | | | n/a | n/a | 2.84 / 1.51 | 22 / 171 |
+
+Notes on the table:
+
+- The stamp row reproduces stage 4 exactly: held-out 0.0005, all 0.0010,
+  obj_u 0.0003, family holdout 0.0003 / 0.0015 with obj_u 0.032 / 0.040.
+- Restart spread at the last iteration is small:
+  - k=4: 0.0835 in all four starts.
+  - k=8: 0.0224-0.0236.
+  - k=16: 0.0117-0.0118.
+  - mixed: 3.10e-5 in all four starts.
+  - mlp: 0.021-0.024.
+
+  The embedding rows are therefore not optimisation-limited at this
+  budget.
+- Mixed, the learned part alone in materialise's gauge:
+  - Pair tables (double-centred): max |.| = 6e-7.
+  - `u` part: 0.21.
+  - The stamp theta moved by at most 0.011 from its stamp-fit init.
+- Top level (biome, D = 4): exact collapsed hook targets
+  (`Bench.top_hook`), the stamp fit's mid tables installed, K = 0, no
+  probes.  Held-out KL only:
+
+| top feature set | params | KL train | KL held | s |
+|---|---|---|---|---|
+| tabular | 36 | 0.0216 | 0.0225 | 35 |
+| embed k=2 | 20 | 0.0219 | 0.0246 | 49 |
+| embed k=4 | 52 | 0.0219 | 0.0225 | 53 |
+
+**What the numbers show.**
+
+1. *The stamp is needed for never-seen values, and it is the only exact
+   row.*
+   - Stamp: 68 parameters give every table to 1e-3, and a family that never
+     occurred to 1.5e-3.
+   - Every learned-embedding row fails the never-seen family completely:
+     pair error about 2.5, the reference's own magnitude; unary 4.5-6.5;
+     test KL 1.4-2.8 nats.
+   - This holds at every k and for the MLP.  It is structural: a value that
+     never occurs gets no gradient in `e(v)` or `u[v]`, so it stays at its
+     initialisation.  No trainer can fix that; only a feature computed from
+     what `v` asks of the level below can.
+2. *Learned embeddings do generalise across values, but only partially and
+   only among seen values.*
+   - On pairs never seen adjacent (both values seen elsewhere), the
+     embeddings carry real structure: corr 0.74 / 0.94 / 0.93 for
+     k = 4 / 8 / 16, against 0.23 for tabular (slope 0.09, i.e. unlearned).
+     Prior evidence under the window estimator (`convpot_test.md`) was
+     corr ~0.
+   - The errors stay large: 0.24-0.79 against reference magnitudes of
+     0.5-1.7.
+   - Seen pairs are not exact either: all-pairs max error 0.9-2.6, KL train
+     1.5e-3 to 0.08, against the stamp's 2e-6.
+   - The induced table is not low-rank in a shared value embedding.  It is a
+     sum over spill tiles of stamp overlaps, rank roughly the size of the
+     overlap strip per offset.  The `l2` on `(E, A)` also costs fit:
+     k = 33 with `l2 = 1e-7` reaches a loss of 1e-4 on one iteration's
+     records, against 0.010 (KL 7e-4) with `l2 = 1e-4`.
+   - k = 16 has the best KL (test 0.0019) but a worse held-out slope
+     (0.80) than k = 8.  More capacity fits the seen pairs at the expense of
+     the unseen ones.
+   - The MLP context encoder fits training records better than k = 8
+     (7e-3) but holds out worse (0.030 / 0.028).  It is not a joint
+     potential, and its pairwise projection is off by 1.0.  It buys nothing
+     here.
+3. *Mixed does not hurt where values are seen, and its bilinear part stays
+   at zero.*
+   - Held-out pairs 0.0007, KL test 5e-7, the same as the stamp.
+   - The learned pair part is 6e-7: with the stamp already exact, the ridge
+     keeps `E A E^T` at zero.
+   - It does hurt the never-seen family, through the unary.  The unseen
+     values keep their random-init embeddings and `u` (`u` has no ridge,
+     and `e(v) . A e(absent)` folds into the unary).
+     - Unseen obj_u error: 0.36 / 0.45 (stamp 0.03 / 0.04).
+     - Test KL: 0.03 nats (stamp 2e-4 / 6e-3).
+   - So a learned part next to a sufficient derived set needs its
+     unseen-value rows pinned to zero, by a zero init or a ridge on `u`, or
+     it leaks init noise into values the data never constrained.
+   - It costs 5x the fit time (346 s against 66 s with holdouts).
+4. *Tabular is the no-generalisation baseline, as expected.*
+   - Held-out slope is 0.09.  The family holdout is at the reference's
+     magnitude.
+   - Its seen fit is distorted too: KL train 0.025, all-pairs 1.6, obj_u
+     0.2.  That comes from `train.fit`'s ridge `l2 |theta|^2` acting on the
+     ~25-nat unary in the `pad = -1` gauge (see deviations).
+5. *Top level.*  The embedding fit runs through the same code on D = 4 with
+   collapsed hook targets.  k = 4 matches tabular (held-out KL 0.0225 vs
+   0.0225), and k = 2 is 0.0246.  There is no information there, as
+   expected.
+6. *What this means for latents with no painter (Q1, Q2).*
+   - A channel whose values each ask something definite of the level below
+     should get derived features: the stamp, or Q2's masked exemplar patch,
+     which is a stamp by construction.
+   - Learned embeddings recover some cross-value structure under the
+     bootstrap trainer: corr 0.94 at k = 8 on unseen pairs.  So for a
+     latent with no painter they are usable, but only at reduced accuracy
+     (errors ~0.3 nats), and they never reach values the contexts do not
+     visit.
+   - The forward chain must therefore visit every value, or the value has
+     no potential at all.
+   - The mixed design (derived + small learned) is safe for seen values, but
+     only if the learned rows of unvisited values are pinned to zero.
+   - Q1 answer for circles: derived; mixed only with zero-init or ridged
+     learned rows.
+
+Deviations:
+
+- **No ridge on `u` in `embed_fit.loss`.**  With the u ridge, embed k = 33
+  stalled at KL 0.71, worse than u-only.  In the gauge where absent has no
+  energy, `u` is the whole object free energy (~25 nats), and `l2 = 1e-4`
+  on it costs ~2 nats of penalty.  `train.fit`'s tabular row keeps its
+  ridge on `u` as specified, which explains part of its poor seen fit.
+- **Learned absent embedding.**  The embeddings learn `e(absent)`, with
+  off-grid as a zero row.  With `e(absent) = 0` the model cannot tell an
+  absent neighbour from the world edge (stage 5's edge discount), and
+  KL train rose 10-50x (k = 8: 0.093 vs 0.0095; k = 16: 0.056 vs 0.0012, on one
+  iteration's records).  This matches the tabular rows' pad -1 convention.
+  Tables are folded to materialise's gauge before comparing (`canon` in the
+  script).
+- **Optimiser schedule.**  Adam is followed by an L-BFGS polish.  Random
+  restarts run at the first and last iterations only, with the previous
+  optimum as a warm start in between, and intermediate iterations run half
+  the steps.  Family-holdout fits use 1 random restart.
+- **No probes.**  The embedding rows run without consistency probes; they
+  are joint potentials, so closed by construction (except the MLP).
+- **MLP contexts.**  The MLP row's contexts come from its pairwise
+  projection, so its bootstrap is approximate.
+- **Common test set.**  `KL test` (the common test set) is an addition.
