@@ -233,6 +233,23 @@ the roots case correctly:
   the refinement prunes what the placed windows leave orphaned.  43 -> 120
   windows for 5 trunks.
 
+Diversity by recombination (soft coarse coherence, hard edge signatures;
+`LAM8` in the script).  With `lam8` finite alone the windows recombine
+freely and the copies differ (mean pairwise Jaccard distance of the
+aligned tree masks 0.75 at lam8 2, 0.89 at 0.5, against 0.03 verbatim),
+every guarantee holding, but the edge signatures match a trunk window's
+top to its own bottom, so trunks tile themselves to the sky and trunk
+segments land above branches.  The missing constraint is height: a window
+keeps its exemplar row (`align`: a hard pair between the window's ey and a
+painted chunk-row channel, ey = 8 x the chunk row), which forbids a trunk
+anywhere but on the ground and a crown anywhere but at its height, and
+leaves recombination free sideways.  With it, one exemplar has little to
+recombine at a given height: 1-6 recombined seams in 5 copies, and the
+diversity that remains (0.17-0.35) is mostly pruning, crowns cut at seams
+whose signatures match nothing else (105-391 cells pruned, 1266-1979
+cells against 2342 verbatim).  Recombination needs more material at
+each height than one tree offers.
+
 Not learned, copied: the soft terms are the coordinate coupling and
 coherence as in the roots second pass; a learned potential on top of the
 copy is the same open item as for the limbs.

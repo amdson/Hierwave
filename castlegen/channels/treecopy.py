@@ -212,7 +212,7 @@ class TreeCopy:
     mu) honours the refinement softly."""
 
     def __init__(self, W, trunk_xs, A=None, seed=0, ring=1, nu=6.0, lam=1.0, dangle=1.0, K=1, Kt=1, Dmax=4096,
-                 delta=0.05, lam8=INF, f8=0.1, cut=2.0):
+                 delta=0.05, lam8=INF, f8=0.1, cut=2.0, align=True):
         self.kinds = KINDS
         self.A = procedural_tree() if A is None else A
         self.alpha, self.mass, self.mask, self.trunk, self.n_ground = parse_tree(self.kinds, self.A, ring)
@@ -232,9 +232,21 @@ class TreeCopy:
         self.coarse = coord.Coarse(self.kinds, self.alpha, CH)
         self.u8, self.d8 = self.coarse.channel(), self.coarse.cert_channel()
         no_trunk = np.where(self.coarse.has_trunk == 1, INF, 0.0)       # trunk windows only where fixed
-        self.m8 = Model(self.H, W, [self.u8, self.surf, self.d8],
-                        self.coarse.factors(lam8=lam8, f=f8, cut=cut) + [Factor.unary(("u8", "self"), no_trunk, name="no_trunk")],
-                        [self.coarse.certificate()])
+        f8s = self.coarse.factors(lam8=lam8, f=f8, cut=cut) + [Factor.unary(("u8", "self"), no_trunk, name="no_trunk")]
+        chans8 = [self.u8, self.surf, self.d8]
+        if align:
+            # a window keeps its height above the ground: exemplar row ey = 8 x the world chunk row.  Soft
+            # coherence lets windows recombine sideways but not stack a trunk on itself or on a branch.
+            self.row8 = Channel("row8", CH, self.H // CH).add_view("val", np.arange(self.H // CH), self.H // CH)
+            my = self.alpha.shape[0]
+            tab = np.full((my + 1, self.H // CH), INF)
+            tab[my] = 0.0                                                # FREE anywhere
+            for i in range(self.H // CH):
+                if CH * i <= my - 1:
+                    tab[CH * i, i] = 0.0
+            f8s.append(Factor.pair(("u8", "ey"), ("row8", "val"), (0, 0), tab, name="align"))
+            chans8.append(self.row8)
+        self.m8 = Model(self.H, W, chans8, f8s, [self.coarse.certificate()])
         ty, tx = self.trunk
         wins = [w for w in range(1, self.coarse.D) if self.coarse.has_trunk[w]
                 and self.coarse.wins[w][0] == ty - (ty % CH) and self.coarse.wins[w][1] <= tx < self.coarse.wins[w][1] + CH]
@@ -261,6 +273,9 @@ class TreeCopy:
         self.u8.grid[:] = 0
         self.u8.fixed[:] = False
         self.d8.grid[:] = self.d8.D - 1
+        if hasattr(self, "row8"):
+            self.row8.grid[:] = np.arange(self.H // CH)[:, None]
+            self.row8.fixed[:] = True
         self.uref = np.full((self.H, self.W), -1, np.int64)
         self._fix_trunks()
 
