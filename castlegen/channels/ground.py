@@ -7,7 +7,7 @@ count honour apply to them; `ground` maps them to OTHER, a wildcard in the
 texture tables: against a neighbour of kind x it takes the (x, x) term,
 against sky the solid term, and its unary is the mean of the solids'.  A
 root cell is then texture-neutral wherever it stands, which is the gate of
-channels.tex section 16 in its marginalised form: the ground says nothing
+notes/history/channels.tex section 16 in its marginalised form: the ground says nothing
 about cells it does not own, but keeps saying what it says about their
 neighbours.  Two wrong gates were tried first: OTHER as earth (a root cell
 in fine-grained stone paid the lost rock cohesion; copies stalled at a

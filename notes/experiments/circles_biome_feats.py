@@ -1,4 +1,4 @@
-"""Stage 4c of the biome circles test (notes/circles_biome_stage4c.md): do we
+"""Stage 4c of the biome circles test (notes/circles_biome_test.md, "Stage 4c"): do we
 need the derived stamp features, or do learned value embeddings generalise?
 
 Mid level (obj, D = 33), the stage 4 setup: CirclesBiome(6, 6), default

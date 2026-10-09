@@ -112,7 +112,7 @@ against the fixed tiles above and below the block and (for the first /
 last column) to the left / right.  Transition weight between columns:
 `J d` per row.  Forward filter with per-column normalisation gives log Z;
 backward sampling redraws the block.  Validate `mid_logZ` against brute
-force at BM = 2 (q^4 = 256 states) in `tests/test_potts.py`, and
+force at BM = 2 (q^4 = 256 states) in `tests/channels/test_potts.py`, and
 `top_probs` against brute force over the 4 mid cells.
 
 `stats` returns, all as frequencies (pair tables normalised to sum 1 over

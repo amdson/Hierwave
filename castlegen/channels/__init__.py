@@ -1,4 +1,4 @@
-"""Channels: the generic layer of notes/channels.tex (plan: notes/channels_demo.md).
+"""Channels: the generic layer of notes/history/channels.tex (plan: notes/channels_demo.md).
 
 A model is a set of channels (a grid of values at one level each, with views
 of its domain), a list of factors (tables over views, at offsets), and at

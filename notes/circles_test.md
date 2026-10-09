@@ -143,7 +143,7 @@ after each top sweep.  The frozen diagnostic S1f uses
 `Oracle.mid_probs_plain(i, j)`: the one-site conditional with the tiles
 fixed, `exp(-lam[..] - kappa * violations(o, tiles))`.
 
-Tests (`tests/test_circles.py`): `mid_probs` against brute force over the
+Tests (`tests/channels/test_circles.py`): `mid_probs` against brute force over the
 block's tiles on a reduced footprint (use `BM = 4` with a radius-1 disc
 if the class allows `R` as a parameter, else enumerate only the footprint
 tiles, which is exact because tiles are independent); `reference()`

@@ -1,5 +1,5 @@
-"""Masked exemplar coordinates for roots (channels.tex sections 5 and 9;
-the painted-mask direction of notes/dsl.md).
+"""Masked exemplar coordinates for roots (notes/history/channels.tex sections 5 and 9;
+the painted-mask direction of notes/history/dsl.md).
 
 A level-1 coordinate channel u holds, per cell, an index into a painted
 exemplar.  Its view `alpha` is the exemplar's statement at that
@@ -410,7 +410,7 @@ def by_alpha_index(alpha, tile_D):
 
 
 class CoordKernel:
-    """The coordinate channel's own kernel (channels.tex section 10)."""
+    """The coordinate channel's own kernel (notes/history/channels.tex section 10)."""
 
     def __init__(self, u: Channel, tile: Channel, alpha, lam=1.0, w=0.0, nu=2.0, radius=2, K=8, Kt=4):
         self.u, self.tile, self.alpha = u, tile, np.ascontiguousarray(alpha, np.int64)
@@ -490,7 +490,7 @@ top-left exemplar cell) or FREE, sampled by the generic tile kernel with
   unary       a bonus on the trunk window (one per copy), a small cost per
               other masked window
 then refined: fine u, tiles, and certificate depth d from the exemplar's
-own tree, every cell of a footprint at once (channels.tex: a level starts
+own tree, every cell of a footprint at once (notes/history/channels.tex: a level starts
 as a consistent refinement of the level above)."""
 
 

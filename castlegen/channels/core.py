@@ -15,7 +15,7 @@ Factor: a table over views.
            E[pad] (pad >= 0) or nothing.  Same-level only.
 Hard entries are inf.  A factor is homed on its a side, which is the finer
 (or equal) level: top-down only, a coarser channel never reads a finer one.
-Certificate: the one computed factor (the tree rule of channels.tex, 14):
+Certificate: the one computed factor (the tree rule of notes/history/channels.tex, 14):
 every cell of the tile channel with mass > 0 holds d < INF and is either a
 trunk with d = 0 or has a 4-neighbour q with mass_q >= mass_p and d_q < d_p.
 
@@ -25,7 +25,7 @@ offset), and nothing homed below it.  compile(chan, below=True) also packs
 the factors homed on strictly finer channels that read `chan` (pairs at
 offset (0, 0) and counts), so the candidate energies are the full
 conditional of the joint (bidirectional).  Kinds is a tiny tile-set stand-in
-(name, tags, colour) so the demo does not depend on castlegen.tileset."""
+(name, tags, colour) so the demo does not depend on castlegen.legacy.tileset."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field

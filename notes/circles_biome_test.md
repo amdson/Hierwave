@@ -220,7 +220,7 @@ def autocorr_clamped(model, home, parent, sweeps) -> float
 `Trainer.install` = materialise (`paintpot.materialise`) + support rows
 from `support_factors()` added to `extra`.
 
-## Tests (`tests/test_circles_biome.py`)
+## Tests (`tests/channels/test_circles_biome.py`)
 
 - `STAMP` sizes: 13 + 24 for discs, 8 + 16 for bars; no footprint leaves
   its block; ring spill at most one cell.
@@ -253,7 +253,7 @@ appended here.  Stages are gated; do not start a stage before the
 previous gate passes.
 
 1. **Interface.**  `Sampler`, `MaterialisedBias`, candidate cap, block
-   fast path, hard-rows-first.  Gate: `tests/test_circles.py`,
+   fast path, hard-rows-first.  Gate: `tests/channels/test_circles.py`,
    `test_potts.py`, `test_paintpot.py` pass through the wrappers, and the
    circles `eta0.5` S0 run reproduces its final L1s within eval noise.
 2. **Model and oracle.**  Gate: the tests above; an oracle render with
@@ -348,9 +348,9 @@ build on today's kernel and merge without conflict.
 | package | builds | owns | depends on | gate |
 |---|---|---|---|---|
 | A. Sampler layer | stage 1: `Sampler` wrapping the kernel, candidate cap `K`, block active bit, hard rows first | `castlegen/channels/sampler.py` (new), additions to `kernel.py`, `core.py` | nothing | old circles / Potts / paintpot tests pass through the wrapper; `test_sampler.py` for cap invariance and dormancy on `Potts(1,1)` |
-| B. Model and oracle | stage 2: `CirclesBiome`, painters, `support_factors`, `reference`, `stamp_features`, oracle, render, tests; stamps as data so stage 7 is a parameterisation | `castlegen/channels/circles_biome.py`, `tests/test_circles_biome.py` | current `core.py` only | the tests above; an oracle render with zero conflicts, both families, dormant blocks |
-| C. Trainer | `ExactTargets`, `SampledTargets`, `fit`, `autocorr_clamped` | `castlegen/channels/targets.py` (new), additions to `train.py`, `tests/test_targets.py` | `paintpot.features`, the existing Potts and circles oracles | stage 6 on Potts and `fit` on the old circles with `Oracle.mid_probs` targets: tables match the published S1 |
-| D. AIS targets | `AISTargets` on the one-site window over the child channel's sampler | `castlegen/channels/aistargets.py` (new), `tests/test_aistargets.py` | `induce.ais_log_z`; the `Targets` protocol | equals an exact hook to 1e-9 on the old circles; within the AIS standard error without it |
+| B. Model and oracle | stage 2: `CirclesBiome`, painters, `support_factors`, `reference`, `stamp_features`, oracle, render, tests; stamps as data so stage 7 is a parameterisation | `castlegen/channels/circles_biome.py`, `tests/channels/test_circles_biome.py` | current `core.py` only | the tests above; an oracle render with zero conflicts, both families, dormant blocks |
+| C. Trainer | `ExactTargets`, `SampledTargets`, `fit`, `autocorr_clamped` | `castlegen/channels/targets.py` (new), additions to `train.py`, `tests/channels/test_targets.py` | `paintpot.features`, the existing Potts and circles oracles | stage 6 on Potts and `fit` on the old circles with `Oracle.mid_probs` targets: tables match the published S1 |
+| D. AIS targets | `AISTargets` on the one-site window over the child channel's sampler | `castlegen/channels/aistargets.py` (new), `tests/channels/test_aistargets.py` | `induce.ais_log_z`; the `Targets` protocol | equals an exact hook to 1e-9 on the old circles; within the AIS standard error without it |
 
 Integration order: A first; stage 3 (A + B); stages 4-5 (B + C + D);
 stage 7 (A + B); stage 8 (A only, by whoever built A).
@@ -522,7 +522,7 @@ values uniform, theta0, 20 repeats of init + 30 obj sweeps):
 The obj time is linear in the active fraction; a fully dormant world costs
 0.14 ms for 30 sweeps (the block loop and seeding, 2-3% of a fully active
 one) plus a 0.07 ms init.  No conflict in any run; dormant slots stay at 0
-through the sweeps and the relaxation (`tests/test_circles_biome.py`).
+through the sweeps and the relaxation (`tests/channels/test_circles_biome.py`).
 
 ### What the numbers show (stage 3)
 
@@ -580,7 +580,7 @@ run; tiles dominate.
 
 Script `notes/experiments/circles_biome_fit.py` (callbacks and
 `materialise` in `castlegen/channels/biome_fit.py`, test
-`tests/test_biome_fit.py`), outputs `images/cbio_stage45.json`,
+`tests/channels/test_biome_fit.py`), outputs `images/cbio_stage45.json`,
 `images/cbio_stage45_heldout.json` (`HELDOUT=1`), `images/cbio_fit_tables.png`,
 renders `images/cbio_fit_oracle.png`, `images/cbio_fit_top_<targets>_K<K>.png`,
 log `images/cbio_stage45_log.txt`.  Wall time 1453 s + 90 s (holdout run).
@@ -1011,7 +1011,7 @@ enumerates the whole domain); a tempered kernel and `unary_logZ` for
 coordinate channels so AIS can run over them; dormancy for coordinate
 channels if the parents' writes ever become hard.
 
-Tests: `tests/test_migrate.py` (7).  The full suite has 8 pre-existing
+Tests: `tests/channels/test_migrate.py` (7).  The full suite has 8 pre-existing
 failures unrelated to the channel code (`pipeline.py:217` NameError in
 test_flow / test_promise / test_support; data files missing in
 test_blockconn / test_blockfield).
@@ -1546,7 +1546,7 @@ the stage 7 script is unchanged.
   are therefore passed as runs; here they are one run (the parent mask is
   packed first).
 
-**Tests** (`tests/test_sampler.py`, additive): `test_adm_identity` (grids
+**Tests** (`tests/channels/test_sampler.py`, additive): `test_adm_identity` (grids
 equal to `sweep_cap` after `init` + 4 sweeps, same seed, for Potts(2, 2)
 top/mid/tile with and without a hard palette parent row, Circles(2, 2)
 top/mid/tile with and without a hard slot row, the toy with a hard parent
@@ -1654,7 +1654,7 @@ learned value embeddings generalise across values too (dsl_updates.md C2
 ### Stage 4c: feature sets
 
 Script `notes/experiments/circles_biome_feats.py`, module
-`castlegen/channels/embed_fit.py`, tests `tests/test_embed_fit.py`.
+`castlegen/channels/embed_fit.py`, tests `tests/channels/test_embed_fit.py`.
 Outputs `images/cbio_stage4c.json`, `images/cbio_feats.png`, and the log
 `images/cbio_stage4c_log.txt`.  Wall time 1046 s for every row below,
 single core.
