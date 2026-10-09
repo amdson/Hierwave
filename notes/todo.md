@@ -4,7 +4,7 @@ Collected 2026-10-09 from `dsl_updates.md` (Open, Deferred, C3-C5),
 `dsl_interface.md`, `circles_biome_test.md` (stretch, stage 7b/8/4c/5b
 remainders), `channels_system.tex` (research questions), `reading.md`,
 `history/todo.txt` (the items the new design did not already settle),
-and the memory notes.  Grouped by what they are; within a group, the
+`blockgram.md` (uncommitted, main checkout), and the memory notes.  Grouped by what they are; within a group, the
 order I would do them.  Each item names its source.
 
 ## 1. Validation still owed on the toys
@@ -111,7 +111,66 @@ order I would do them.  Each item names its source.
       (research question 5; constitution 6-7).  Untested in the channels
       layer.
 
-## 4. Training and features
+## 4. The compiled grammar's variable set (blockgram)
+
+`castlegen/blockgram/{core,towers,tower_spec,compile}.py`, `notes/blockgram.md`,
+`castlegen/channels/tower.py`, `notes/experiments/{blockgram_towers,blockgram_compile,tower_windows}.py`:
+all uncommitted in the main checkout as of 2026-10-08, not on any branch.
+The tower grammar compiles to per-level channels whose values are
+nothing like the toy's: fixed-width records (type, box, hashed seed,
+attributes) with up to 64 slots per block, a head domain that is a
+product of choice domains, choices collapsed into partners (I), lifted
+(E*), quantified or kept under an existence projection, and leaves that
+are stateless hashes of the path.  The channels layer handles none of
+this yet.
+
+- [ ] **Execute the compiled plan** (`Compiled.table()` -> channels + kernels
+      + rendering).  `notes/blockgram.md` "Not yet done".  Everything
+      below is what that needs from the channels layer.
+- [ ] **Record-valued channels.**  A slot holds a record, not a small
+      integer: the domain is a product (room widths x stair room x stair
+      direction x ...), far above any `D x D` table.  Needs structured
+      values with the stamp features and the support test computed from
+      the record (box overlap, attribute predicates), i.e. group 2's
+      "support from footprint overlap" generalised to arbitrary records.
+- [ ] **Collapsed choices as one head.**  Internal choices (I) are decided
+      exactly with their finest partner; the sampler must draw the head
+      jointly (the floor chain is drawn by backward messages over 5 room
+      widths), so the candidate set is a sampled or enumerated subset
+      with a cap, not the whole domain.  Same shape as the joint (u, t, d)
+      coordinate kernel; the "joint blocks rule" in group 3 is the
+      general form.
+- [ ] **Existence projections and quantified values as the honour /
+      certificate mechanism.**  The compiler decides per factor whether
+      the coarse side keeps values with some completion (honoured below,
+      a backtracking search one level down) or only values valid for
+      every fine assignment.  The channels layer has hard honour and
+      certificates; map projection -> certificate at the coarse level,
+      quantification -> support, and make the one-level-down search a
+      kernel, not a compile-time check.
+- [ ] **Lifted choices (E*) and reads across sets.**  A choice reads
+      summaries of other sets over a world box (the ground in my box), so
+      its level is the finest whose 3 x 3 block window holds every read:
+      a channel whose view is a box query on another level's channels.
+      Group 3's "formula factors" and "coarse certificate" are the
+      specified pieces.
+- [ ] **Stateless leaves and the broadcast frame.**  Leaves hashed from the
+      path and records copied into every block they cover are a
+      deterministic refinement with no sampled state; decide whether they
+      are a painter (parent writes, no channel) or a channel with one
+      candidate.  Chunk rendering from empty caches equal to the whole
+      render is the test (15 chunks tile for tile today).
+- [ ] **Learning on top.**  The compiler produces hard structure only; the
+      soft terms (floors that differ, bridge log-odds, the "every gap got
+      a bridge" calibration lesson) are hand set.  The bootstrap trainer
+      should fit them once the plan executes through the channels layer.
+- [ ] **The negative result to beat**: towers of counted rooms could not
+      nucleate from blank under single-site window moves
+      (`channels_demo.md` 2026-10-06).  The compiled plan must grow a
+      valid tower from blank in a fixed number of sweeps.
+- [ ] Commit the blockgram work (it is only in the working copy).
+
+## 5. Training and features
 
 - [ ] **Multi-site windows and the one-site window as settings of one
       routine** (`fitWindows` folded into `Trainer.fit`).  `dsl_interface.md`.
@@ -132,7 +191,7 @@ order I would do them.  Each item names its source.
       method from 16 chains); widen or use more chains when a target's
       error matters.  Package D deviation 5.
 
-## 5. Documentation
+## 6. Documentation
 
 - [ ] **`reference_math.tex`**: drop *honour* as a category (a hard
       parent factor; define "honourable" inline), state the direction
@@ -147,7 +206,7 @@ order I would do them.  Each item names its source.
 - [ ] History notes cite each other by bare filenames as if from
       `notes/`; harmless.
 
-## 6. Infrastructure and legacy
+## 7. Infrastructure and legacy
 
 - [ ] `castlegen/legacy/pipeline.py:219` uses an undefined name (`an`);
       three legacy tests xfail on it.
@@ -161,10 +220,10 @@ order I would do them.  Each item names its source.
       exist where the scripts were run.  Decide whether to commit a
       curated set.
 
-## 7. 3D
+## 8. 3D
 
 - [ ] **Luanti backend**: own minimal game, `singlenode` mapgen, a trusted
       mod calling the C sampler through LuaJIT FFI, `chunksize = 4`;
       `.vox` export for inspection before that.  Memory `luanti-for-3d`,
-      `history/todo.txt` LATER.  Not before the stretch case and the
-      first real type.
+      `history/todo.txt` LATER.  Not before the stretch case, the
+      first real type and the compiled grammar.
