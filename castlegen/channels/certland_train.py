@@ -54,6 +54,9 @@ class Cfg:
     levels: tuple = (0, 1, 2, 3)          # root levels moved, top-down (i = 0..3 for h = 16..2)
     K: dict = field(default_factory=lambda: {0: 8, 1: 4, 2: 1, 3: 1})
     anneal: dict = field(default_factory=dict)   # {i: (M, L0)} -> annealed_move at that root level
+    proposal: bool = False                # a proposal-only predictor preds.q (cp.QPreds, boundary context)
+                                          # drives the subtree pass, trained on the pass's own examples
+                                          # (keys (i + QOFF, ch)); preds (Gibbs examples only) ships
     steps: int = 50                       # Adam steps per (level, channel) per update
     lr: float = 1e-3
     l2: float = 1e-6
@@ -113,9 +116,9 @@ class Archive:
         self.pos = {}     # next write
         self.opt = {}     # (i, ch) -> adam state
 
-    def _alloc(self, i, ch, D):
+    def _alloc(self, i, ch, D, nf=None):
         c = int(max(1, min(self.cap, self.floats // D)))
-        self.buf[(i, ch)] = dict(feats=np.zeros((c, cp.NF), np.float32), offs=np.zeros((c, D), np.float32),
+        self.buf[(i, ch)] = dict(feats=np.zeros((c, cp.NF if nf is None else nf), np.float32), offs=np.zeros((c, D), np.float32),
                                  val=np.zeros(c, np.int64), w=np.zeros(c), upd=np.zeros(c, np.int64))
         self.n[(i, ch)] = 0
         self.pos[(i, ch)] = 0
@@ -132,7 +135,7 @@ class Archive:
         if N == 0:
             return
         if (i, ch) not in self.buf:
-            self._alloc(i, ch, offs.shape[1])
+            self._alloc(i, ch, offs.shape[1], feats.shape[1])
         b = self.buf[(i, ch)]
         c = len(b["val"])
         upd = np.broadcast_to(np.asarray(upd, np.int64), (N,))
@@ -219,9 +222,12 @@ def record_cells(world, l, ch, y0, y1, x0, x1):
     return feats, offs, vals
 
 
+QOFF = 4      # store key (i + QOFF, ch): the proposal-only predictor's examples
+
+
 class _Collect:
-    def __init__(self, store, upd):
-        self.store, self.upd = store, upd
+    def __init__(self, store, upd, proposal=False):
+        self.store, self.upd, self.proposal = store, upd, proposal
         self.time = 0.0
         self.calls = 0
 
@@ -244,6 +250,14 @@ class _Collect:
                         raise AssertionError(f"collect: state {j} of root ({i}, {ry}, {rx}) violates a hard row "
                                              f"at level {l} channel {ch}")
                     acc.setdefault((l, ch), []).append((f, o, v, np.full(len(v), wj)))
+            if self.proposal:
+                # the proposal-only predictor's examples (known flags + boundary), stored apart
+                for (l, ch), (f, o, v) in cc.record_pass(world, i, ry, rx, st, proposal=True).items():
+                    acc.setdefault((l + QOFF, ch), []).append((f, o, v, np.full(len(v), wj)))
+            elif cp.KF:
+                # the proposal's own context (known flags, placeholders): the same value and weight
+                for (l, ch), (f, o, v) in cc.record_pass(world, i, ry, rx, st).items():
+                    acc.setdefault((l, ch), []).append((f, o, v, np.full(len(v), wj)))
         cc.set_subtree(world, i, ry, rx, save)
         for (l, ch), parts in acc.items():
             f = np.concatenate([p[0] for p in parts])
@@ -254,11 +268,18 @@ class _Collect:
         self.time += time.time() - t0
 
 
-def collector(archive, upd):
+def collector(archive, upd, proposal=False):
     """collect(world, i, ry, rx, states, wbar) for move_level: records every
     state with wbar_j > 0 into `archive` (an Archive or Examples) and leaves
-    the world as found.  .time accumulates the recording time."""
-    return _Collect(archive, upd)
+    the world as found.  .time accumulates the recording time.  Under the
+    known-flag layout (cp.KF) each state gives two examples per cell and
+    channel: the Gibbs one (all slots known, for the shipped sampler) and
+    the proposal's own (certland_chain.record_pass: the pass's known mask,
+    placeholders and bias-free energies), the same value and weight.
+    With proposal=True the second example is instead the proposal-only
+    predictor's (record_pass(proposal=True), width cp.NFQ), stored under
+    (l + QOFF, ch)."""
+    return _Collect(archive, upd, proposal)
 
 
 # ------------------------------------------------------------------ loss and Adam
@@ -469,7 +490,16 @@ def make_chains(cfg, preds, H, W, noise_seeds, rng, log=print, **world_kw):
 # ------------------------------------------------------------------ one update
 def _params_or_init(preds, i, ch, seed):
     p = preds.params(i, ch)
-    return cp.init_params(i, ch, preds.nh, seed) if p is None else p
+    return cp.init_params(i, ch, preds.nh, seed, preds.nf) if p is None else p
+
+
+def _mover(preds, cfg):
+    """The predictor set that drives the subtree pass."""
+    if cfg.proposal:
+        if getattr(preds, "q", None) is None:
+            preds.q = cp.QPreds(preds.nh)
+        return preds.q
+    return preds
 
 
 def update(world, preds, archive, cfg, upd, rng):
@@ -481,7 +511,8 @@ def update(world, preds, archive, cfg, upd, rng):
     cc = _chain()
     worlds = world if isinstance(world, (list, tuple)) else [world]
     fresh = Examples()
-    col = collector(fresh, upd)
+    col = collector(fresh, upd, cfg.proposal)
+    mp = _mover(preds, cfg)
     log = dict(upd=upd, levels={}, fit={}, time={})
     tm = time.time()
     for i in cfg.levels:
@@ -489,7 +520,7 @@ def update(world, preds, archive, cfg, upd, rng):
         rec0 = col.time
         stats = []
         for w in worlds:
-            stats.append(cc.move_level(w, preds, i, cfg.K[i], rng, collect=col, move=_move_fn(cfg, i)))
+            stats.append(cc.move_level(w, mp, i, cfg.K[i], rng, collect=col, move=_move_fn(cfg, i)))
         n = sum(s["n"] for s in stats)
         log["levels"][i] = dict(
             ess=float(sum(s["ess"] * s["n"] for s in stats) / max(n, 1)),
@@ -509,11 +540,12 @@ def update(world, preds, archive, cfg, upd, rng):
         pool = new if old is None else {k: np.concatenate([new[k].astype(old[k].dtype), old[k]]) for k in new}
         pool["feats"] = pool["feats"].astype(np.float64)
         pool["offs"] = pool["offs"].astype(np.float64)
-        p0 = _params_or_init(preds, i, ch, cfg.seed + 101 * i + ch)
+        tgt, li = (mp, i - QOFF) if i >= QOFF else (preds, i)
+        p0 = _params_or_init(tgt, li, ch, cfg.seed + 101 * i + ch)
         pre = eval_ce(p0, pool)
         p, st, fit = fit_steps(p0, pool, cfg.steps, cfg.lr, archive.opt.get((i, ch)), cfg.batch, rng, cfg.l2)
         archive.opt[(i, ch)] = st
-        preds.set(i, ch, p)
+        tgt.set(li, ch, p)
         log["fit"][(i, ch)] = dict(n_new=len(new["val"]), n_arch=0 if old is None else len(old["val"]),
                                    w_new=float(new["w"].sum()), loss_pre=pre, loss=eval_ce(p, pool),
                                    loss0=eval_ce(None, pool), fit=fit)
@@ -548,11 +580,15 @@ def evaluate(world, preds, cfg, upd, save=True):
 
 
 def save_ckpt(path, preds, upd):
+    """Predictor params (and those of a proposal-only set preds.q, if any)."""
     d = dict(nh=np.int64(preds.nh), upd=np.int64(upd))
+    q = getattr(preds, "q", None)
     for i in range(cl.NL - 1):
         for ch in (0, 1):
             if preds.th[i][ch] is not None:
                 d[f"th_{i}_{ch}"] = np.asarray(preds.th[i][ch])
+            if q is not None and q.th[i][ch] is not None:
+                d[f"thq_{i}_{ch}"] = np.asarray(q.th[i][ch])
     np.savez(path, **d)
 
 
@@ -563,6 +599,10 @@ def load_ckpt(path, preds=None):
         for ch in (0, 1):
             if f"th_{i}_{ch}" in z:
                 preds.set(i, ch, cp.unpack(z[f"th_{i}_{ch}"], i, ch, preds.nh))
+            if f"thq_{i}_{ch}" in z:
+                if getattr(preds, "q", None) is None:
+                    preds.q = cp.QPreds(preds.nh)
+                preds.q.set(i, ch, cp.unpack(z[f"thq_{i}_{ch}"], i, ch, preds.nh, cp.NFQ))
     return preds, int(z["upd"])
 
 
@@ -571,7 +611,7 @@ def format_log(lg):
     for i, d in lg["levels"].items():
         s.append(f"h{cl.HS[i]}: ess {d['ess']:.2f} chg {d['changed']:.3f} dead {d['dead']:.2f} ({d['time']:.1f}s)")
     for (i, ch), d in sorted(lg["fit"].items()):
-        s.append(f"[{cl.HS[i]}{'rc'[ch]} n{d['n_new']}+{d['n_arch']} {d['loss_pre']:.3f}->{d['loss']:.3f} "
+        s.append(f"[{'q' if i >= QOFF else ''}{cl.HS[i % QOFF]}{'rc'[ch]} n{d['n_new']}+{d['n_arch']} {d['loss_pre']:.3f}->{d['loss']:.3f} "
                  f"(0: {d['loss0']:.3f})]")
     t = lg["time"]
     s.append(f"t moves {t['moves']:.1f} rec {t['record']:.1f} tiles {t['tiles']:.2f} fit {t['fit']:.1f}")

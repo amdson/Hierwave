@@ -39,6 +39,46 @@ as ordinal features: value / range, a few bumps along the range, end
 indicators. Fixed length `NF` (module constant, the same for all levels and
 channels).
 
+**Layouts (twist round).** The context is selected by the env
+`CERTLAND_PRED_FEATS`, read when `certland_pred` is imported (one layout per
+process; non-default layouts compile without numba's disk cache):
+
+- `wide` (default, `NF = 651`): the parent (rho, cert) and quadrant as
+  above; the same-level 4x4 window covering the cell's parent block and one
+  ring (rows `y0-1..y0+2`, columns `x0-1..x0+2`, `(y0, x0)` the block's
+  top-left; it contains the old 3x3; the cell's own channel blanked at its
+  slot); the parent's 3x3 neighbourhood at the parent level. Same 25-feature
+  encoding per slot for every level and channel (generic, symmetric).
+- `widek` (`NF = 667`): `wide` plus one known flag per same-level slot (16).
+  `cell_features_k` / `cell_bias_k` take the flags `kn (16,)`; a slot with
+  `kn = 0` has its values zeroed. `cell_features` / `cell_bias` (spec
+  signatures unchanged) set every flag to 1: the shipped sampler and the
+  Gibbs recording. The subtree pass feeds its real known mask (outside the
+  subtree / drawn already = 1; undrawn placeholders = 0; at the cell's own
+  slot the flag of its other channel). The parent level is always known.
+- `v0` (`NF = 251`): the old 3x3 layout, for comparisons.
+
+**Proposal-only predictor (stage 2).** `cp.QPreds(nh)` = `Preds(nh, nf=NFQ)`,
+`NFQ = NF + NBND` (`NBND = 72`): the pass's context (`cell_features_k`, known
+flags) plus `boundary_features(i, ry, rx, l, y, x, rhos, certs, Aofs, Bofs,
+out, o)`: the fixed cells adjacent to the subtree on all four sides at levels
+`l+1..l+3`, under the cell's parent block (clipped to the subtree; the cell
+itself at the root level), per (side, depth) `1{in map}`, mean rho, mean A,
+mean B, min A, max B (normalised). Used only inside the pass
+(`pass_subtree` / `subtree_move` / `move_level` take a QPreds like a Preds;
+`_bias_args` flags it in `ons[8]`); the shipped sampler keeps `Preds`.
+`init_params(..., nf=None)`, `unpack(..., nf=None)` and `Preds(nh, nf=None)`
+take the width. Training: `Cfg.proposal = True` puts a QPreds at `preds.q`,
+moves with it, records the Gibbs examples for `preds` and
+`record_pass(proposal=True)` examples for `preds.q` (store keys
+`(l + QOFF, ch)`); checkpoints carry `thq_i_ch`.
+
+```python
+@njit def cell_features_k(h, ch, y, x, rho, cert, Aof, Bof, prho, pcert, pAof, pBof, has_parent, kn, out)
+@njit def cell_bias_k(h, ch, y, x, rho, cert, Aof, Bof, prho, pcert, pAof, pBof, has_parent, kn,
+                      th, nh, on, out)
+```
+
 ```python
 NF: int
 @njit def cell_features(h, ch, y, x, rho, cert, Aof, Bof, prho, pcert, pAof, pBof, has_parent, out)  # out (NF,)
@@ -87,6 +127,12 @@ def pass_subtree(world, preds, i, ry, rx, rng, forced=False, L0=np.inf, order="r
     # forced=True: outcomes are the current values (read before overwriting), logq their
     # probability; dead = no admissible value (sampling) / forced value excluded (forced).
     # order="bottomup": certificate rows of a level drawn bottom-up (optional).
+    # The bias is cp.cell_bias_k with the pass's known mask (ignored unless layout widek).
+def record_pass(world, i, ry, rx, state, L0=np.inf, order="raster") -> {(l, ch): (feats, offs, vals)}
+    # the proposal's own training examples for `state`: a forced pass (bias off) recording, per
+    # non-tile cell and channel in draw order, cell_features_k with the pass's known mask, the
+    # pass's bias-free energies (designed soft against placeholders, +inf on hard exclusions
+    # against KNOWN cells and the single-cell bounds) and the value. The world ends in `state`.
 def subtree_move(world, preds, i, ry, rx, K, rng, collect=None, L0=np.inf) -> dict
     # i-SIR: particle 0 = current state (forced pass, assert logq finite), K proposals;
     # logw_j = -soft_j - logq_j (-inf on violation or dead); select j ~ w; if collect:
@@ -127,7 +173,8 @@ class Archive:        # per (i, ch): feats (N, NF), offs (N, D) designed energy 
 def collector(archive, upd) -> collect(world, i, ry, rx, states, wbar)
     # for each state j with wbar_j > 0: install it, for every non-tile cell of the subtree and
     # both channels record (features, cell_conditional(world, None, ...), value, wbar_j);
-    # leave the world as found
+    # leave the world as found. Layout widek: also the proposal's own examples
+    # (certland_chain.record_pass) with the same value and weight (two examples per cell).
 def weighted_ce(p, feats, offs, val, w) -> scalar        # JAX; -sum w log softmax(-(offs + b))[val] / sum w
 def fit_steps(p, batch, steps, lr, adam_state=None) -> (p, adam_state, loss)
 def init_chain(world, preds, noise_seed, burn, rng)      # forward generation + burn-in moves

@@ -97,10 +97,12 @@ _ZB = np.zeros(1)
 
 
 def _bias_args(preds):
-    """(ths: 8-tuple indexed 2 i + ch, ons (8,), nh)."""
+    """(ths: 8-tuple indexed 2 i + ch, ons (9,), nh); ons[8] = 1 for a
+    proposal-only predictor (cp.QPreds: input NFQ with the boundary)."""
     if preds is None:
-        return (_ZB,) * 8, np.zeros(8, np.int64), 1
-    ths, ons, nh = [], np.zeros(8, np.int64), 1
+        return (_ZB,) * 8, np.zeros(9, np.int64), 1
+    ths, ons, nh = [], np.zeros(9, np.int64), 1
+    ons[8] = int(getattr(preds, "proposal", False))
     for i in range(NL - 1):
         for ch in range(2):
             th, nh_, on = preds.args(i, ch)
@@ -280,9 +282,31 @@ def _inbox(y, x, y0, y1, x0, x1):
     return y0 <= y < y1 and x0 <= x < x1
 
 
+@njit(cache=True)
+def _known_slots(ch, y, x, y0, y1, x0, x1, rows, cols, known, kn):
+    """Known flags of the predictor's same-level context slots during the
+    pass (cp.cell_features_k, layout widek): the 4 x 4 window over the
+    cell's 2 x 2 block and one ring, row-major.  Known = off the grid,
+    outside the subtree box, or drawn already; at the cell itself the slot
+    carries its other channel (the cert placeholder while drawing rho, the
+    drawn rho while drawing cert).  Other layouts ignore kn."""
+    ya, xa = y - (y & 1) - 1, x - (x & 1) - 1
+    for d in range(16):
+        yy, xx = ya + d // 4, (xa + d % 4) % cols
+        if yy == y and xx == x:
+            kn[d] = 1 if ch == 1 else 0
+        elif yy < 0 or yy >= rows or not _inbox(yy, xx, y0, y1, x0, x1):
+            kn[d] = 1
+        else:
+            kn[d] = 1 if known[yy - y0, xx - x0] else 0
+
+
 @njit
 def _draw_level(l, i, ry, rx, rhos, certs, Aofs, Bofs, fill, kappa, lam, beta,
-                forced, fbuf, L0, bottomup, ths, ons, nh, e, bb, known):
+                forced, fbuf, L0, bottomup, ths, ons, nh, e, bb, known, rec, RF, RO, RV):
+    """One level of the pass. rec: also write, per cell in draw order, the
+    known-flag features (RF[2 l + ch]), the bias-free energies e (RO) and
+    the drawn value (RV) -- the proposal's own context, for training."""
     h = 16 >> l
     s = 1 << (l - i)
     y0, x0 = ry * s, rx * s
@@ -299,7 +323,9 @@ def _draw_level(l, i, ry, rx, rhos, certs, Aofs, Bofs, fill, kappa, lam, beta,
     for a in range(s):
         for b in range(s):
             known[a, b] = False
+    kn = np.ones(16, np.int64)
     logq = 0.0
+    nrec = 0
     for r in range(s):
         y = y1 - 1 - r if bottomup else y0 + r
         for x in range(x0, x1):
@@ -307,20 +333,47 @@ def _draw_level(l, i, ry, rx, rhos, certs, Aofs, Bofs, fill, kappa, lam, beta,
             # ---- rho
             for t in range(Dr):
                 e[t] = cl._designed_rho(l, h, y, x, t, rho, prho, fill, kappa, lam, beta)
-            if ons[2 * l]:
-                cp.cell_bias(h, 0, y, x, rho, cert, Aof, Bof, prho, pcert, pA, pB, hp,
-                             ths[2 * l], nh, 1, bb[:Dr])
+            if ons[2 * l] or rec:          # (known flags only matter under layout widek)
+                _known_slots(0, y, x, y0, y1, x0, x1, rows, cols, known, kn)
+            if rec:
+                cp.cell_features_k(h, 0, y, x, rho, cert, Aof, Bof, prho, pcert, pA, pB, hp, kn, RF[2 * l][nrec])
+                if ons[8]:
+                    cp.boundary_features(i, ry, rx, l, y, x, rhos, certs, Aofs, Bofs, RF[2 * l][nrec], cp.NF)
+                for t in range(Dr):
+                    RO[2 * l][nrec, t] = e[t]
+            if ons[2 * l] and ons[8]:
+                cp.cell_bias_q(h, 0, y, x, rho, cert, Aof, Bof, prho, pcert, pA, pB, hp, kn,
+                               i, ry, rx, l, rhos, certs, Aofs, Bofs, ths[2 * l], nh, bb[:Dr])
+                for t in range(Dr):
+                    e[t] += bb[t]
+            elif ons[2 * l]:
+                cp.cell_bias_k(h, 0, y, x, rho, cert, Aof, Bof, prho, pcert, pA, pB, hp, kn,
+                               ths[2 * l], nh, 1, bb[:Dr])
                 for t in range(Dr):
                     e[t] += bb[t]
             pk, lp = _pick(e, Dr, forced, fbuf[o + k] if forced else 0)
             if pk < 0:
                 return logq, True
+            if rec:
+                RV[2 * l][nrec] = pk
             rho[y, x] = pk
             logq += lp
             # ---- cert
-            if ons[2 * l + 1]:
-                cp.cell_bias(h, 1, y, x, rho, cert, Aof, Bof, prho, pcert, pA, pB, hp,
-                             ths[2 * l + 1], nh, 1, bb[:Dc])
+            if ons[2 * l + 1] or rec:
+                _known_slots(1, y, x, y0, y1, x0, x1, rows, cols, known, kn)
+            if rec:
+                cp.cell_features_k(h, 1, y, x, rho, cert, Aof, Bof, prho, pcert, pA, pB, hp, kn,
+                                   RF[2 * l + 1][nrec])
+                if ons[8]:
+                    cp.boundary_features(i, ry, rx, l, y, x, rhos, certs, Aofs, Bofs, RF[2 * l + 1][nrec], cp.NF)
+            if ons[2 * l + 1] and ons[8]:
+                cp.cell_bias_q(h, 1, y, x, rho, cert, Aof, Bof, prho, pcert, pA, pB, hp, kn,
+                               i, ry, rx, l, rhos, certs, Aofs, Bofs, ths[2 * l + 1], nh, bb[:Dc])
+                for t in range(Dc):
+                    e[t] = bb[t]
+            elif ons[2 * l + 1]:
+                cp.cell_bias_k(h, 1, y, x, rho, cert, Aof, Bof, prho, pcert, pA, pB, hp, kn,
+                               ths[2 * l + 1], nh, 1, bb[:Dc])
                 for t in range(Dc):
                     e[t] = bb[t]
             else:
@@ -350,9 +403,15 @@ def _draw_level(l, i, ry, rx, rhos, certs, Aofs, Bofs, fill, kappa, lam, beta,
                         e[t] = np.inf
                 else:
                     e[t] += L0 * nv
+            if rec:
+                for t in range(Dc):
+                    RO[2 * l + 1][nrec, t] = e[t]       # bias-free when recording (ons off)
             pk, lp = _pick(e, Dc, forced, fbuf[o + s * s + k] if forced else 0)
             if pk < 0:
                 return logq, True
+            if rec:
+                RV[2 * l + 1][nrec] = pk
+                nrec += 1
             cert[y, x] = pk
             logq += lp
             known[y - y0, x - x0] = True
@@ -433,11 +492,19 @@ def _draw_tiles(i, ry, rx, rhos, certs, Aofs, Bofs, kappa, lam,
     return logq, False
 
 
+@njit(cache=True)
+def _dummy_rec():
+    z2 = np.zeros((1, 1))
+    z1 = np.zeros(1, np.int64)
+    return (z2, z2, z2, z2, z2, z2, z2, z2), (z2, z2, z2, z2, z2, z2, z2, z2), (z1, z1, z1, z1, z1, z1, z1, z1)
+
+
 @njit
 def _pass(i, ry, rx, rhos, certs, Aofs, Bofs, fill, kappa, lam, beta,
-          forced, fbuf, L0, bottomup, ths, ons, nh):
+          forced, fbuf, L0, bottomup, ths, ons, nh, rec, RF, RO, RV):
     """One ordered top-down pass over the subtree, in place. forced: fbuf
-    holds the flat values to force (read them with _save first)."""
+    holds the flat values to force (read them with _save first). rec (with
+    forced and ons all 0): record the pass's own contexts into RF / RO / RV."""
     e = np.empty(257)
     bb = np.empty(257)
     smax = 1 << (4 - i)
@@ -445,14 +512,14 @@ def _pass(i, ry, rx, rhos, certs, Aofs, Bofs, fill, kappa, lam, beta,
     rhos[i][ry, rx] = 0
     certs[i][ry, rx] = 0
     logq, dead = _draw_level(i, i, ry, rx, rhos, certs, Aofs, Bofs, fill, kappa, lam, beta,
-                             forced, fbuf, L0, bottomup, ths, ons, nh, e, bb, known)
+                             forced, fbuf, L0, bottomup, ths, ons, nh, e, bb, known, rec, RF, RO, RV)
     if dead:
         return logq, True
     for l in range(i + 1, 5):
         _refine(l, i, ry, rx, rhos, certs, Aofs, Bofs)
         if l < 4:
             lq, dead = _draw_level(l, i, ry, rx, rhos, certs, Aofs, Bofs, fill, kappa, lam, beta,
-                                   forced, fbuf, L0, bottomup, ths, ons, nh, e, bb, known)
+                                   forced, fbuf, L0, bottomup, ths, ons, nh, e, bb, known, rec, RF, RO, RV)
         else:
             lq, dead = _draw_tiles(i, ry, rx, rhos, certs, Aofs, Bofs, kappa, lam,
                                    forced, fbuf, L0, bottomup, e, known)
@@ -469,8 +536,9 @@ def _pass_entry(i, ry, rx, rhos, certs, Aofs, Bofs, fill, kappa, lam, beta,
     fbuf = np.zeros(n, np.int64)
     if forced:
         _save(i, ry, rx, rhos, certs, fbuf)
+    RF, RO, RV = _dummy_rec()
     return _pass(i, ry, rx, rhos, certs, Aofs, Bofs, fill, kappa, lam, beta,
-                 forced, fbuf, L0, bottomup, ths, ons, nh)
+                 forced, fbuf, L0, bottomup, ths, ons, nh, False, RF, RO, RV)
 
 
 @njit
@@ -479,9 +547,10 @@ def _move(i, ry, rx, rhos, certs, Aofs, Bofs, fill, kappa, lam, beta,
     """i-SIR move. states (K+1, n), logw (K+1,) out; info out:
     [chosen, dead, changed, violating completed proposals, particle-0 ok]."""
     np.random.seed(seed)
+    RF, RO, RV = _dummy_rec()
     _save(i, ry, rx, rhos, certs, states[0])
     lq0, d0 = _pass(i, ry, rx, rhos, certs, Aofs, Bofs, fill, kappa, lam, beta,
-                    True, states[0], L0, bottomup, ths, ons, nh)
+                    True, states[0], L0, bottomup, ths, ons, nh, False, RF, RO, RV)
     s0, nv0 = _energy(i, ry, rx, rhos, certs, Aofs, Bofs, fill, kappa, lam, beta)
     if d0 or nv0 > 0 or not np.isfinite(lq0):
         _load(i, ry, rx, rhos, certs, states[0])
@@ -493,7 +562,7 @@ def _move(i, ry, rx, rhos, certs, Aofs, Bofs, fill, kappa, lam, beta,
     bad = 0
     for j in range(1, K + 1):
         lq, d = _pass(i, ry, rx, rhos, certs, Aofs, Bofs, fill, kappa, lam, beta,
-                      False, states[0], L0, bottomup, ths, ons, nh)
+                      False, states[0], L0, bottomup, ths, ons, nh, False, RF, RO, RV)
         _save(i, ry, rx, rhos, certs, states[j])
         if d:
             dead += 1
@@ -528,6 +597,58 @@ def _move(i, ry, rx, rhos, certs, Aofs, Bofs, fill, kappa, lam, beta,
     info[1] = dead
     info[2] = ch
     info[3] = bad
+
+
+@njit
+def _record_entry(i, ry, rx, rhos, certs, Aofs, Bofs, fill, kappa, lam, beta, fbuf, L0, bottomup, ths, ons, nh,
+                  RF, RO, RV):
+    return _pass(i, ry, rx, rhos, certs, Aofs, Bofs, fill, kappa, lam, beta,
+                 True, fbuf, L0, bottomup, ths, ons, nh, True, RF, RO, RV)
+
+
+def state_to_flat(i, state):
+    parts = []
+    for l, (r, c) in zip(range(i, NL), state):
+        parts.append(np.asarray(r, np.int64).ravel())
+        if l < NL - 1:
+            parts.append(np.asarray(c, np.int64).ravel())
+    return np.concatenate(parts)
+
+
+def record_pass(world, i, ry, rx, state, L0=np.inf, order="raster", proposal=False):
+    """The proposal's own training examples for `state` of the subtree of
+    (i, ry, rx): a forced pass (bias off) through `state`, recording at
+    every non-tile cell and channel, in draw order, the known-flag context
+    features (cp.cell_features_k with the pass's known mask: placeholders
+    flagged), the pass's bias-free energies (designed soft against the
+    placeholders, +inf on values excluded by hard rows against KNOWN cells
+    and the single-cell bounds) and the drawn value.  The world ends in
+    `state` (callers restore it).  proposal: features of width cp.NFQ
+    (cell_features_k then cp.boundary_features), for a proposal-only
+    predictor.  Returns {(l, ch): (feats, offs, vals)}."""
+    rhos, certs, Aofs, Bofs = _tup(world)
+    ths, ons, nh = _bias_args(None)
+    ons[8] = int(proposal)
+    nf = cp.NFQ if proposal else cp.NF
+    RF, RO, RV = [], [], []
+    for l in range(NL - 1):
+        for ch in range(2):
+            if l >= i:
+                n = 1 << (2 * (l - i))
+                D = cl.HS[l] ** 2 + 1 if ch == cl.RHO else len(world.Aof[l])
+                RF.append(np.zeros((n, nf)))
+                RO.append(np.zeros((n, D)))
+                RV.append(np.zeros(n, np.int64))
+            else:
+                RF.append(np.zeros((1, 1)))
+                RO.append(np.zeros((1, 1)))
+                RV.append(np.zeros(1, np.int64))
+    lq, dead = _record_entry(i, ry, rx, rhos, certs, Aofs, Bofs, world.fill, world.kappa, world.lam, world.beta,
+                             state_to_flat(i, state), float(L0), order == "bottomup", ths, ons, nh,
+                             tuple(RF), tuple(RO), tuple(RV))
+    assert not dead, f"record_pass: state of root ({i}, {ry}, {rx}) has q = 0"
+    return {(l, ch): (RF[2 * l + ch], RO[2 * l + ch], RV[2 * l + ch])
+            for l in range(i, NL - 1) for ch in range(2)}
 
 
 # ------------------------------------------------------------------ python API

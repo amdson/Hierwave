@@ -69,12 +69,12 @@ def _dom(w, i, ch):
     return cl.HS[i] ** 2 + 1 if ch == cl.RHO else len(w.Aof[i])
 
 
-def random_preds(levels=(0, 1, 2, 3), scale=0.5, seed=0, nh=16):
+def random_preds(levels=(0, 1, 2, 3), scale=0.5, seed=0, nh=16, proposal=False):
     rng = np.random.default_rng(seed)
-    preds = cp.Preds(nh)
+    preds = cp.QPreds(nh) if proposal else cp.Preds(nh)
     for i in levels:
         for ch in (0, 1):
-            p = cp.init_params(i, ch, nh, seed + 10 * i + ch)
+            p = cp.init_params(i, ch, nh, seed + 10 * i + ch, preds.nf)
             p = {k: (rng.normal(0, scale, np.shape(v)) if isinstance(v, np.ndarray) else v) for k, v in p.items()}
             preds.set(i, ch, p)
     return preds
@@ -207,6 +207,140 @@ def test_forced_pass_finite(withpred):
             assert _same(cc.get_subtree(w, i, ry, rx), st)      # a forced pass leaves the state as found
 
 
+def _logsm(e, v):
+    ok = np.isfinite(e)
+    lg = np.where(ok, -np.where(ok, e, 0.0), -np.inf)
+    mx = lg.max()
+    return lg[v] - mx - np.log(np.exp(lg - mx).sum())
+
+
+@pytest.mark.parametrize("proposal", [False, True])
+def test_record_pass_matches_forced_pass(proposal):
+    """The proposal's recorded contexts (record_pass: features with the
+    pass's known flags, bias-free energies) reproduce the pass: the forced
+    log q with a predictor minus the one without equals the sum over the
+    recorded cells of log softmax(-(offs + b(feats)))[v] - log softmax(-offs)[v]."""
+    import jax
+    jax.config.update("jax_enable_x64", True)
+    import jax.numpy as jnp
+    w = world()
+    preds = random_preds(proposal=proposal)
+    rng = np.random.default_rng(7)
+    for i in range(cl.NL - 1):
+        for ry, rx in _roots(w, i, 2, rng):
+            st = cc.get_subtree(w, i, ry, rx)
+            lq1, d1 = cc.pass_subtree(w, preds, i, ry, rx, rng, forced=True)
+            lq0, d0 = cc.pass_subtree(w, cp.Preds(16), i, ry, rx, rng, forced=True)
+            assert not d0 and not d1
+            rec = cc.record_pass(w, i, ry, rx, st, proposal=proposal)
+            assert _same(cc.get_subtree(w, i, ry, rx), st)
+            tot = 0.0
+            for (l, ch), (f, o, v) in rec.items():
+                assert f.shape == (len(v), preds.nf) and o.shape == (len(v), _dom(w, l, ch))
+                p = preds.params(l, ch)
+                b = np.asarray(cp.jax_bias({k: jnp.asarray(x) for k, x in p.items()}, jnp.asarray(f)))
+                for k in range(len(v)):
+                    assert np.isfinite(o[k, v[k]])
+                    tot += _logsm(o[k] + b[k], v[k]) - _logsm(o[k], v[k])
+            assert np.isclose(lq1 - lq0, tot, atol=1e-8), (i, ry, rx, lq1 - lq0, tot)
+
+
+def test_feature_layout():
+    """wide / widek: every slot of the 4 x 4 same-level window and of the
+    parent's 3 x 3 encodes the cell it names (compared with that cell's own
+    features: its rho from its cert-channel context and vice versa)."""
+    if not cp.WIDE:
+        pytest.skip("layout v0")
+    w = world()
+    rng = np.random.default_rng(8)
+    for i in range(1, cl.NL - 1):
+        rows, cols = w.rho[i].shape
+        prow, pcol = w.rho[i - 1].shape
+        for _ in range(6):
+            y, x = int(rng.integers(rows)), int(rng.integers(cols))
+            for ch in (0, 1):
+                f = cp.features_np(w, i, ch, y, x)
+                ya, xa = y - (y & 1) - 1, x - (x & 1) - 1
+                for d in range(16):
+                    yy, xx = ya + d // 4, (xa + d % 4) % cols
+                    slot = f[cp.OFF_WIN + d * cp.NCELL:cp.OFF_WIN + (d + 1) * cp.NCELL]
+                    if yy < 0:
+                        assert slot[0] == 1 and not slot[1:].any()
+                        continue
+                    if yy >= rows:
+                        assert slot[1] == 1 and slot[0] == 0
+                        continue
+                    me = cp.OFF_WIN + ((yy & 1) + 1) * 4 * cp.NCELL + ((xx & 1) + 1) * cp.NCELL
+                    g_c = cp.features_np(w, i, 0, yy, xx)[me:me + cp.NCELL]    # its cert
+                    g_r = cp.features_np(w, i, 1, yy, xx)[me:me + cp.NCELL]    # its rho
+                    own = yy == y and xx == x
+                    if not (own and ch == 0):
+                        assert np.array_equal(slot[2:2 + cp.NR], g_r[2:2 + cp.NR])
+                    if not (own and ch == 1):
+                        assert np.array_equal(slot[2 + cp.NR:], g_c[2 + cp.NR:])
+                py, px = y // 2, x // 2
+                for d in range(9):
+                    yy, xx = py + d // 3 - 1, (px + d % 3 - 1) % pcol
+                    slot = f[cp.OFF_PN + d * cp.NCELL:cp.OFF_PN + (d + 1) * cp.NCELL]
+                    if 0 <= yy < prow:
+                        me = cp.OFF_WIN + ((yy & 1) + 1) * 4 * cp.NCELL + ((xx & 1) + 1) * cp.NCELL
+                        g_r = cp.features_np(w, i - 1, 1, yy, xx)[me:me + cp.NCELL]
+                        assert np.array_equal(slot[2:2 + cp.NR], g_r[2:2 + cp.NR])
+                if cp.KF:
+                    assert np.all(f[cp.OFF_KN:cp.OFF_KN + cp.NSLOT] == 1)
+
+
+def _brute_boundary(w, i, ry, rx, l, y, x):
+    """boundary_features written out in numpy."""
+    out = np.zeros(cp.NBND)
+    s = 1 << (l - i)
+    fy0, fx0, fs = (y, x, 1) if l == i else (y - (y & 1), x - (x & 1), 2)
+    for k in range(1, cp.NDEP + 1):
+        lp = l + k
+        if lp > 4:
+            break
+        m, hq = 1 << k, 16 >> lp
+        rows, cols = w.rho[lp].shape
+        Y0, X0, S = ry * s * m, rx * s * m, s * m
+        if lp == 4:
+            R = A = B = w.rho[4].astype(float)
+        else:
+            R = w.rho[lp].astype(float)
+            A, B = w.Aof[lp][w.cert[lp]].astype(float), w.Bof[lp][w.cert[lp]].astype(float)
+        for side in range(4):
+            b = (side * cp.NDEP + k - 1) * cp.NBS
+            if side < 2:
+                yy = Y0 - 1 if side == 0 else Y0 + S
+                if yy < 0:
+                    continue
+                if yy >= rows:
+                    out[b + 1:b + cp.NBS] = 1
+                    continue
+                cells = [(yy, (fx0 * m + t) % cols) for t in range(fs * m)]
+            else:
+                xx = (X0 - 1) % cols if side == 2 else (X0 + S) % cols
+                cells = [(fy0 * m + t, xx) for t in range(fs * m)]
+            r = np.array([R[c] for c in cells]) / hq ** 2
+            a = np.array([A[c] for c in cells]) / hq
+            bb = np.array([B[c] for c in cells]) / hq
+            out[b:b + cp.NBS] = [1, r.mean(), a.mean(), bb.mean(), a.min(), bb.max()]
+    return out
+
+
+def test_boundary_features_brute():
+    w = world()
+    rng = np.random.default_rng(9)
+    rhos, certs, Aofs, Bofs = cc._tup(w)
+    for i in range(cl.NL - 1):
+        for ry, rx in _roots(w, i, 3, rng):
+            for l, y0, y1, x0, x1 in cc.subtree_slices(i, ry, rx)[:-1]:
+                for _ in range(3):
+                    y, x = int(rng.integers(y0, y1)), int(rng.integers(x0, x1))
+                    out = np.zeros(cp.NBND)
+                    cp.boundary_features(i, ry, rx, l, y, x, rhos, certs, Aofs, Bofs, out, 0)
+                    assert np.allclose(out, _brute_boundary(w, i, ry, rx, l, y, x)), (i, ry, rx, l, y, x)
+
+
 def test_move_level_valid():
     w = world()
     preds = random_preds(scale=0.3)
@@ -313,11 +447,11 @@ def run_h2_chain(w, preds, ry, rx, n, move, rng, **kw):
     return out
 
 
-def check_invariance(move, n, label, **kw):
+def check_invariance(move, n, label, proposal=False, **kw):
     w = world()
     ent, ry, rx, p = pick_h2_root(w)
     assert ent > 0.5, ent                                     # a non-trivial root
-    preds = random_preds(levels=(3,), scale=0.2, seed=7)   # TV(q, p*) ~ 0.75: a wrong proposal
+    preds = random_preds(levels=(3,), scale=0.2, seed=7, proposal=proposal)   # TV(q, p*) ~ 0.75: a wrong proposal
     q = exact_q_h2(w, preds, ry, rx, p)
     assert q.sum() <= 1 + 1e-9
     tv_q = 0.5 * np.abs(q / q.sum() - p).sum()
@@ -340,6 +474,12 @@ def check_invariance(move, n, label, **kw):
 def test_subtree_move_invariant(K):
     check_invariance(lambda w, preds, i, ry, rx, rng: cc.subtree_move(w, preds, i, ry, rx, K, rng),
                      40000, f"subtree_move K={K}")
+
+
+def test_subtree_move_invariant_proposal_preds():
+    """The same with a proposal-only predictor (cp.QPreds: boundary context)."""
+    check_invariance(lambda w, preds, i, ry, rx, rng: cc.subtree_move(w, preds, i, ry, rx, 2, rng),
+                     40000, "subtree_move K=2 QPreds", proposal=True)
 
 
 def test_annealed_move_invariant():
