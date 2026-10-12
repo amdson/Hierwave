@@ -66,12 +66,13 @@ def city_model(B=8, Sb=3, K=32, shift=True, restart=False, beta0=1.0, gamma0=2.0
                                                      beta0=beta0, gamma0=gamma0, **kw)
 
 
-def marian_model(B=8, Sb=3, K=32, shift=True, restart=False, beta0=1.0, gamma0=1.5, gamma1=5.0, **kw):
-    """Hard-weight ramp 1.5 -> 5 (notes/marian_test.md): 0.62% wildcards at K32
-    against 1.25% with the default 2 -> 8; K48 0.40%, K64 0.34%."""
+def marian_model(B=8, Sb=3, K=32, shift=True, restart=False, beta0=1.0, gamma0=2.0, **kw):
+    """Hard-weight ramp 2 -> 8 (the default).  A gentler ramp (1.5 -> 5) halves
+    the wildcard rate but mostly by building less (layers 2-3 empty); at
+    matched composition it is only marginally better (notes/marian_test.md)."""
     from castlegen import marian
     return marian.tile_model(marian.load()), BlockSchedule.anneal(B=B, Sb=Sb, K=K, shift=shift, restart=restart,
-                                                                 beta0=beta0, gamma0=gamma0, gamma1=gamma1, **kw)
+                                                                 beta0=beta0, gamma0=gamma0, **kw)
 
 
 def socket_base(model: SocketModel, sched):

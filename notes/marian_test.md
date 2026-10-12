@@ -172,3 +172,23 @@ The hard-weight ramp matters most and is sharp (gamma0 3 is 5x worse than
 2): a gentle ramp 1.5 -> 5 halves wildcards at no cost.  With it: K32 0.0062
 (C, 4 seeds of 96^2: 0.0064, 0.94 s per lone chunk), K48 0.0040, K64 0.0034,
 K96 (2 -> 5) 0.0027.  `export_models.marian_model` now uses 1.5 -> 5 at K32.
+
+### Correction: the gentle ramp mostly builds less (2026-10-12)
+Composition was not checked above.  Air fraction per layer (layers 0-5),
+48^2 x 2 seeds:
+
+| schedule | wildcards | air per layer | prototypes |
+|---|---|---|---|
+| ramp 2 -> 8, K32 | 0.0126 | 0, .01, .17, .67, .97, 1 | 92 |
+| ramp 1.5 -> 5, K32 | 0.0061 | 0, .02, .59, .99, 1, 1 | 73 |
+| ramp 2 -> 8, K64 | 0.0051 | 0, .01, .34, .87, .99, 1 | 87 |
+| ramp 1.5 -> 5, K64 | 0.0031 | 0, .05, .93, 1, 1, 1 | 60 |
+
+Fewer storeys, fewer conflicts.  Longer runs also flatten (the air profile's
+equilibrium is flatter than the K32 snapshot).  Recalibrating the air weights
+for the gentle ramp to the 2 -> 8 K32 composition is unstable (layer air
+flips between ~0 and ~1 with small weight changes), but near-matched points
+give 0.0105-0.0121 against 0.0126: marginal.  All wildcard comparisons need
+composition held fixed; the export is back to 2 -> 8.  The per-layer air
+weights sit near a sharp transition, another reason to replace them with a
+learned coarse height level.
