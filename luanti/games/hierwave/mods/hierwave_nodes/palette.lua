@@ -41,4 +41,6 @@ return {
 	"deep_water",
 	"dark_grass",
 	"window",
+	"brick",
+	"wood",
 }
