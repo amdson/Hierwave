@@ -218,7 +218,21 @@ def load(root="cache/marian"):
                      faces, pname)
 
 
-def tile_model(ms: MarianSet, L=MAP_HEIGHT, domains="ac", colors=None):
+# Empty's weight per layer (bottom -> top); None keeps Marian's (10 everywhere).
+AIR_WEIGHTS = None
+
+
+def air_layer_unary(ms: MarianSet, air_weights):
+    """(L, T) per-layer unary that gives Empty weight air_weights[l] on layer
+    l instead of its prototype weight (other modules unchanged)."""
+    L = len(air_weights)
+    lu = np.zeros((L, ms.T))
+    t = ms.air()
+    lu[:, t] = -np.log(np.asarray(air_weights, float)) + np.log(ms.weight[t])
+    return lu
+
+
+def tile_model(ms: MarianSet, L=MAP_HEIGHT, domains="ac", colors=None, air_weights="default"):
     """TileModel3D: u = -log weight, forbidden pairs = not allowed in either
     listing (union of the two directions' bitsets), per-layer domains
     ('ac' propagated, 'raw' boundary only, None unconstrained)."""
@@ -231,7 +245,10 @@ def tile_model(ms: MarianSet, L=MAP_HEIGHT, domains="ac", colors=None):
     dom = {"ac": ms.layer_domains, "raw": ms.boundary_ok}[domains](L) if domains else np.ones((L, ms.T), bool)
     if colors is None:
         colors = proto_colors(ms)
-    return TileModel3D(list(ms.names), -np.log(ms.weight), F, dom, colors)
+    if isinstance(air_weights, str):
+        air_weights = AIR_WEIGHTS
+    lu = None if air_weights is None else air_layer_unary(ms, air_weights)
+    return TileModel3D(list(ms.names), -np.log(ms.weight), F, dom, colors, lu=lu)
 
 
 def proto_colors(ms: MarianSet):

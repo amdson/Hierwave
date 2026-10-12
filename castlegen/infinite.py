@@ -805,7 +805,8 @@ class TileModel3D:
     soft pair energies in the same layout (finite, symmetrised by summing
     nothing: give both directions consistently).  wild: a final fix
     half-step puts the wildcard T where no module fits (ids then include T).
-    colors (T, 3) for render."""
+    colors (T, 3) for render.  lu (L, T) optional per-layer unary added to u
+    (enters through base(); not supported together with soft E)."""
     names: list
     u: np.ndarray
     F: np.ndarray
@@ -813,6 +814,7 @@ class TileModel3D:
     colors: np.ndarray
     E: np.ndarray = None
     wild: bool = True
+    lu: np.ndarray = None
 
     def __post_init__(self):
         T = len(self.names)
@@ -831,6 +833,12 @@ class TileModel3D:
         if not np.isfinite(self.E).all():
             raise ValueError("E: finite soft energies; forbid pairs with F")
         self.colors = np.asarray(self.colors, np.uint8).reshape(T, 3)
+        if self.lu is not None:
+            if self.soft:
+                raise ValueError("lu with soft E is not supported")
+            self.lu = np.ascontiguousarray(self.lu, np.float64).reshape(self.L, T)
+            if not np.isfinite(self.lu).all():
+                raise ValueError("lu: finite")
 
     @property
     def T(self):
@@ -845,9 +853,15 @@ class TileModel3D:
         return 1 if self.wild else 0
 
     def base(self, beta):
-        """(S, L, T): exp(-beta (u - min u)) on each layer's domain."""
-        b = np.exp(-np.asarray(beta)[:, None] * (self.u - self.u.min())[None, :])
-        return np.ascontiguousarray(b[:, None, :] * self.dom[None, :, :])
+        """(S, L, T): exp(-beta (u + lu[l] - min)) on each layer's domain."""
+        beta = np.asarray(beta)
+        if self.lu is None:
+            b = np.exp(-beta[:, None] * (self.u - self.u.min())[None, :])
+            return np.ascontiguousarray(b[:, None, :] * self.dom[None, :, :])
+        ul = self.u[None, :] + self.lu
+        ul = ul - ul.min(1, keepdims=True)
+        b = np.exp(-beta[:, None, None] * ul[None, :, :])
+        return np.ascontiguousarray(b * self.dom[None, :, :])
 
     def run(self, grid, gy0, gx0, seed, sched, ups):
         _anneal3d(grid, gy0, gx0, seed, self.base(sched.beta), sched.beta, sched.gamma, self.u, self.F,
@@ -861,7 +875,12 @@ class TileModel3D:
         """(unary energy, forbidden pairs + domain misses); wildcards count 0."""
         u = np.append(self.u, 0.0)
         p, d = self.violations(grid)
-        return float(u[np.minimum(grid, self.T)].sum()), p + d
+        g = np.minimum(grid, self.T)
+        E = float(u[g].sum())
+        if self.lu is not None:
+            lu = np.concatenate([self.lu, np.zeros((self.L, 1))], 1)
+            E += float(np.take_along_axis(lu, g.reshape(self.L, -1), 1).sum())
+        return E, p + d
 
 
 def _generate_blocks3d(model, bs, seed, y0, x0, H, W, stats=None):
