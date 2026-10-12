@@ -8,6 +8,7 @@ dependencies = ["jax>=0.4.30", "numpy", "scipy", "numba", "matplotlib"]
 [project.optional-dependencies]
 render = ["pillow"]
 dev = ["pytest", "pillow"]
+viewer = ["pygame"]
 
 [tool.setuptools.packages.find]
 include = ["castlegen*"]
