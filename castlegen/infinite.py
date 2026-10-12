@@ -190,12 +190,16 @@ class TileModel:
 
 
 @njit(cache=True)
-def _anneal_sockets(grid, gy0, gx0, seed, base, sN, sE, sS, sW, beta, gamma, ups, cone=True):
+def _anneal_sockets(grid, gy0, gx0, seed, base, sN, sE, sS, sW, beta, gamma, ups, cone=True, fix=False):
     """_anneal for socket tiles: tile t fits its left neighbour l iff
     sE[l] == sW[t] (likewise right, up, down); V counts misfits; the soft
     energy is unary only.  base[s, t] = exp(-beta[s] (u[t] - min u)).
     cone=False updates every cell but the border at every half-step (a
-    fixed-boundary run for statistics, not exact)."""
+    fixed-boundary run for statistics, not exact).
+    fix=True adds half-step 2S + 1 on parity 0, lexicographic at beta[S-1]:
+    a cell with no tile fitting all four neighbours takes the wildcard T
+    (fits anything).  Every pair has one parity-0 cell and parity 1 is not
+    updated again, so the result has no misfit; the cone grows by one."""
     H, W = grid.shape
     T = base.shape[1]
     S = beta.shape[0]
@@ -211,9 +215,9 @@ def _anneal_sockets(grid, gy0, gx0, seed, base, sN, sE, sS, sW, beta, gamma, ups
             r = _u01(seed, gy0 + i, gx0 + j, 0) * acc
             grid[i, j] = min(np.searchsorted(cdf, r, side="right"), T - 1)
     eg = np.empty(5)
-    for h in range(1, 2 * S + 1):
-        s = (h - 1) >> 1
-        g = gamma[s]
+    for h in range(1, 2 * S + 1 + fix):
+        s = min((h - 1) >> 1, S - 1)
+        g = np.inf if h > 2 * S else gamma[s]
         hard_inf = np.isinf(g)
         for k in range(5):
             eg[k] = 0.0 if hard_inf and k > 0 else np.exp(-g * k)
@@ -231,6 +235,10 @@ def _anneal_sockets(grid, gy0, gx0, seed, base, sN, sE, sS, sW, beta, gamma, ups
                     v[t] = n
                     if n < vmin:
                         vmin = n
+                ups[0] += 1
+                if h > 2 * S and vmin > 0:
+                    grid[i, j] = T
+                    continue
                 if hard_inf:
                     for t in range(T):
                         w[t] = bs[t] if v[t] == vmin else 0.0
@@ -238,19 +246,21 @@ def _anneal_sockets(grid, gy0, gx0, seed, base, sN, sE, sS, sW, beta, gamma, ups
                     for t in range(T):
                         w[t] = bs[t] * eg[v[t]]
                 grid[i, j] = _draw(w, T, _u01(seed, gy0 + i, gx0 + j, h))
-                ups[0] += 1
 
 
 @njit(cache=True)
 def _socket_violations(grid, sN, sE, sS, sW):
+    """Misfit pairs; socket -1 (the wildcard's) fits anything."""
     H, W = grid.shape
     n = 0
     for i in range(H):
         for j in range(W):
             if j + 1 < W:
-                n += sE[grid[i, j]] != sW[grid[i, j + 1]]
+                a, b = sE[grid[i, j]], sW[grid[i, j + 1]]
+                n += a != b and a >= 0 and b >= 0
             if i + 1 < H:
-                n += sS[grid[i, j]] != sN[grid[i + 1, j]]
+                a, b = sS[grid[i, j]], sN[grid[i + 1, j]]
+                n += a != b and a >= 0 and b >= 0
     return n
 
 
@@ -259,12 +269,15 @@ class SocketModel:
     """Edge-socket tiles for large T: tile t has sockets sN, sE, sS, sW
     (ints); horizontal neighbours fit iff sE[left] == sW[right], vertical iff
     sS[top] == sN[bottom].  Soft energy unary u (e.g. -log WFC weight).  Cost
-    per update O(T) socket compares, no T x T tables."""
+    per update O(T) socket compares, no T x T tables.
+    wild_u: if set, a final fix half-step puts the wildcard tile T (fits any
+    socket, energy wild_u) where no tile fits; output ids then include T."""
     u: np.ndarray
     sN: np.ndarray
     sE: np.ndarray
     sS: np.ndarray
     sW: np.ndarray
+    wild_u: float = None
 
     def __post_init__(self):
         self.u = np.ascontiguousarray(self.u, np.float64)
@@ -275,13 +288,21 @@ class SocketModel:
     def T(self):
         return self.u.size
 
+    @property
+    def extra_pad(self):
+        return 0 if self.wild_u is None else 1
+
     def run(self, grid, gy0, gx0, seed, sched, ups, cone=True):
         base = np.exp(-sched.beta[:, None] * (self.u - self.u.min())[None, :])
         _anneal_sockets(grid, gy0, gx0, seed, base, self.sN, self.sE, self.sS, self.sW,
-                        sched.beta, sched.gamma, ups, cone)
+                        sched.beta, sched.gamma, ups, cone, self.wild_u is not None)
 
     def energy(self, grid):
-        return float(self.u[grid].sum()), int(_socket_violations(grid, self.sN, self.sE, self.sS, self.sW))
+        """(soft energy, misfit pairs); the wildcard counts wild_u."""
+        ext = lambda a, x: np.append(a, x)
+        u = ext(self.u, 0.0 if self.wild_u is None else self.wild_u)
+        return float(u[grid].sum()), int(_socket_violations(grid, ext(self.sN, -1), ext(self.sE, -1),
+                                                             ext(self.sS, -1), ext(self.sW, -1)))
 
 
 @dataclass
@@ -324,7 +345,7 @@ def generate(model, sched: Schedule, seed, y0, x0, H, W, pad=None, stats=None):
     """The world cells [y0, y0 + H) x [x0, x0 + W), (H, W) int32.  pad
     defaults to the light cone 2S (smaller pads are for tests: they are not
     exact)."""
-    P = sched.pad if pad is None else pad
+    P = sched.pad + getattr(model, "extra_pad", 0) if pad is None else pad
     grid = np.zeros((H + 2 * P, W + 2 * P), np.int32)
     ups = np.zeros(1, np.int64)
     model.run(grid, np.int64(y0 - P), np.int64(x0 - P), np.uint64(seed & M64), sched, ups)

@@ -77,3 +77,16 @@ fixed border; not exact).  Experiment `notes/experiments/infinite_city.py`.
   Images: images/infinite_city_hot.png (varied, defective),
   images/infinite_city_bulk256.png (clean, two zones),
   images/infinite_city.png (clean, all R).
+
+## Wildcard fix pass and diversity weights (2026-10-12)
+- Upweighting rare zones only changes the winner (P 82%).  Cheaper zone
+  boundaries keep variety: BOUNDARY_W 0.5 with P, I, D at 1.0 keeps P C I D W
+  at S = 128 with ~0.02 misfits per cell (a speckled patchwork, no layout;
+  rail and highways never form).
+- `SocketModel(wild_u=...)`: one extra half-step on parity 0, lexicographic;
+  a cell with no fitting tile takes the wildcard id T (fits any socket).
+  Every pair has one parity-0 cell, so the output has no misfit; the pad
+  grows by one, chunks stay exact.  Wildcards per cell at S = 32, 64, 128:
+  0.10, 0.047, 0.019 (about 20 per 32^2 chunk at S = 128), in small
+  diagonal pairs on district fronts.  Image:
+  images/infinite_city_fix_bw.5_rare.png (wildcards magenta).
