@@ -122,3 +122,53 @@ global, 48^2 columns, seeds 0-2 (`notes/experiments/marian_mh2x2.py`):
   the defects may need vertical or larger joint moves, untested.
 - With the rising air profile the wildcard rate is 1.25% at K32 (Marian's
   uniform weights gave 0.52%): taller structure is harder.
+
+## Wildcard experiments, round 2 (2026-10-12)
+All at the default AIR_WEIGHTS, B8 shift global, 48^2 columns, seeds 0-2,
+numba single core, one batch per table so times compare
+(`notes/experiments/marian_sched.py` + `marian_sched_runs.py`; seed spread
+about +-0.0007).
+
+Group shapes (`plaquette.py`: 'h' 2x2 in a layer, 'vx' / 'vy' 2 layers x 2
+cols / rows, None = skip):
+
+| run | wildcards | time |
+|---|---|---|
+| base K32 / K48 / K64 / K96 | 0.0125 / 0.0072 / 0.0053 / 0.0032 | 9.2 / 13.6 / 18.0 / 26.7 s |
+| MH h every sweep, K32 | 0.0082 | 27 s |
+| MH vx every sweep, K32 | 0.0055 | 27 s |
+| MH vx every other sweep, K32 | 0.0078 | 17 s |
+| MH vx, vy alternate with skips, K32 | 0.0065 | 18 s |
+| MH vx, K24 | 0.0083 | 20 s |
+| MH vx, vy in the last half, K48 | 0.0053 | 22 s |
+
+Vertical groups beat horizontal ones, but no group variant beats plain
+sweeps at equal time.
+
+Exact domino moves at gamma = inf (enumerate pairs within min + 1
+violations per cell; exact lexicographic Gibbs on the pair): K32 0.0115, K64
+0.0054, ~free.  The wildcard analysis
+(`notes/experiments/marian_wildcards.py`) finds wildcards on layers 1-3, 82%
+of them fit if one single neighbour were removed, with varied neighbour
+signatures (no missing module); dominoes show the blocking neighbour is
+itself pinned, so the defects are longer chains.
+
+Schedule shape at Sb3 K64 (equal cost unless noted):
+
+| change | wildcards |
+|---|---|
+| reference (gamma 2 -> 8, quench 4) | 0.0053 |
+| gamma 2 -> 5 | 0.0044 |
+| gamma 2 -> 4 | 0.0037 |
+| gamma 1.5 -> 5 | 0.0034 |
+| gamma 1 -> 8 | 0.0060 |
+| gamma 3 -> 8 | 0.0269 |
+| gamma 2 -> 12 | 0.0075 |
+| quench 1 / 12 | 0.0049 / 0.0058 |
+| Sb4 K48 / Sb6 K32 (1.4x / 2.2x time) | 0.0043 / 0.0043 |
+| B16 (2.5x time) | 0.0030 |
+
+The hard-weight ramp matters most and is sharp (gamma0 3 is 5x worse than
+2): a gentle ramp 1.5 -> 5 halves wildcards at no cost.  With it: K32 0.0062
+(C, 4 seeds of 96^2: 0.0064, 0.94 s per lone chunk), K48 0.0040, K64 0.0034,
+K96 (2 -> 5) 0.0027.  `export_models.marian_model` now uses 1.5 -> 5 at K32.
