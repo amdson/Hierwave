@@ -5,11 +5,17 @@
 --   tile (r, c): r grows south, c east; N = 8 blocks per tile side.
 --   world x = 8 c + j, world z = -(8 r + i); template layer k is world y = k - 4.
 --   below layer 0: stone; above layer L - 1: air.
+-- 3D sets (model layers ML > 1, e.g. marian: ML = 6 module layers, each
+-- template K = tpl.L = 8 blocks tall): module (l, r, c) fills
+--   x = 8 c + j, z = -(8 r + i), y = Y0_3D + K l + y_local, Y0_3D = -8,
+-- so layer 0 (modules standing on the ground) spans y -8 .. -1 and the top
+-- layer ends at y = -8 + K ML - 1 (39 for marian); stone below, air above.
 
 local hw = {}
 
 hw.N = 8
-hw.Y0 = -4  -- world y of template layer 0
+hw.Y0 = -4     -- world y of template layer 0 (2D sets)
+hw.Y0_3D = -8  -- world y of the bottom of module layer 0 (3D sets)
 
 local floor = math.floor
 local byte = string.byte
@@ -69,15 +75,20 @@ local THEMES = {
 	{6, 7, 7, 5, 6},     -- town
 }
 
-function hw.placeholder_provider(seed, n)
+-- layers ML > 1 (3D sets): out is (ML, H, W), layer l hashed with seed + 2 l
+function hw.placeholder_provider(seed, n, layers)
+	layers = layers or 1
 	return function(r0, c0, H, W, out)
-		for a = 0, H - 1 do
-			local r = r0 + a
-			for b = 0, W - 1 do
-				local c = c0 + b
-				local th = THEMES[hash3(floor(r / 4), floor(c / 4), seed) % #THEMES + 1]
-				local t = th[hash3(r, c, seed + 1) % #th + 1]
-				out[a * W + b] = t % n
+		for l = 0, layers - 1 do
+			local sd = seed + 2 * l
+			for a = 0, H - 1 do
+				local r = r0 + a
+				for b = 0, W - 1 do
+					local c = c0 + b
+					local th = THEMES[hash3(floor(r / 4), floor(c / 4), sd) % #THEMES + 1]
+					local t = th[hash3(r, c, sd + 1) % #th + 1]
+					out[(l * H + a) * W + b] = t % n
+				end
 			end
 		end
 		return 0
@@ -93,11 +104,12 @@ typedef struct hw_world hw_world;
 hw_model* hw_model_load(const char* path);
 void      hw_model_free(hw_model*);
 int       hw_model_T(const hw_model*);
+int       hw_model_L(const hw_model*);
 void      hw_model_set_fast(hw_model*, int on);
 int       hw_tiles(const hw_model*, uint64_t seed, int64_t y0, int64_t x0,
                    int H, int W, int32_t* out);
 hw_world* hw_world_new(const hw_model*, uint64_t seed, int C);
-int       hw_world_region(hw_world*, int64_t y0, int64_t x0, int H, int W, int32_t* out);
+int       hw_world_region(hw_world*, int64_t y0, int64_t x0, int H, int W, int32_t* out);  /* (L, H, W) */
 void      hw_world_free(hw_world*);
 ]]
 
@@ -129,15 +141,18 @@ end
 ---------------------------------------------------------------------------
 -- Generator: fills mapchunk [minp, maxp] of a VoxelManip.
 
--- node_names[id + 1] = node name for palette id
-function hw.new_generator(tpl, node_names, provider, new_buffer, log)
-	local N, L = tpl.N, tpl.L
+-- node_names[id + 1] = node name for palette id; layers = model layers ML
+-- (1: 2D set, one template stack per tile; > 1: 3D set, the provider fills
+-- (ML, H, W) and each module is a K = tpl.L tall template)
+function hw.new_generator(tpl, node_names, provider, new_buffer, log, layers)
+	local N, K = tpl.N, tpl.L
+	local ML = layers or 1
 	local NN = N * N
-	local LNN = L * NN
+	local KNN = K * NN
 	local ntpl = tpl.n
 	local s = tpl.data
-	local Y0 = hw.Y0
-	local Ytop = Y0 + L - 1
+	local Y0 = ML > 1 and hw.Y0_3D or hw.Y0
+	local Ytop = Y0 + ML * K - 1
 
 	local cid = {}
 	for id, name in ipairs(node_names) do
@@ -153,7 +168,8 @@ function hw.new_generator(tpl, node_names, provider, new_buffer, log)
 	local tiles, tiles_len = nil, 0
 	local bad_ids = 0
 
-	local gen = {stats = {chunks = 0, t_tiles = 0, t_fill = 0, bad_ids = 0}}
+	local gen = {stats = {chunks = 0, t_tiles = 0, t_fill = 0, bad_ids = 0},
+		layers = ML, Y0 = Y0, Ytop = Ytop}
 
 	-- tile region for a chunk: rows r0..r1, cols c0..c1
 	function gen.tile_region(minp, maxp)
@@ -162,14 +178,21 @@ function hw.new_generator(tpl, node_names, provider, new_buffer, log)
 		return r0, c0, r1 - r0 + 1, c1 - c0 + 1
 	end
 
-	-- palette id at a world position, given tile ids (for checks)
+	-- model layer of world y (nil outside the templates)
+	function gen.layer_at(y)
+		if y < Y0 or y > Ytop then return nil end
+		return floor((y - Y0) / K)
+	end
+
+	-- palette id at a world position, given the tile id there (for checks)
 	function gen.palette_at(x, y, z, tile)
 		if y < Y0 then return 1 end  -- stone
 		if y > Ytop then return 0 end
+		local yy = (y - Y0) % K
 		local zz = -z
 		local i, j = zz % N, x % N
 		if tile < 0 or tile >= ntpl then tile = 0 end
-		return byte(s, 17 + tile * LNN + (y - Y0) * NN + i * N + j)
+		return byte(s, 17 + tile * KNN + yy * NN + i * N + j)
 	end
 
 	function gen.generate(vm, minp, maxp)
@@ -178,8 +201,6 @@ function hw.new_generator(tpl, node_names, provider, new_buffer, log)
 		local emin, emax = vm:get_emerged_area()
 		local area = VoxelArea(emin, emax)
 		vm:get_data(data)
-		local ystride = area.ystride
-		local zstride = area.zstride
 
 		if maxp.y < Y0 then
 			for z = minp.z, maxp.z do
@@ -199,9 +220,9 @@ function hw.new_generator(tpl, node_names, provider, new_buffer, log)
 		end
 
 		local r0, c0, H, W = gen.tile_region(minp, maxp)
-		if H * W > tiles_len then
-			tiles = new_buffer(H * W)
-			tiles_len = H * W
+		if ML * H * W > tiles_len then
+			tiles = new_buffer(ML * H * W)
+			tiles_len = ML * H * W
 		end
 		local rc = provider(r0, c0, H, W, tiles)
 		if rc ~= 0 then
@@ -212,11 +233,12 @@ function hw.new_generator(tpl, node_names, provider, new_buffer, log)
 
 		local ylo = minp.y
 		local yhi = maxp.y < Ytop and maxp.y or Ytop
+		local HW = H * W
 		for z = minp.z, maxp.z do
 			local zz = -z
 			local r = floor(zz / N)
 			local i = zz - r * N
-			local trow = (r - r0) * W
+			local trow = (r - r0) * W - c0
 			for y = ylo, yhi do
 				local vi = area:index(minp.x, y, z)
 				if y < Y0 then
@@ -225,15 +247,17 @@ function hw.new_generator(tpl, node_names, provider, new_buffer, log)
 						vi = vi + 1
 					end
 				else
-					local koff = 17 + (y - Y0) * NN + i * N
+					local l = floor((y - Y0) / K)
+					local koff = 17 + (y - Y0 - l * K) * NN + i * N
+					local tbase = l * HW + trow
 					for x = minp.x, maxp.x do
 						local c = floor(x / N)
-						local t = tiles[trow + c - c0]
+						local t = tiles[tbase + c]
 						if t < 0 or t >= ntpl then
 							bad_ids = bad_ids + 1
 							t = 0
 						end
-						data[vi] = pal[byte(s, t * LNN + koff + (x - c * N))]
+						data[vi] = pal[byte(s, t * KNN + koff + (x - c * N))]
 						vi = vi + 1
 					end
 				end

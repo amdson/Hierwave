@@ -89,6 +89,8 @@ log("action", ("templates %s: n=%d N=%d L=%d"):format(tpl_path, tpl.n, tpl.N, tp
 
 local provider, provider_name, new_buffer
 local world_addr, model_T
+-- model layers: 1 for 2D sets; 3D sets (marian) report L from the model
+local layers = tonumber(S:get("hierwave_layers") or "") or 1
 
 if provider_mode ~= "placeholder" then
 	local why
@@ -106,14 +108,15 @@ if provider_mode ~= "placeholder" then
 				why = "hw_model_load failed on " .. hwm_path
 			else
 				model_T = lib.hw_model_T(model)
+				layers = lib.hw_model_L(model)
 				if fast then lib.hw_model_set_fast(model, 1) end
 				local world = lib.hw_world_new(model, seed, chunk_tiles)
 				provider = hw.sampler_provider(ffi, lib, world)
 				new_buffer = function(n) return ffi.new("int32_t[?]", n) end
 				world_addr = hw.ptr_to_number(ffi, world)
 				provider_name = "sampler"
-				log("action", ("sampler: %s, model %s (T=%d, wildcard id T), seed %d, C=%d")
-					:format(lib_path, hwm_path, model_T, seed, chunk_tiles))
+				log("action", ("sampler: %s, model %s (T=%d, L=%d, wildcard id T), seed %d, C=%d")
+					:format(lib_path, hwm_path, model_T, layers, seed, chunk_tiles))
 				if tpl.n < model_T then
 					log("warning", ("template file has %d templates < T=%d; out-of-range ids use template 0")
 						:format(tpl.n, model_T))
@@ -128,7 +131,7 @@ if provider_mode ~= "placeholder" then
 end
 
 if not provider then
-	provider = hw.placeholder_provider(seed, tpl.n)
+	provider = hw.placeholder_provider(seed, tpl.n, layers)
 	new_buffer = function() return {} end
 	provider_name = "placeholder"
 end
@@ -152,12 +155,13 @@ hierwave_gen = {
 	template = tpl,
 	gen_env = gen_env,
 	ffi = ffi,
+	layers = layers,
 }
 
 ---------------------------------------------------------------------------
 -- generation
 
-local gen = hw.new_generator(tpl, node_names, provider, new_buffer, log)
+local gen = hw.new_generator(tpl, node_names, provider, new_buffer, log, layers)
 hierwave_gen.gen = gen
 
 if gen_env == "mapgen" then
@@ -169,6 +173,7 @@ if gen_env == "mapgen" then
 		world_addr = world_addr,
 		node_names = node_names,
 		log_chunks = log_chunks,
+		layers = layers,
 	})
 	core.register_mapgen_script(modpath .. "/mapgen.lua")
 else

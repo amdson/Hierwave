@@ -1,6 +1,8 @@
 -- Headless test hooks (main env), all off by default:
---   hierwave_test_radius = R    emerge mapchunks |cx|,|cz| <= R, y -96..31 at startup,
+--   hierwave_test_radius = R    emerge mapchunks |cx|,|cz| <= R, y -96 .. (31, or 95 when
+--                               the templates reach above y = 31: 3D sets) at startup,
 --                               then check random nodes against provider + template
+--                               (3D sets: the provider's (L, 1, 1) column, layer of y)
 --   hierwave_test_shutdown = true   shut the server down after the test
 --   hierwave_ffi_selftest = true    call hw_dummy from luanti/build/libhwdummy.dylib
 
@@ -32,25 +34,20 @@ local function check(p0, p1, nsamples)
 	local hg = hierwave_gen
 	local gen, provider = hg.gen, hg.provider
 	local names = hierwave_nodes.node_names
-	local buf = hg.provider_name == "sampler" and nil or {}
 	local bad, counts = 0, {}
+	local ylo, yhi = gen.Y0 - 4, gen.Ytop + 4
+	local layers = gen.layers
 	-- blocks emerged early may already be unloaded (long city runs)
-	core.load_area({x = p0.x, y = -16, z = p0.z}, {x = p1.x, y = 31, z = p1.z})
+	core.load_area({x = p0.x, y = ylo, z = p0.z}, {x = p1.x, y = yhi, z = p1.z})
 	local rng = PcgRandom(12345)
+	local out = hg.provider_name == "sampler" and hg.ffi.new("int32_t[?]", layers) or {}
 	for _ = 1, nsamples do
 		local x = rng:next(p0.x, p1.x)
-		local y = rng:next(-8, 24)
+		local y = rng:next(ylo, yhi)
 		local z = rng:next(p0.z, p1.z)
 		local r, c = math.floor(-z / 8), math.floor(x / 8)
-		local tile
-		if hg.provider_name == "sampler" then
-			local out = hg.ffi.new("int32_t[1]")
-			provider(r, c, 1, 1, out)
-			tile = out[0]
-		else
-			provider(r, c, 1, 1, buf)
-			tile = buf[0]
-		end
+		provider(r, c, 1, 1, out)                -- (layers, 1, 1)
+		local tile = out[gen.layer_at(y) or 0]
 		local want = names[gen.palette_at(x, y, z, tile) + 1]
 		local got = core.get_node({x = x, y = y, z = z}).name
 		counts[got] = (counts[got] or 0) + 1
@@ -69,16 +66,19 @@ end
 
 core.after(0, function()
 	local lo, hi = -32 - 64 * R, 31 + 64 * R
+	local ytop = 31
+	while ytop < hierwave_gen.gen.Ytop do ytop = ytop + 64 end
+	local ny = (ytop + 97) / 64
 	local p0 = {x = lo, y = -96, z = lo}
-	local p1 = {x = hi, y = 31, z = hi}
+	local p1 = {x = hi, y = ytop, z = hi}
 	local t0 = core.get_us_time()
 	log("action", ("emerging %s..%s (%d mapchunks), provider %s, %s env")
 		:format(core.pos_to_string(p0), core.pos_to_string(p1),
-			(2 * R + 1) ^ 2 * 2, hierwave_gen.provider_name, hierwave_gen.gen_env))
+			(2 * R + 1) ^ 2 * ny, hierwave_gen.provider_name, hierwave_gen.gen_env))
 	core.emerge_area(p0, p1, function(blockpos, action, remaining)
 		if remaining > 0 then return end
 		local dt = (core.get_us_time() - t0) / 1e6
-		local nch = (2 * R + 1) ^ 2 * 2
+		local nch = (2 * R + 1) ^ 2 * ny
 		log("action", ("emerge done: %d mapchunks in %.2f s (%.1f ms/chunk)"):format(nch, dt, dt * 1e3 / nch))
 		local st = hierwave_gen.gen.stats
 		if st.chunks > 0 then

@@ -6,7 +6,7 @@
 #   luanti/run.sh test [R]        headless: generate mapchunks |cx|,|cz| <= R
 #                                 (default 1) in a fresh test world, check, exit
 #
-# Environment: HW_SET (biomes|city, default biomes), HW_SEED (default 1),
+# Environment: HW_SET (biomes|city|marian, default biomes), HW_SEED (default 1),
 #   LUANTI (binary; default luanti/build/luanti.app if present, else
 #   /Applications/luanti.app; only the former can load our dylibs via FFI),
 #   HW_EXTRA (extra config lines, e.g. "hierwave_provider = placeholder").
@@ -30,6 +30,10 @@ CONF="$HERE/build/$MODE.conf"
 {
 	cat "$HERE/luanti.conf"
 	printf '\nhierwave_set = %s\nhierwave_seed = %s\n' "$SET" "$SEED"
+	if [ "$SET" = marian ]; then
+		# 3D modules fill y -8 .. 39: spawn above the roofs
+		printf 'hierwave_spawn_y = 41.5\nstatic_spawnpoint = 4, 41.5, -4\n'
+	fi
 	if [ "$MODE" = test ]; then
 		printf 'hierwave_test_radius = %s\nhierwave_test_shutdown = true\n' "${2:-1}"
 		printf 'hierwave_log_chunks = true\nhierwave_ffi_selftest = true\n'

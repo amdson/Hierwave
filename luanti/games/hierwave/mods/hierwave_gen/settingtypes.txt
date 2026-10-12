@@ -1,5 +1,7 @@
 #    Tile set: model data/<set>.hwm, templates data/<set>.hwt.
-hierwave_set (Tile set) enum biomes biomes,city
+#    biomes, city: 2D tiles with 24-block template stacks; marian: 3D modules
+#    (Marian Kleineberg's WFC set, 6 layers of 8^3 modules from y = -8).
+hierwave_set (Tile set) enum biomes biomes,city,marian
 
 #    Sampler seed (uint64 in the C API; values below 2^53 here).
 hierwave_seed (Sampler seed) int 1 0
@@ -16,7 +18,14 @@ hierwave_gen_env (Generation environment) enum auto auto,main,mapgen
 hierwave_chunk_tiles (Sampler chunk tiles) int 32 8 256
 
 #    Fast socket sampling (candidate tiles only; deterministic, not numba-exact).
+#    No effect on 3D sets (always exact).
 hierwave_fast (Fast sampler) bool true
+
+#    Model layers for the placeholder provider (the sampler reads L from the model).
+hierwave_layers (Placeholder layers) int 1 1 256
+
+#    Spawn height (new players and respawn at (4, y, -4)).
+hierwave_spawn_y (Spawn y) float 0.5
 
 #    Overrides: sampler dylib, model file, template file (absolute paths).
 hierwave_lib (Sampler library path) string

@@ -117,7 +117,7 @@ core.register_item(":", {
 })
 
 -- Viewer player.
-local spawn = {x = 4, y = 0.5, z = -4}
+local spawn = {x = 4, y = tonumber(core.settings:get("hierwave_spawn_y") or "") or 0.5, z = -4}
 local view_privs = {fly = true, fast = true, noclip = true, interact = true,
 	shout = true, teleport = true, debug = true}
 

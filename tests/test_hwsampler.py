@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import pytest
 
@@ -143,3 +145,79 @@ def test_city_block_world_and_fast(tmp_path, city_m):
     wf.region(0, 0, 4, 4)
     assert np.array_equal(wf.region(-9, -7, 18, 22), f)
     assert city_m.energy(f)[1] == 0
+
+
+# ------------------------------------------------------------------ layered 3D (TileModel3D, kind 2)
+def _toy3d(lu=False, wild=True, seed=0, T=14, L=4, dens=0.55):
+    from castlegen.infinite import TileModel3D
+    rng = np.random.default_rng(seed)
+    F = rng.random((6, T, T)) < dens
+    F[:, 0, 0] = False                         # tile 0 fits itself everywhere: no empty world
+    dom = rng.random((L, T)) < 0.7
+    dom[:, 0] = True
+    return TileModel3D([f"t{i}" for i in range(T)], rng.random(T) * 2, F, dom, np.zeros((T, 3)),
+                       wild=wild, lu=rng.normal(size=(L, T)) if lu else None)
+
+
+@pytest.mark.parametrize("lu,wild", [(False, True), (True, True), (True, False)])
+def test_3d_flat_bit_exact(tmp_path, lu, wild):
+    from castlegen.infinite import Schedule
+    m = _toy3d(lu=lu, wild=wild)
+    s = Schedule.anneal(S=6, beta0=0.3, gamma0=1.0, quench=2)
+    M = _load(tmp_path, "t3f", m, s)
+    assert M.kind == 2 and M.L == m.L and M.T == m.T and M.pad == 2 * s.S + wild
+    for seed, reg in ((4, (-11, -7, 9, 13)), ((1 << 64) - 5, (6, -30, 7, 5))):
+        a = generate(m, s, seed, *reg)
+        assert a.shape == (m.L,) + reg[2:]
+        assert np.array_equal(M.tiles(seed, *reg), a)
+
+
+@pytest.mark.parametrize("B,Sb,K,shift,restart,lu", [
+    (4, 2, 3, True, False, True),
+    (4, 2, 2, False, True, False),
+    (6, 2, 2, True, True, True),
+])
+def test_3d_block_bit_exact(tmp_path, B, Sb, K, shift, restart, lu):
+    from castlegen.infinite import BlockSchedule
+    m = _toy3d(lu=lu, seed=B)
+    s = BlockSchedule.anneal(B=B, Sb=Sb, K=K, shift=shift, restart=restart, beta0=0.5, gamma0=1.0, quench=1)
+    M = _load(tmp_path, "t3b", m, s)
+    assert M.B == B and M.pad == (2 * Sb + 1) * B
+    for reg in ((-13, -9, 11, 14), (17, -31, 6, 9)):
+        assert np.array_equal(M.tiles(9, *reg), generate(m, s, 9, *reg))
+
+
+def test_3d_world_equals_tiles(tmp_path):
+    from castlegen.infinite import BlockSchedule
+    m = _toy3d(lu=True)
+    s = BlockSchedule.anneal(B=4, Sb=2, K=2, shift=True, restart=False, beta0=0.5, gamma0=1.0, quench=1)
+    M = _load(tmp_path, "t3w", m, s)
+    w = hs.World(M, seed=6, C=8)
+    w.region(-8, 8, 8, 8)
+    w.region(3, -5, 2, 2)
+    a = w.region(-9, -7, 18, 22)
+    assert a.shape == (m.L, 18, 22)
+    assert np.array_equal(a, M.tiles(6, -9, -7, 18, 22))
+    assert np.array_equal(a, generate(m, s, 6, -9, -7, 18, 22))
+    M.set_fast(True)                           # ignored for 3D models
+    assert np.array_equal(M.tiles(6, -9, -7, 18, 22), a)
+
+
+_MARIAN = os.path.exists("cache/marian/Assets/ModuleData.asset")
+
+
+@pytest.mark.skipif(not _MARIAN, reason="cache/marian assets missing")
+@pytest.mark.parametrize("air", [None, (1.0, 3.0, 10.0, 30.0, 60.0, 100.0)])
+def test_marian_block_bit_exact(tmp_path, air):
+    from castlegen import marian
+    from castlegen.infinite import BlockSchedule
+    m = marian.tile_model(marian.load(), air_weights=air)
+    assert (m.lu is None) == (air is None)
+    s = BlockSchedule.anneal(B=4, Sb=2, K=3, shift=True, restart=False, beta0=1.0, gamma0=2.0, quench=1)
+    M = _load(tmp_path, "mb", m, s)
+    reg = (-6, -9, 7, 10)
+    a = generate(m, s, 7, *reg)
+    assert np.array_equal(M.tiles(7, *reg), a)
+    w = hs.World(M, seed=7, C=4)
+    w.region(-4, -8, 2, 2)
+    assert np.array_equal(w.region(*reg), a)

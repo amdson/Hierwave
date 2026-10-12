@@ -12,18 +12,31 @@
  *
  * Model file (.hwm, written by castlegen/export_models.py), little endian:
  *   char[4]  "HWM2"        ("HWM1" files, without the block words, still load)
- *   uint32   kind          0 pair tables (TileModel), 1 sockets (SocketModel)
+ *   uint32   kind          0 pair tables (TileModel), 1 sockets (SocketModel),
+ *                          2 layered 3D hard tables (TileModel3D, HWM2 only)
  *   uint32   T             tiles
  *   uint32   R             schedule rows: S sweeps (flat) or Sb K (block)
- *   uint32   flags         bit 0: wildcard fix pass (socket models; id T)
+ *   uint32   flags         bit 0: wildcard fix pass (socket and 3D models; id T)
  *   uint32   B, Sb, K, shift   (HWM2 only) B = 0: flat Schedule; B > 0:
- *                          BlockSchedule (socket models only), row sb K + k
+ *                          BlockSchedule (kinds 1 and 2), row sb K + k
+ *   uint32   L             (kind 2 only) layers, 1 .. 256
  *   double   beta[R], gamma[R]          (gamma may be +inf)
  *   double   u[T]
  *   kind 0:  double Eh[T][T], Ev[T][T]; int32 Hh[T][T], Hv[T][T]
  *   kind 1:  double wild_u; int32 sN[T], sE[T], sS[T], sW[T];
  *            double base[R][T]   = exp(-beta[r] (u[t] - min u)) as numpy
  *                                  computes it (stored so no exp differs)
+ *   kind 2:  uint8 F[6][T][T]  (F[d][n][t] = 1: t with neighbour n in
+ *                                  direction d forbidden, symmetrised);
+ *            double base[R][L][T] = TileModel3D.base(beta) (u, per-layer
+ *                                  unary lu and the layer domain folded in;
+ *                                  0 outside the domain)
+ *
+ * 3D models (kind 2): outputs are (L, H, W) layer-major: hw_tiles writes
+ * L H W ints, out[(k H + i) W + j]; hw_world_region likewise returns (L, H, W)
+ * for the requested columns, and world chunks hold all L layers of C x C
+ * columns.  hw_model_L gives L (1 for 2D models).  Key for layer k at step
+ * key h: (h << 8) | k; parity (k + y + x) & 1 (see _anneal3d / _block3d).
  *
  * Kernels (see infinite.py): step 0 draws every cell of the padded block
  * from the unary at beta[0]; half-step h = 1 .. 2S (+1 for the wildcard
@@ -49,8 +62,10 @@
  * equivalent-in-distribution but different-in-bits draw that touches only
  * the tiles sharing a socket with a neighbour; deterministic, not equal to
  * numba (extra uniforms for rejection: hash(seed, y, x, h + k 2^40)).
+ * 3D models have no fast mode (set_fast is ignored): their exact kernel
+ * interleaves the sums of four sites (see the layered 3D kernel section).
  *
- * Extra API: hw_model_S (rows), hw_model_B, hw_model_pad, hw_model_set_fast, hw_world_chunks,
+ * Extra API: hw_model_S (rows), hw_model_B, hw_model_L, hw_model_kind, hw_model_pad, hw_model_set_fast, hw_world_chunks,
  * hw_u01.  Calls return 0 on success, -1 on allocation failure. */
 #include <math.h>
 #include <pthread.h>
@@ -74,6 +89,10 @@ typedef struct hw_model {
     int nsock;
     int32_t *loff[4], *lidx[4];  /* tiles by socket on each side, index order */
     int fast;
+    /* kind 2 (layered 3D); base is then [S][L][T], cdf0 [L][T] */
+    int L, Tp;                   /* Tp: T rounded up to 16 */
+    uint8_t *A8, *zrow;          /* [6][T][Tp] 1 - F (allowed), zero row [Tp] */
+    int32_t *dlist, *dn;         /* per layer: domain tiles (index order), count */
 } hw_model;
 
 static inline int64_t fdiv(int64_t a, int64_t b) { int64_t q = a / b; return (a % b != 0 && a < 0) ? q - 1 : q; }
@@ -423,12 +442,254 @@ static void block_sockets(const hw_model *m, int32_t *grid, int64_t H, int64_t W
     (void)T;
 }
 
+/* ------------------------------------------------------------------ layered 3D kernel */
+/* kind 2 (TileModel3D, hard tables only): grid (L, H, W), cell (k, i, j) at
+ * k H W + i W + j.  F[d][n][t] = 1 forbids t with neighbour n in direction d
+ * (0 col-1, 1 layer-1, 2 row+1, 3 col+1, 4 layer+1, 5 row-1).  Exact form of
+ * _site3 (soft = False): cnt[t] = number of existing neighbours allowing t,
+ * summed from byte rows A[d][n][:] = 1 - F[d][n][:] (vectorisable), and
+ * v[t] = nd - cnt[t].  Finite gamma: w[t] = bs[t] eg[v[t]] summed in index
+ * order over the layer's domain list (other tiles weigh exactly 0.0, adding
+ * them changes nothing), NB3 sites of one half-step at a time: those cells
+ * never read each other, so their addition chains interleave (each chain
+ * keeps numba's order).  Lexicographic: the tiles of maximal cnt (bs > 0),
+ * in index order.  hw_model_set_fast has no effect on 3D models. */
+#define NB3 4
+typedef struct {
+    double *w, *c;
+    uint8_t *cnt;                /* [NB3][Tp] */
+    int32_t *cand;
+    double *cl;                  /* [T][NB3] interleaved prefix sums */
+    int nb, brow, bk;
+    int64_t bidx[NB3], bgy[NB3], bgx[NB3], bkey[NB3];
+    double beg[7];
+} hw_scratch3;
+
+static inline int upper_s(const double *c, int stride, int n, double r) {
+    int lo = 0, hi = n;
+    while (lo < hi) {
+        int mid = (lo + hi) >> 1;
+        if (c[(size_t)mid * stride] <= r) lo = mid + 1; else hi = mid;
+    }
+    return lo;
+}
+
+/* cnt[0 .. Tp) for cell index c0 (layer k); returns nd */
+static inline int cnt3(const hw_model *m, const int32_t *grid, int64_t H, int64_t W, int k, int64_t c0,
+                       uint8_t *restrict cnt) {
+    const int L = m->L, Tp = m->Tp;
+    const int64_t HW = H * W;
+    const size_t TT = (size_t)m->T * Tp;
+    const uint8_t *r0 = m->A8 + 0 * TT + (size_t)grid[c0 - 1] * Tp;
+    const uint8_t *r2 = m->A8 + 2 * TT + (size_t)grid[c0 + W] * Tp;
+    const uint8_t *r3 = m->A8 + 3 * TT + (size_t)grid[c0 + 1] * Tp;
+    const uint8_t *r5 = m->A8 + 5 * TT + (size_t)grid[c0 - W] * Tp;
+    const uint8_t *r1 = k > 0 ? m->A8 + 1 * TT + (size_t)grid[c0 - HW] * Tp : m->zrow;
+    const uint8_t *r4 = k < L - 1 ? m->A8 + 4 * TT + (size_t)grid[c0 + HW] * Tp : m->zrow;
+    for (int t = 0; t < Tp; t++) cnt[t] = (uint8_t)(r0[t] + r1[t] + r2[t] + r3[t] + r4[t] + r5[t]);
+    return 4 + (k > 0) + (k < L - 1);
+}
+
+/* _site3 lexicographic (hard_inf) or the wildcard pass (fix) for cell
+ * (k, i, j) at schedule row `row` */
+static int site3(const hw_model *m, const int32_t *grid, int64_t H, int64_t W, int k, int64_t i, int64_t j,
+                 int row, int fix, hw_scratch3 *sc, uint64_t seed, int64_t gy, int64_t gx, int64_t key) {
+    const int T = m->T;
+    const double *bs = m->base + ((size_t)row * m->L + k) * T;
+    uint8_t *cnt = sc->cnt;
+    int nd = cnt3(m, grid, H, W, k, (int64_t)k * H * W + i * W + j, cnt);
+    const int32_t *D = m->dlist + (size_t)k * T;
+    const int dn = m->dn[k];
+    int best = -1;
+    for (int p = 0; p < dn; p++) {
+        int t = D[p];
+        if (bs[t] > 0.0 && cnt[t] > best) best = cnt[t];
+    }
+    if (best < 0) return fix ? T : 0;           /* nothing positive: numba draws all-zero weights */
+    if (fix && best < nd) return T;
+    int nc = 0;
+    double acc = 0.0;
+    for (int p = 0; p < dn; p++) {
+        int t = D[p];
+        if (cnt[t] == best && bs[t] > 0.0) {
+            sc->cand[nc] = t;
+            sc->w[nc] = bs[t];
+            acc += bs[t];
+            sc->c[nc++] = acc;
+        }
+    }
+    return sc->cand[draw_prefix(sc->w, sc->c, nc, u01(seed, gy, gx, key))];
+}
+
+/* draw the queued finite-gamma sites */
+static void flush3(const hw_model *m, int32_t *grid, int64_t H, int64_t W, hw_scratch3 *sc, uint64_t seed) {
+    const int nb = sc->nb;
+    if (!nb) return;
+    sc->nb = 0;
+    const int T = m->T, Tp = m->Tp, k = sc->bk;
+    const double *bs = m->base + ((size_t)sc->brow * m->L + k) * T;
+    const int32_t *D = m->dlist + (size_t)k * T;
+    const int dn = m->dn[k];
+    const uint8_t *cq[NB3];
+    int nd = 0;
+    for (int q = 0; q < nb; q++) {
+        uint8_t *cnt = sc->cnt + (size_t)q * Tp;
+        nd = cnt3(m, grid, H, W, k, sc->bidx[q], cnt);
+        cq[q] = cnt;
+    }
+    for (int q = nb; q < NB3; q++) cq[q] = cq[0];
+    double ev[8];                                /* ev[c] = eg[nd - c] */
+    for (int c = 0; c < 8; c++) ev[c] = c <= nd ? sc->beg[nd - c] : 0.0;
+    double a0 = 0.0, a1 = 0.0, a2 = 0.0, a3 = 0.0;
+    const uint8_t *q0 = cq[0], *q1 = cq[1], *q2 = cq[2], *q3 = cq[3];
+    double *cl = sc->cl;
+    for (int p = 0; p < dn; p++) {
+        int t = D[p];
+        double b = bs[t];
+        a0 += b * ev[q0[t]];
+        a1 += b * ev[q1[t]];
+        a2 += b * ev[q2[t]];
+        a3 += b * ev[q3[t]];
+        double *cp = cl + (size_t)p * NB3;
+        cp[0] = a0; cp[1] = a1; cp[2] = a2; cp[3] = a3;
+    }
+    double tot[NB3] = {a0, a1, a2, a3};
+    for (int q = 0; q < nb; q++) {
+        double x = u01(seed, sc->bgy[q], sc->bgx[q], sc->bkey[q]) * tot[q];
+        int kk = upper_s(cl + q, NB3, dn, x);
+        if (kk >= dn) {
+            kk = -1;
+            for (int p = dn - 1; p >= 0; p--)
+                if (bs[D[p]] * ev[cq[q][D[p]]] > 0.0) { kk = p; break; }
+        }
+        grid[sc->bidx[q]] = kk < 0 ? 0 : D[kk];
+    }
+}
+
+/* site3 into grid; exact finite-gamma draws are queued (flush3 before any
+ * cell of the next half-step reads the grid) */
+static inline void put3(const hw_model *m, int32_t *grid, int64_t H, int64_t W, int k, int64_t i, int64_t j,
+                        int row, int hard_inf, int fix, const double *eg, hw_scratch3 *sc, uint64_t seed,
+                        int64_t gy, int64_t gx, int64_t key) {
+    const int64_t idx = (int64_t)k * H * W + i * W + j;
+    if (hard_inf || fix) {
+        grid[idx] = site3(m, grid, H, W, k, i, j, row, fix, sc, seed, gy, gx, key);
+        return;
+    }
+    if (sc->nb && (sc->brow != row || sc->bk != k || sc->nb == NB3)) flush3(m, grid, H, W, sc, seed);
+    if (!sc->nb) {
+        sc->brow = row; sc->bk = k;
+        memcpy(sc->beg, eg, sizeof sc->beg);
+    }
+    int q = sc->nb++;
+    sc->bidx[q] = idx; sc->bgy[q] = gy; sc->bgx[q] = gx; sc->bkey[q] = key;
+}
+
+static inline void eg7(double g, double *eg) {
+    int hard_inf = isinf(g);
+    for (int n = 0; n < 7; n++) eg[n] = (hard_inf && n > 0) ? 0.0 : exp(-g * n);
+}
+
+/* _init3: cell (k, y, x) from base[0][k] */
+static void init3(const hw_model *m, int32_t *grid, int64_t H, int64_t W, int64_t gy0, int64_t gx0,
+                  uint64_t seed) {
+    const int T = m->T;
+    for (int k = 0; k < m->L; k++) {
+        const double *cdf = m->cdf0 + (size_t)k * T;
+        double acc = cdf[T - 1];
+        int32_t *g = grid + (size_t)k * H * W;
+        for (int64_t i = 0; i < H; i++)
+            for (int64_t j = 0; j < W; j++) {
+                double r = u01(seed, gy0 + i, gx0 + j, k) * acc;
+                int t = upper(cdf, T, r);
+                g[i * W + j] = t < T - 1 ? t : T - 1;
+            }
+    }
+}
+
+/* _anneal3d (flat schedule, cone, all layers) */
+static void anneal3d(const hw_model *m, int32_t *grid, int64_t H, int64_t W, int64_t gy0, int64_t gx0,
+                     uint64_t seed, hw_scratch3 *sc) {
+    const int S = m->S, L = m->L;
+    init3(m, grid, H, W, gy0, gx0, seed);
+    double eg[7];
+    int64_t last = 2 * (int64_t)S + (m->wild ? 1 : 0);
+    for (int64_t h = 1; h <= last; h++) {
+        int fixp = h > 2 * (int64_t)S;
+        int s = (int)((h - 1) >> 1);
+        if (s > S - 1) s = S - 1;
+        double g = fixp ? INFINITY : m->gamma[s];
+        eg7(g, eg);
+        int64_t par = (h - 1) & 1;
+        for (int k = 0; k < L; k++)
+            for (int64_t i = h; i < H - h; i++) {
+                int64_t j0 = h + ((par - (k + gy0 + i + gx0 + h)) & 1);
+                for (int64_t j = j0; j < W - h; j += 2)
+                    put3(m, grid, H, W, k, i, j, s, isinf(g), fixp, eg, sc, seed, gy0 + i, gx0 + j, (h << 8) | k);
+            }
+        flush3(m, grid, H, W, sc, seed);
+    }
+}
+
+/* _block3d: grid (L, H, W) block aligned, column (0, 0) = world (gy0, gx0) */
+static void block3d(const hw_model *m, int32_t *grid, int64_t H, int64_t W, int64_t gy0, int64_t gx0,
+                    uint64_t seed, hw_scratch3 *sc) {
+    const int64_t B = m->B, Sb = m->Sb, K = m->K;
+    const int L = m->L;
+    init3(m, grid, H, W, gy0, gx0, seed);
+    double eg[7];
+    for (int64_t hb = 1; hb <= 2 * Sb; hb++) {
+        int64_t sb = (hb - 1) >> 1, bpar = (hb - 1) & 1;
+        int64_t off = (m->shift && (sb & 1)) ? (B >> 1) : 0;
+        int64_t lo = (hb - 1) * B + 1;
+        for (int64_t y0 = off - B; y0 < H; y0 += B) {
+            if (y0 < lo || y0 + B > H - lo) continue;
+            int64_t BYg = fdiv(gy0 + y0 - off, B);
+            for (int64_t x0 = off - B; x0 < W; x0 += B) {
+                if (x0 < lo || x0 + B > W - lo) continue;
+                if (((BYg + fdiv(gx0 + x0 - off, B)) & 1) != bpar) continue;
+                for (int64_t kin = 0; kin < K; kin++) {
+                    int row = (int)(sb * K + kin);
+                    double g = m->gamma[row];
+                    int hard_inf = isinf(g);
+                    eg7(g, eg);
+                    for (int64_t p = 0; p < 2; p++) {
+                        int64_t hkey = 1 + (((hb - 1) * K + kin) << 1) + p;
+                        for (int k = 0; k < L; k++)
+                            for (int64_t i = y0; i < y0 + B; i++) {
+                                int64_t j0 = x0 + ((p - (k + gy0 + i + gx0 + x0)) & 1);
+                                for (int64_t j = j0; j < x0 + B; j += 2)
+                                    put3(m, grid, H, W, k, i, j, row, hard_inf, 0, eg, sc, seed, gy0 + i, gx0 + j,
+                                         (hkey << 8) | k);
+                            }
+                        flush3(m, grid, H, W, sc, seed);
+                    }
+                }
+            }
+        }
+    }
+    if (m->wild) {
+        int64_t m0 = 2 * Sb * B + 1;
+        int64_t hkey = 1 + ((2 * Sb * K) << 1);
+        int row = (int)(Sb * K - 1);
+        eg7(INFINITY, eg);
+        for (int k = 0; k < L; k++)
+            for (int64_t i = m0; i < H - m0; i++) {
+                int64_t j0 = m0 + ((0 - (k + gy0 + i + gx0 + m0)) & 1);
+                for (int64_t j = j0; j < W - m0; j += 2)
+                    grid[(int64_t)k * H * W + i * W + j] =
+                        site3(m, grid, H, W, k, i, j, row, 1, sc, seed, gy0 + i, gx0 + j, (hkey << 8) | k);
+            }
+    }
+}
+
 /* ------------------------------------------------------------------ model */
 void hw_model_free(hw_model *m) {
     if (!m) return;
     free(m->beta); free(m->gamma); free(m->u); free(m->Eh); free(m->Ev); free(m->Hh); free(m->Hv);
     for (int d = 0; d < 4; d++) { free(m->sock[d]); free(m->loff[d]); free(m->lidx[d]); }
     free(m->base); free(m->w4); free(m->cdf0); free(m->bcum);
+    free(m->A8); free(m->zrow); free(m->dlist); free(m->dn);
     free(m);
 }
 
@@ -448,8 +709,10 @@ hw_model *hw_model_load(const char *path) {
     int ver = 0;
     if (rd(f, magic, 1, 4) && !memcmp(magic, "HWM", 3) && (magic[3] == '1' || magic[3] == '2'))
         ver = magic[3] - '0';
-    if (!ver || !rd(f, hd, 4, 4) || (ver == 2 && !rd(f, bk, 4, 4)) || hd[0] > 1 || hd[1] == 0 || hd[2] == 0 ||
-        (bk[0] && (hd[0] != 1 || bk[1] == 0 || bk[2] == 0 || (uint64_t)bk[1] * bk[2] != hd[2]))) {
+    uint32_t L3 = 1;
+    if (!ver || !rd(f, hd, 4, 4) || (ver == 2 && !rd(f, bk, 4, 4)) || hd[0] > 2 || hd[1] == 0 || hd[2] == 0 ||
+        (hd[0] == 2 && (ver != 2 || !rd(f, &L3, 4, 1) || L3 == 0 || L3 > 256)) ||
+        (bk[0] && (hd[0] == 0 || bk[1] == 0 || bk[2] == 0 || (uint64_t)bk[1] * bk[2] != hd[2]))) {
         fclose(f);
         return NULL;
     }
@@ -457,10 +720,41 @@ hw_model *hw_model_load(const char *path) {
     int ok = 1;
     m->kind = (int)hd[0]; m->T = (int)hd[1]; m->S = (int)hd[2]; m->wild = (int)(hd[3] & 1);
     m->B = (int)bk[0]; m->Sb = (int)bk[1]; m->K = (int)bk[2]; m->shift = bk[3] ? 1 : 0;
+    m->L = (int)L3;
     size_t T = (size_t)m->T, S = (size_t)m->S;
     m->beta = rdalloc(f, 8, S, &ok);
     m->gamma = rdalloc(f, 8, S, &ok);
     m->u = rdalloc(f, 8, T, &ok);
+    if (m->kind == 2) {
+        size_t L = (size_t)m->L;
+        uint8_t *F = rdalloc(f, 1, 6 * T * T, &ok);
+        m->base = rdalloc(f, 8, S * L * T, &ok);
+        fclose(f);
+        if (!ok) { free(F); hw_model_free(m); return NULL; }
+        m->Tp = (int)((T + 15) & ~(size_t)15);
+        size_t Tp = (size_t)m->Tp;
+        m->A8 = calloc(6 * T * Tp, 1);
+        m->zrow = calloc(Tp, 1);
+        m->dlist = malloc(4 * L * T); m->dn = calloc(L, 4);
+        m->cdf0 = malloc(8 * L * T);
+        if (!m->A8 || !m->zrow || !m->dlist || !m->dn || !m->cdf0) { free(F); hw_model_free(m); return NULL; }
+        for (size_t d = 0; d < 6; d++)
+            for (size_t n = 0; n < T; n++)
+                for (size_t t = 0; t < T; t++) m->A8[(d * T + n) * Tp + t] = !F[(d * T + n) * T + t];
+        free(F);
+        for (size_t k = 0; k < L; k++) {
+            int n = 0;
+            for (size_t t = 0; t < T; t++) {
+                int any = 0;
+                for (size_t r = 0; r < S; r++) any |= m->base[(r * L + k) * T + t] > 0.0;
+                if (any) m->dlist[k * T + n++] = (int32_t)t;
+            }
+            m->dn[k] = n;
+            double acc = 0.0;
+            for (size_t t = 0; t < T; t++) { acc += m->base[k * T + t]; m->cdf0[k * T + t] = acc; }
+        }
+        return m;
+    }
     if (m->kind == 0) {
         m->wild = 0;
         m->Eh = rdalloc(f, 8, T * T, &ok);
@@ -514,10 +808,14 @@ hw_model *hw_model_load(const char *path) {
 int hw_model_T(const hw_model *m) { return m->T; }
 int hw_model_S(const hw_model *m) { return m->S; }
 int hw_model_B(const hw_model *m) { return m->B; }
+/* layers: 1 for 2D models; kind 2 outputs are (L, H, W) */
+int hw_model_L(const hw_model *m) { return m->kind == 2 ? m->L : 1; }
+/* 0 pair, 1 socket, 2 layered 3D */
+int hw_model_kind(const hw_model *m) { return m->kind; }
 /* tiles of context per side (a block schedule rounds up to block alignment) */
 int hw_model_pad(const hw_model *m) {
     if (m->B) return (2 * m->Sb + m->wild) * m->B;
-    return 2 * m->S + (m->kind == 1 && m->wild);
+    return 2 * m->S + (m->kind >= 1 && m->wild);
 }
 void hw_model_set_fast(hw_model *m, int on) { m->fast = on ? 1 : 0; }
 
@@ -535,28 +833,45 @@ int hw_tiles(const hw_model *m, uint64_t seed, int64_t y0, int64_t x0, int H, in
         gy0 = y0 - P; gx0 = x0 - P; GH = H + 2 * P; GW = W + 2 * P;
     }
     size_t T = (size_t)m->T;
-    int32_t *grid = calloc((size_t)GH * GW, 4);
+    int Lm = hw_model_L(m);
+    int32_t *grid = calloc((size_t)Lm * GH * GW, 4);
     double *w = malloc(8 * (T + 1)), *c = malloc(8 * (T + 1));
     int64_t *v64 = m->kind == 0 ? malloc(8 * T) : NULL;
     hw_scratch sc = {w, c, NULL, NULL, NULL, NULL};
+    hw_scratch3 sc3 = {0};
+    sc3.w = w; sc3.c = c;
     if (m->kind == 1) {
         sc.v = malloc(T);
         sc.cand = malloc(4 * T);
         sc.mark = calloc(T + 1, 4);
         sc.ulist = malloc(4 * T);
+    } else if (m->kind == 2) {
+        sc3.cnt = malloc((size_t)NB3 * m->Tp);
+        sc3.cand = malloc(4 * T);
+        sc3.cl = malloc(8 * NB3 * T);
     }
-    int ok = grid && w && c && (m->kind == 0 ? v64 != NULL : (sc.v && sc.cand && sc.mark && sc.ulist));
+    int ok = grid && w && c;
+    if (m->kind == 0) ok = ok && v64;
+    else if (m->kind == 1) ok = ok && sc.v && sc.cand && sc.mark && sc.ulist;
+    else ok = ok && sc3.cnt && sc3.cand && sc3.cl;
     if (ok) {
         if (m->kind == 0)
             anneal_pairs(m, grid, (int)GH, (int)GW, gy0, gx0, seed, c, v64, w);
+        else if (m->kind == 2 && m->B)
+            block3d(m, grid, GH, GW, gy0, gx0, seed, &sc3);
+        else if (m->kind == 2)
+            anneal3d(m, grid, GH, GW, gy0, gx0, seed, &sc3);
         else if (m->B)
             block_sockets(m, grid, GH, GW, gy0, gx0, seed, &sc);
         else
             anneal_sockets(m, grid, (int)GH, (int)GW, gy0, gx0, seed, &sc);
         int64_t oy = y0 - gy0, ox = x0 - gx0;
-        for (int i = 0; i < H; i++) memcpy(out + (size_t)i * W, grid + (size_t)(i + oy) * GW + ox, 4 * (size_t)W);
+        for (int k = 0; k < Lm; k++)
+            for (int i = 0; i < H; i++)
+                memcpy(out + ((size_t)k * H + i) * W, grid + ((size_t)k * GH + i + oy) * GW + ox, 4 * (size_t)W);
     }
     free(grid); free(w); free(c); free(v64); free(sc.v); free(sc.cand); free(sc.mark); free(sc.ulist);
+    free(sc3.cnt); free(sc3.cand); free(sc3.cl);
     return ok ? 0 : -1;
 }
 
@@ -566,7 +881,7 @@ typedef struct { int64_t cy, cx; int32_t *data; } hw_slot;
 typedef struct hw_world {
     const hw_model *m;
     uint64_t seed;
-    int C;
+    int C, L;
     pthread_mutex_t mu;
     hw_slot *tab;
     size_t cap, n;
@@ -611,7 +926,7 @@ hw_world *hw_world_new(const hw_model *m, uint64_t seed, int C) {
     if (!m || C <= 0) return NULL;
     hw_world *wd = calloc(1, sizeof *wd);
     if (!wd) return NULL;
-    wd->m = m; wd->seed = seed; wd->C = C;
+    wd->m = m; wd->seed = seed; wd->C = C; wd->L = hw_model_L(m);
     wd->cap = 64;
     wd->tab = calloc(wd->cap, sizeof *wd->tab);
     pthread_mutex_init(&wd->mu, NULL);
@@ -636,7 +951,7 @@ int hw_world_chunks(hw_world *wd) {
 
 int hw_world_region(hw_world *wd, int64_t y0, int64_t x0, int H, int W, int32_t *out) {
     if (H <= 0 || W <= 0) return 0;
-    const int64_t C = wd->C;
+    const int64_t C = wd->C, L = wd->L;
     int64_t cy0 = fdiv(y0, C), cy1 = fdiv(y0 + H - 1, C) + 1;
     int64_t cx0 = fdiv(x0, C), cx1 = fdiv(x0 + W - 1, C) + 1;
     /* missing chunks -> bounding rectangle (World.ensure) */
@@ -653,17 +968,19 @@ int hw_world_region(hw_world *wd, int64_t y0, int64_t x0, int H, int W, int32_t 
     pthread_mutex_unlock(&wd->mu);
     if (my0 != INT64_MAX) {
         int BH = (int)((my1 - my0) * C), BW = (int)((mx1 - mx0) * C);
-        int32_t *g = malloc((size_t)BH * BW * 4);
+        int32_t *g = malloc((size_t)L * BH * BW * 4);
         if (!g || hw_tiles(wd->m, wd->seed, my0 * C, mx0 * C, BH, BW, g)) { free(g); return -1; }
         int rc = 0;
         pthread_mutex_lock(&wd->mu);
         for (int64_t cy = my0; cy < my1 && !rc; cy++)
             for (int64_t cx = mx0; cx < mx1; cx++) {
                 if (wfind(wd, cy, cx)) continue;
-                int32_t *d = malloc((size_t)C * C * 4);
+                int32_t *d = malloc((size_t)L * C * C * 4);
                 if (!d) { rc = -1; break; }
-                for (int64_t i = 0; i < C; i++)
-                    memcpy(d + i * C, g + ((cy - my0) * C + i) * BW + (cx - mx0) * C, 4 * (size_t)C);
+                for (int64_t k = 0; k < L; k++)
+                    for (int64_t i = 0; i < C; i++)
+                        memcpy(d + (k * C + i) * C, g + (k * BH + (cy - my0) * C + i) * BW + (cx - mx0) * C,
+                               4 * (size_t)C);
                 if (wput(wd, cy, cx, d)) { free(d); rc = -1; break; }
             }
         pthread_mutex_unlock(&wd->mu);
@@ -677,8 +994,10 @@ int hw_world_region(hw_world *wd, int64_t y0, int64_t x0, int H, int W, int32_t 
             if (!d) { pthread_mutex_unlock(&wd->mu); return -1; }
             int64_t ya = cy * C > y0 ? cy * C : y0, yb = (cy + 1) * C < y0 + H ? (cy + 1) * C : y0 + H;
             int64_t xa = cx * C > x0 ? cx * C : x0, xb = (cx + 1) * C < x0 + W ? (cx + 1) * C : x0 + W;
-            for (int64_t y = ya; y < yb; y++)
-                memcpy(out + (y - y0) * W + (xa - x0), d + (y - cy * C) * C + (xa - cx * C), 4 * (size_t)(xb - xa));
+            for (int64_t k = 0; k < L; k++)
+                for (int64_t y = ya; y < yb; y++)
+                    memcpy(out + (k * H + y - y0) * W + (xa - x0), d + (k * C + y - cy * C) * C + (xa - cx * C),
+                           4 * (size_t)(xb - xa));
         }
     pthread_mutex_unlock(&wd->mu);
     return 0;

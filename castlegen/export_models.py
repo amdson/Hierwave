@@ -8,10 +8,14 @@ files for the C sampler (castlegen/csrc/hwsampler.c documents the format).
             beta0=1.0, gamma0=2.0)  (block Gibbs)
     city_flat  the same tiles on the old flat
             Schedule.anneal(S=64, beta0=1.0, gamma0=2.0)
+    marian  castlegen.marian.tile_model(load()) (TileModel3D, 454 modules,
+            L = 6, Empty's per-layer weight from marian.AIR_WEIGHTS read at
+            export time), BlockSchedule.anneal(B=8, Sb=3, K=32, shift=True,
+            restart=False, beta0=1.0, gamma0=2.0)
 
-biomes_model() / city_model() / city_flat_model() return (model, schedule) so tests can run
+biomes_model() / city_model() / city_flat_model() / marian_model() return (model, schedule) so tests can run
 castlegen.infinite.generate on the same thing.  Run as a script to write
-luanti/games/hierwave/mods/hierwave_gen/data/{biomes,city}.hwm."""
+luanti/games/hierwave/mods/hierwave_gen/data/{biomes,city,marian}.hwm."""
 from __future__ import annotations
 
 import os
@@ -19,7 +23,7 @@ import struct
 
 import numpy as np
 
-from castlegen.infinite import BlockSchedule, Schedule, SocketModel, TileModel, biomes
+from castlegen.infinite import BlockSchedule, Schedule, SocketModel, TileModel, TileModel3D, biomes
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 DATA = os.path.join(ROOT, "luanti", "games", "hierwave", "mods", "hierwave_gen", "data")
@@ -62,6 +66,12 @@ def city_model(B=8, Sb=3, K=32, shift=True, restart=False, beta0=1.0, gamma0=2.0
                                                      beta0=beta0, gamma0=gamma0, **kw)
 
 
+def marian_model(B=8, Sb=3, K=32, shift=True, restart=False, beta0=1.0, gamma0=2.0, **kw):
+    from castlegen import marian
+    return marian.tile_model(marian.load()), BlockSchedule.anneal(B=B, Sb=Sb, K=K, shift=shift, restart=restart,
+                                                                 beta0=beta0, gamma0=gamma0, **kw)
+
+
 def socket_base(model: SocketModel, sched):
     """exactly the base table the numba kernel gets (rows: sweeps, or the
     raveled (Sb, K) block rows)."""
@@ -81,10 +91,18 @@ def write_hwm(path, model, sched):
     i32 = lambda a: np.ascontiguousarray(a, "<i4").tobytes()
     if isinstance(model, TileModel):
         if block:
-            raise TypeError("block schedules are for SocketModel")
+            raise TypeError("block schedules are for SocketModel and TileModel3D")
         head = struct.pack("<4sIIII", b"HWM2", 0, model.T, R, 0) + bk
         body = (f64(beta) + f64(gamma) + f64(model.u) + f64(model.Eh) + f64(model.Ev)
                 + i32(model.Hh) + i32(model.Hv))
+    elif isinstance(model, TileModel3D):
+        if model.soft:
+            raise TypeError("TileModel3D with soft E is not supported by the C sampler")
+        head = struct.pack("<4sIIII", b"HWM2", 2, model.T, R, 1 if model.wild else 0) + bk
+        head += struct.pack("<I", model.L)
+        body = (f64(beta) + f64(gamma) + f64(model.u)
+                + np.ascontiguousarray(model.F, np.uint8).tobytes()
+                + f64(model.base(beta)))
     elif isinstance(model, SocketModel):
         wild = model.wild_u is not None
         head = struct.pack("<4sIIII", b"HWM2", 1, model.T, R, 1 if wild else 0) + bk
@@ -99,16 +117,18 @@ def write_hwm(path, model, sched):
     return path
 
 
-def main(flat=False):
-    """flat=True (python -m castlegen.export_models --flat) also writes city_flat.hwm."""
-    todo = [("biomes", biomes_model()), ("city", city_model())]
-    if flat:
-        todo.append(("city_flat", city_flat_model()))
-    for name, (m, s) in todo:
+def main(flat=False, only=None):
+    """flat=True (python -m castlegen.export_models --flat) also writes
+    city_flat.hwm; only: names to write (python -m castlegen.export_models
+    marian writes just marian.hwm)."""
+    allm = [("biomes", biomes_model), ("city", city_model), ("marian", marian_model), ("city_flat", city_flat_model)]
+    makers = [(n, f) for n, f in allm if (n in only if only else n != "city_flat" or flat)]
+    for name, make in makers:
+        m, s = make()
         p = write_hwm(os.path.join(DATA, f"{name}.hwm"), m, s)
         print(f"{name}: T = {m.T}, rows = {s.beta.size} -> {os.path.relpath(p, ROOT)} ({os.path.getsize(p)} bytes)")
 
 
 if __name__ == "__main__":
     import sys
-    main(flat="--flat" in sys.argv)
+    main(flat="--flat" in sys.argv, only=[a for a in sys.argv[1:] if not a.startswith("-")])

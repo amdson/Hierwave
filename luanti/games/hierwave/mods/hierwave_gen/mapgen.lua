@@ -18,11 +18,11 @@ if cfg.provider == "sampler" then
 	provider = hw.sampler_provider(ffi, lib, world)
 	new_buffer = function(n) return ffi.new("int32_t[?]", n) end
 else
-	provider = hw.placeholder_provider(cfg.seed, tpl.n)
+	provider = hw.placeholder_provider(cfg.seed, tpl.n, cfg.layers)
 	new_buffer = function() return {} end
 end
 
-local gen = hw.new_generator(tpl, cfg.node_names, provider, new_buffer, log)
+local gen = hw.new_generator(tpl, cfg.node_names, provider, new_buffer, log, cfg.layers)
 
 core.register_on_generated(function(vm, minp, maxp, blockseed)
 	local ok, dt_tiles, dt_fill = gen.generate(vm, minp, maxp)
