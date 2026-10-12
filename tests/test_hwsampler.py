@@ -8,8 +8,13 @@ from castlegen.infinite import generate, u01
 
 @pytest.fixture(scope="module")
 def city():
-    m, s = ex.city_model(S=6, quench=2)
+    m, s = ex.city_flat_model(S=6, quench=2)
     return m, s
+
+
+@pytest.fixture(scope="module")
+def city_m():
+    return ex.city_socket_model()
 
 
 def _load(tmp_path, name, m, s):
@@ -47,9 +52,9 @@ def test_city_bit_exact(tmp_path, city):
     assert (a == m.T).any()                       # wildcards exercised
 
 
-def test_city_hot_bit_exact(tmp_path):
+def test_city_hot_bit_exact(tmp_path, city_m):
     """beta0 0.1: contradictions in the quench take the full lexicographic path."""
-    m, _ = ex.city_model()
+    m = city_m
     from castlegen.infinite import Schedule
     s = Schedule.anneal(S=5, quench=2)
     M = _load(tmp_path, "ch", m, s)
@@ -88,3 +93,53 @@ def test_city_fast_deterministic(tmp_path, city):
     w.region(-16, -20, 4, 4)
     assert np.array_equal(w.region(-17, -20, 20, 24), a)
     assert m.energy(a)[1] == 0                                       # wildcard pass: no misfits
+
+
+def test_reads_hwm1(tmp_path):
+    m, s = ex.biomes_model(S=4)
+    p = ex.write_hwm(str(tmp_path / "b.hwm"), m, s)
+    raw = open(p, "rb").read()
+    old = tmp_path / "b1.hwm"
+    old.write_bytes(b"HWM1" + raw[4:20] + raw[36:])          # drop the block words
+    assert np.array_equal(hs.Model.load(str(old)).tiles(2, -5, -6, 9, 7), generate(m, s, 2, -5, -6, 9, 7))
+
+
+@pytest.mark.parametrize("B,Sb,K,shift,restart,beta0,region", [
+    (4, 2, 3, True, False, 1.0, (-13, -9, 11, 14)),
+    (4, 2, 3, False, True, 1.0, (-5, -22, 9, 13)),
+    (6, 2, 2, True, True, 0.1, (-7, 3, 10, 8)),            # hot: contradictions in the quench
+    (4, 3, 2, True, False, 0.3, (17, -31, 6, 9)),
+])
+def test_city_block_bit_exact(tmp_path, city_m, B, Sb, K, shift, restart, beta0, region):
+    from castlegen.infinite import BlockSchedule
+    s = BlockSchedule.anneal(B=B, Sb=Sb, K=K, shift=shift, restart=restart, beta0=beta0, gamma0=2.0, quench=1)
+    M = _load(tmp_path, "cb", city_m, s)
+    assert M.B == B and M.S == Sb * K and M.pad == (2 * Sb + 1) * B
+    assert np.array_equal(M.tiles(9, *region), generate(city_m, s, 9, *region))
+
+
+def test_city_block_no_wildcard_bit_exact(tmp_path, city_m):
+    from castlegen.infinite import BlockSchedule, SocketModel
+    m = SocketModel(city_m.u, city_m.sN, city_m.sE, city_m.sS, city_m.sW)
+    s = BlockSchedule.anneal(B=4, Sb=2, K=2, shift=True, restart=False, beta0=1.0, gamma0=2.0, quench=1)
+    M = _load(tmp_path, "cbn", m, s)
+    assert np.array_equal(M.tiles(3, -6, -2, 8, 9), generate(m, s, 3, -6, -2, 8, 9))
+
+
+def test_city_block_world_and_fast(tmp_path, city_m):
+    from castlegen.infinite import BlockSchedule
+    s = BlockSchedule.anneal(B=4, Sb=2, K=3, shift=True, restart=False, beta0=1.0, gamma0=2.0, quench=1)
+    M = _load(tmp_path, "cbw", city_m, s)
+    w = hs.World(M, seed=6, C=8)
+    w.region(-8, 8, 8, 8)
+    w.region(3, -5, 2, 2)
+    a = w.region(-9, -7, 18, 22)
+    assert np.array_equal(a, M.tiles(6, -9, -7, 18, 22))
+    assert np.array_equal(a, generate(city_m, s, 6, -9, -7, 18, 22))
+    M.set_fast(True)
+    f = M.tiles(6, -9, -7, 18, 22)
+    assert np.array_equal(f[3:, 5:], M.tiles(6, -6, -2, 15, 17))
+    wf = hs.World(M, seed=6, C=4)
+    wf.region(0, 0, 4, 4)
+    assert np.array_equal(wf.region(-9, -7, 18, 22), f)
+    assert city_m.energy(f)[1] == 0

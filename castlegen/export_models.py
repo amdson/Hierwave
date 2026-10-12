@@ -4,9 +4,12 @@ files for the C sampler (castlegen/csrc/hwsampler.c documents the format).
     biomes  castlegen.infinite.biomes(), Schedule.anneal(S=64)
     city    castlegen.citytiles with BOUNDARY_W = 0.5 and ZONE_W below
             (FEAT_W unchanged), SocketModel u = -log w, wild_u = 20,
+            BlockSchedule.anneal(B=8, Sb=3, K=32, shift=True, restart=False,
+            beta0=1.0, gamma0=2.0)  (block Gibbs)
+    city_flat  the same tiles on the old flat
             Schedule.anneal(S=64, beta0=1.0, gamma0=2.0)
 
-biomes_model() / city_model() return (model, schedule) so tests can run
+biomes_model() / city_model() / city_flat_model() return (model, schedule) so tests can run
 castlegen.infinite.generate on the same thing.  Run as a script to write
 luanti/games/hierwave/mods/hierwave_gen/data/{biomes,city}.hwm."""
 from __future__ import annotations
@@ -16,7 +19,7 @@ import struct
 
 import numpy as np
 
-from castlegen.infinite import Schedule, SocketModel, TileModel, biomes
+from castlegen.infinite import BlockSchedule, Schedule, SocketModel, TileModel, biomes
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 DATA = os.path.join(ROOT, "luanti", "games", "hierwave", "mods", "hierwave_gen", "data")
@@ -45,33 +48,47 @@ def city_tiles():
         ct.ZONE_W.update(old[1])
 
 
-def city_model(S=64, beta0=1.0, gamma0=2.0, **kw):
+def city_socket_model():
     ts = city_tiles()
-    m = SocketModel(-np.log(ts.w), ts.sN, ts.sE, ts.sS, ts.sW, wild_u=CITY_WILD_U)
-    return m, Schedule.anneal(S=S, beta0=beta0, gamma0=gamma0, **kw)
+    return SocketModel(-np.log(ts.w), ts.sN, ts.sE, ts.sS, ts.sW, wild_u=CITY_WILD_U)
 
 
-def socket_base(model: SocketModel, sched: Schedule):
-    """exactly the base table SocketModel.run passes to the kernel."""
-    return np.exp(-sched.beta[:, None] * (model.u - model.u.min())[None, :])
+def city_flat_model(S=64, beta0=1.0, gamma0=2.0, **kw):
+    return city_socket_model(), Schedule.anneal(S=S, beta0=beta0, gamma0=gamma0, **kw)
 
 
-def write_hwm(path, model, sched: Schedule):
+def city_model(B=8, Sb=3, K=32, shift=True, restart=False, beta0=1.0, gamma0=2.0, **kw):
+    return city_socket_model(), BlockSchedule.anneal(B=B, Sb=Sb, K=K, shift=shift, restart=restart,
+                                                     beta0=beta0, gamma0=gamma0, **kw)
+
+
+def socket_base(model: SocketModel, sched):
+    """exactly the base table the numba kernel gets (rows: sweeps, or the
+    raveled (Sb, K) block rows)."""
+    beta = sched.beta.ravel()
+    return np.exp(-beta[:, None] * (model.u - model.u.min())[None, :])
+
+
+def write_hwm(path, model, sched):
+    """Format HWM2, documented in castlegen/csrc/hwsampler.c."""
     d = os.path.dirname(os.path.abspath(path))
     os.makedirs(d, exist_ok=True)
-    S = sched.S
+    block = isinstance(sched, BlockSchedule)
+    beta, gamma = sched.beta.ravel(), sched.gamma.ravel()
+    R = beta.size
+    bk = struct.pack("<IIII", sched.B, sched.Sb, sched.K, int(bool(sched.shift))) if block else bytes(16)
     f64 = lambda a: np.ascontiguousarray(a, "<f8").tobytes()
     i32 = lambda a: np.ascontiguousarray(a, "<i4").tobytes()
     if isinstance(model, TileModel):
-        T = model.T
-        head = struct.pack("<4sIIII", b"HWM1", 0, T, S, 0)
-        body = (f64(sched.beta) + f64(sched.gamma) + f64(model.u) + f64(model.Eh) + f64(model.Ev)
+        if block:
+            raise TypeError("block schedules are for SocketModel")
+        head = struct.pack("<4sIIII", b"HWM2", 0, model.T, R, 0) + bk
+        body = (f64(beta) + f64(gamma) + f64(model.u) + f64(model.Eh) + f64(model.Ev)
                 + i32(model.Hh) + i32(model.Hv))
     elif isinstance(model, SocketModel):
-        T = model.T
         wild = model.wild_u is not None
-        head = struct.pack("<4sIIII", b"HWM1", 1, T, S, 1 if wild else 0)
-        body = (f64(sched.beta) + f64(sched.gamma) + f64(model.u)
+        head = struct.pack("<4sIIII", b"HWM2", 1, model.T, R, 1 if wild else 0) + bk
+        body = (f64(beta) + f64(gamma) + f64(model.u)
                 + struct.pack("<d", model.wild_u if wild else 0.0)
                 + i32(model.sN) + i32(model.sE) + i32(model.sS) + i32(model.sW)
                 + f64(socket_base(model, sched)))
@@ -82,11 +99,16 @@ def write_hwm(path, model, sched: Schedule):
     return path
 
 
-def main():
-    for name, (m, s) in (("biomes", biomes_model()), ("city", city_model())):
+def main(flat=False):
+    """flat=True (python -m castlegen.export_models --flat) also writes city_flat.hwm."""
+    todo = [("biomes", biomes_model()), ("city", city_model())]
+    if flat:
+        todo.append(("city_flat", city_flat_model()))
+    for name, (m, s) in todo:
         p = write_hwm(os.path.join(DATA, f"{name}.hwm"), m, s)
-        print(f"{name}: T = {m.T}, S = {s.S} -> {os.path.relpath(p, ROOT)} ({os.path.getsize(p)} bytes)")
+        print(f"{name}: T = {m.T}, rows = {s.beta.size} -> {os.path.relpath(p, ROOT)} ({os.path.getsize(p)} bytes)")
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    main(flat="--flat" in sys.argv)

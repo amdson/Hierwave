@@ -102,13 +102,15 @@ class CBackend:
         return np.asarray(self.world.region(y0, x0, H, W), np.int32)
 
 
-def make_c_backend(set_name, seed, C):
+def make_c_backend(set_name, seed, C, fast=True):
     """hwsampler World for the exported model file; raises on any problem."""
     from castlegen import hwsampler
     path = os.path.join(DATA_DIR, f"{set_name}.hwm")
     if not os.path.exists(path):
         raise RuntimeError(f"{path} missing (python -m castlegen.export_models)")
     model = hwsampler.Model.load(path)
+    if fast:
+        model.set_fast()
     world = hwsampler.World(model, seed, C)
     probe = np.asarray(world.region(0, 0, 1, 1))
     if probe.shape != (1, 1):
@@ -168,7 +170,8 @@ def city_view(S=64):
         a[T] = (170, 170, 175)                                                  # wildcard: plaza grey
         return a
 
-    return TileSetView("city", m, inf.Schedule.anneal(S=S, beta0=1.0, gamma0=2.0), atlas, 8, wild=T)
+    from castlegen.export_models import city_model
+    return TileSetView("city", m, city_model()[1], atlas, 8, wild=T)
 
 
 # ------------------------------------------------------------------ chunk store + worker
@@ -464,11 +467,11 @@ class Viewer:
             self.store.stop()
 
 
-def make_backend(kind, tsv, seed, C):
+def make_backend(kind, tsv, seed, C, fast=True):
     if kind == "c":
         try:
-            b = make_c_backend(tsv.name, seed, C)
-            print(f"viewer: C backend (hwsampler) for {tsv.name}")
+            b = make_c_backend(tsv.name, seed, C, fast)
+            print(f"viewer: C backend (hwsampler, {'fast' if fast else 'exact'}) for {tsv.name}")
             return b
         except Exception as e:                  # noqa: BLE001
             print(f"viewer: C backend unavailable ({e!r}); falling back to numba")
@@ -483,6 +486,7 @@ def main(argv=None):
     ap.add_argument("--render-distance", type=int, default=None,
                     help="chunks (Chebyshev) around the player; default 4 biomes, 2 city")
     ap.add_argument("--backend", choices=["numba", "c"], default="numba")
+    ap.add_argument("--exact", action="store_true", help="C backend: exact (numba-identical) sampling instead of fast")
     ap.add_argument("--px", type=int, default=None, help="pixels per tile (default 4 biomes, 8 city)")
     ap.add_argument("--size", default="1024x768")
     ap.add_argument("--max-batch", type=int, default=16, help="max chunks per generation batch")
@@ -496,7 +500,7 @@ def main(argv=None):
     import pygame
     pygame.init()
     tsv = biomes_view() if a.set == "biomes" else city_view()
-    backend = make_backend(a.backend, tsv, a.seed, a.chunk)
+    backend = make_backend(a.backend, tsv, a.seed, a.chunk, fast=not a.exact)
     R = a.render_distance if a.render_distance is not None else (4 if a.set == "biomes" else 2)
     px = a.px or (4 if a.set == "biomes" else 8)
     w, h = (int(v) for v in a.size.split("x"))

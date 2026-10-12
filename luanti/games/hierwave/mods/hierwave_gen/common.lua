@@ -93,6 +93,7 @@ typedef struct hw_world hw_world;
 hw_model* hw_model_load(const char* path);
 void      hw_model_free(hw_model*);
 int       hw_model_T(const hw_model*);
+void      hw_model_set_fast(hw_model*, int on);
 int       hw_tiles(const hw_model*, uint64_t seed, int64_t y0, int64_t x0,
                    int H, int W, int32_t* out);
 hw_world* hw_world_new(const hw_model*, uint64_t seed, int C);

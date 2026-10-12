@@ -34,7 +34,7 @@ def lib():
         L.hw_model_load.argtypes = [ctypes.c_char_p]
         L.hw_model_load.restype = P
         L.hw_model_free.argtypes = [P]
-        for f in ("hw_model_T", "hw_model_S", "hw_model_pad"):
+        for f in ("hw_model_T", "hw_model_S", "hw_model_B", "hw_model_pad"):
             getattr(L, f).argtypes = [P]
             getattr(L, f).restype = I
         L.hw_model_set_fast.argtypes = [P, I]
@@ -78,10 +78,17 @@ class Model:
 
     @property
     def S(self):
+        """schedule rows: sweeps (flat) or Sb K (block)"""
         return lib().hw_model_S(self._p)
 
     @property
+    def B(self):
+        """block size of a block schedule, 0 for a flat one"""
+        return lib().hw_model_B(self._p)
+
+    @property
     def pad(self):
+        """context tiles per side (block schedules add up to B - 1 for alignment)"""
         return lib().hw_model_pad(self._p)
 
     def set_fast(self, on=True):

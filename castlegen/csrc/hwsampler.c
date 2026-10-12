@@ -11,22 +11,30 @@
  * the results are identical and the first insert wins).
  *
  * Model file (.hwm, written by castlegen/export_models.py), little endian:
- *   char[4]  "HWM1"
+ *   char[4]  "HWM2"        ("HWM1" files, without the block words, still load)
  *   uint32   kind          0 pair tables (TileModel), 1 sockets (SocketModel)
  *   uint32   T             tiles
- *   uint32   S             sweeps of the schedule
+ *   uint32   R             schedule rows: S sweeps (flat) or Sb K (block)
  *   uint32   flags         bit 0: wildcard fix pass (socket models; id T)
- *   double   beta[S], gamma[S]          (gamma may be +inf)
+ *   uint32   B, Sb, K, shift   (HWM2 only) B = 0: flat Schedule; B > 0:
+ *                          BlockSchedule (socket models only), row sb K + k
+ *   double   beta[R], gamma[R]          (gamma may be +inf)
  *   double   u[T]
  *   kind 0:  double Eh[T][T], Ev[T][T]; int32 Hh[T][T], Hv[T][T]
  *   kind 1:  double wild_u; int32 sN[T], sE[T], sS[T], sW[T];
- *            double base[S][T]   = exp(-beta[s] (u[t] - min u)) as numpy
+ *            double base[R][T]   = exp(-beta[r] (u[t] - min u)) as numpy
  *                                  computes it (stored so no exp differs)
  *
  * Kernels (see infinite.py): step 0 draws every cell of the padded block
  * from the unary at beta[0]; half-step h = 1 .. 2S (+1 for the wildcard
  * pass) updates the cells of global parity (y + x) & 1 == (h - 1) & 1 at
  * margin >= h; each draw takes its uniform from hash(seed, y, x, h).
+ * Block schedules (_block_sockets): the padded grid is block aligned
+ * (pb = 2 Sb + wildcard blocks per side); block half-step hb solves the
+ * blocks of block parity (hb - 1) & 1 (lattice shifted by B / 2 on odd
+ * block sweeps if shift) whose cells all sit at margin >= (hb - 1) B + 1,
+ * by K inner checkerboard sweeps, key 1 + (((hb - 1) K + k) << 1) + p; the
+ * wildcard pass is parity 0 at margin >= 2 Sb B + 1, key 1 + ((2 Sb K) << 1).
  *
  * Socket kernel speed-ups that keep the numba result exactly:
  *  - a draw sums its weights once into a prefix array and binary-searches
@@ -42,7 +50,7 @@
  * the tiles sharing a socket with a neighbour; deterministic, not equal to
  * numba (extra uniforms for rejection: hash(seed, y, x, h + k 2^40)).
  *
- * Extra API: hw_model_S, hw_model_pad, hw_model_set_fast, hw_world_chunks,
+ * Extra API: hw_model_S (rows), hw_model_B, hw_model_pad, hw_model_set_fast, hw_world_chunks,
  * hw_u01.  Calls return 0 on success, -1 on allocation failure. */
 #include <math.h>
 #include <pthread.h>
@@ -58,13 +66,17 @@ typedef struct hw_model {
     int32_t *Hh, *Hv;
     double wild_u;
     int32_t *sock[4];          /* sN sE sS sW */
-    double *base;              /* [S][T] */
+    double *base;              /* [S][T] (S = schedule rows) */
+    double *w4;                /* [S][T] base * exp(-4 gamma) */
+    int B, Sb, K, shift;       /* block schedule (B = 0: flat, S sweeps) */
     double *cdf0;              /* prefix of base[0] */
     double *bcum;              /* [S][T + 1] prefix sums of base[s] from 0 (fast path) */
     int nsock;
     int32_t *loff[4], *lidx[4];  /* tiles by socket on each side, index order */
     int fast;
 } hw_model;
+
+static inline int64_t fdiv(int64_t a, int64_t b) { int64_t q = a / b; return (a % b != 0 && a < 0) ? q - 1 : q; }
 
 /* ------------------------------------------------------------------ noise */
 static inline uint64_t mix64(uint64_t z) {
@@ -229,11 +241,106 @@ static int draw_fast(const hw_model *m, int s, const double *bs, const double *e
     return out;
 }
 
-static void anneal_sockets(const hw_model *m, int32_t *grid, int H, int W, int64_t gy0, int64_t gx0,
-                           uint64_t seed, double *w, double *c, uint8_t *v, int32_t *cand,
-                           int32_t *mark, int32_t *ulist, double *w4) {
-    const int T = m->T, S = m->S;
+typedef struct {
+    double *w, *c;
+    uint8_t *v;
+    int32_t *cand, *mark, *ulist;
+} hw_scratch;
+
+/* eg[k] = exp(-g k) (0 for k > 0 when g = inf), as the numba kernels */
+static void eg_row(double g, double *eg) {
+    int hard_inf = isinf(g);
+    for (int k = 0; k < 5; k++) eg[k] = (hard_inf && k > 0) ? 0.0 : exp(-g * k);
+}
+
+/* one socket-cell draw at (i, j) of grid (row stride W) with weight row
+ * `row` (base, gamma); fixp: the wildcard pass (lexicographic, no fitting
+ * tile -> T).  Uniform hash(seed, gy, gx, key). */
+static int sock_cell(const hw_model *m, const int32_t *grid, int64_t W, int64_t i, int64_t j, int row,
+                     int hard_inf, int fixp, const double *eg, hw_scratch *sc, uint64_t seed, int64_t gy,
+                     int64_t gx, int64_t key) {
+    const int T = m->T;
     const int32_t *sN = m->sock[0], *sE = m->sock[1], *sS = m->sock[2], *sW = m->sock[3];
+    const double *bs = m->base + (size_t)row * T;
+    double *w = sc->w, *c = sc->c;
+    int32_t a_up = sS[grid[(i - 1) * W + j]], a_dn = sN[grid[(i + 1) * W + j]];
+    int32_t a_lf = sE[grid[i * W + j - 1]], a_rt = sW[grid[i * W + j + 1]];
+    int32_t a[4] = {a_up, a_rt, a_dn, a_lf};   /* wanted sN, sE, sS, sW */
+    if (hard_inf) {
+        /* tiles fitting all four sides, from the shortest side list */
+        int best = -1, bn = T + 1;
+        for (int d = 0; d < 4; d++) {
+            int n = (a[d] >= 0 && a[d] < m->nsock) ? m->loff[d][a[d] + 1] - m->loff[d][a[d]] : 0;
+            if (n < bn) { bn = n; best = d; }
+        }
+        int nc = 0;
+        if (bn > 0) {
+            const int32_t *L = m->lidx[best] + m->loff[best][a[best]];
+            for (int k = 0; k < bn; k++) {
+                int t = L[k];
+                if (sN[t] == a_up && sE[t] == a_rt && sS[t] == a_dn && sW[t] == a_lf) sc->cand[nc++] = t;
+            }
+        }
+        if (nc > 0) {
+            double acc = 0.0;
+            for (int k = 0; k < nc; k++) {
+                w[k] = bs[sc->cand[k]];
+                acc += w[k];
+                c[k] = acc;
+            }
+            return sc->cand[draw_prefix(w, c, nc, u01(seed, gy, gx, key))];
+        }
+        if (fixp) return T;
+        int vmin = 4;
+        uint8_t *v = sc->v;
+        for (int t = 0; t < T; t++) {
+            int n = (sN[t] != a_up) + (sS[t] != a_dn) + (sW[t] != a_lf) + (sE[t] != a_rt);
+            v[t] = (uint8_t)n;
+            if (n < vmin) vmin = n;
+        }
+        double acc = 0.0;
+        for (int t = 0; t < T; t++) {
+            w[t] = v[t] == vmin ? bs[t] : 0.0;
+            acc += w[t];
+            c[t] = acc;
+        }
+        return draw_prefix(w, c, T, u01(seed, gy, gx, key));
+    }
+    if (m->fast)
+        return draw_fast(m, row, bs, eg, a, sc->mark, sc->ulist, c, u01(seed, gy, gx, key), seed, gy, gx, key);
+    /* w = bs eg[4] everywhere, then the tiles matching a side patched to
+     * bs eg[4 - matches] (the same products as numba's bs[t] * eg[v[t]]) */
+    memcpy(w, m->w4 + (size_t)row * T, 8 * (size_t)T);
+    int32_t *mark = sc->mark, *ulist = sc->ulist;
+    int nu = 0;
+    for (int d = 0; d < 4; d++) {
+        int sk = a[d];
+        if (sk < 0 || sk >= m->nsock) continue;
+        const int32_t *L = m->lidx[d] + m->loff[d][sk];
+        int n = m->loff[d][sk + 1] - m->loff[d][sk];
+        for (int k = 0; k < n; k++) {
+            int t = L[k];
+            if (!mark[t]) ulist[nu++] = t;
+            mark[t]++;
+        }
+    }
+    for (int k = 0; k < nu; k++) {
+        int t = ulist[k];
+        w[t] = bs[t] * eg[4 - mark[t]];
+        mark[t] = 0;
+    }
+    double acc = 0.0;
+    for (int t = 0; t < T; t++) {
+        acc += w[t];
+        c[t] = acc;
+    }
+    return draw_prefix(w, c, T, u01(seed, gy, gx, key));
+}
+
+/* step 0: every cell from base[0] by searchsorted(cdf, r acc, right) */
+static void sock_init(const hw_model *m, int32_t *grid, int64_t H, int64_t W, int64_t gy0, int64_t gx0,
+                      uint64_t seed) {
+    const int T = m->T;
     const double *cdf = m->cdf0;
     double acc0 = cdf[T - 1];
     for (int64_t i = 0; i < H; i++)
@@ -242,6 +349,13 @@ static void anneal_sockets(const hw_model *m, int32_t *grid, int H, int W, int64
             int k = upper(cdf, T, r);
             grid[i * W + j] = k < T - 1 ? k : T - 1;
         }
+}
+
+/* _anneal_sockets (flat schedule, cone) */
+static void anneal_sockets(const hw_model *m, int32_t *grid, int H, int W, int64_t gy0, int64_t gx0,
+                           uint64_t seed, hw_scratch *sc) {
+    const int S = m->S;
+    sock_init(m, grid, H, W, gy0, gx0, seed);
     double eg[5];
     int64_t last = 2 * (int64_t)S + (m->wild ? 1 : 0);
     for (int64_t h = 1; h <= last; h++) {
@@ -249,96 +363,64 @@ static void anneal_sockets(const hw_model *m, int32_t *grid, int H, int W, int64
         if (s > S - 1) s = S - 1;
         int fixp = h > 2 * (int64_t)S;
         double g = fixp ? INFINITY : m->gamma[s];
-        int hard_inf = isinf(g);
-        for (int k = 0; k < 5; k++) eg[k] = (hard_inf && k > 0) ? 0.0 : exp(-g * k);
+        eg_row(g, eg);
         int64_t par = (h - 1) & 1;
-        const double *bs = m->base + (size_t)s * T;
-        if (!hard_inf)
-            for (int t = 0; t < T; t++) w4[t] = bs[t] * eg[4];
         for (int64_t i = h; i < H - h; i++) {
             int64_t j0 = h + ((par - (gy0 + i + gx0 + h)) & 1);
-            for (int64_t j = j0; j < W - h; j += 2) {
-                int32_t a_up = sS[grid[(i - 1) * W + j]], a_dn = sN[grid[(i + 1) * W + j]];
-                int32_t a_lf = sE[grid[i * W + j - 1]], a_rt = sW[grid[i * W + j + 1]];
-                double r = u01(seed, gy0 + i, gx0 + j, h);
-                int out;
-                if (hard_inf) {
-                    /* tiles fitting all four sides, from the shortest side list */
-                    int32_t a[4] = {a_up, a_rt, a_dn, a_lf};   /* wanted sN, sE, sS, sW */
-                    int best = -1, bn = T + 1;
-                    for (int d = 0; d < 4; d++) {
-                        int n = (a[d] >= 0 && a[d] < m->nsock) ? m->loff[d][a[d] + 1] - m->loff[d][a[d]] : 0;
-                        if (n < bn) { bn = n; best = d; }
-                    }
-                    int nc = 0;
-                    if (bn > 0) {
-                        const int32_t *L = m->lidx[best] + m->loff[best][a[best]];
-                        for (int k = 0; k < bn; k++) {
-                            int t = L[k];
-                            if (sN[t] == a_up && sE[t] == a_rt && sS[t] == a_dn && sW[t] == a_lf) cand[nc++] = t;
+            for (int64_t j = j0; j < W - h; j += 2)
+                grid[i * W + j] = sock_cell(m, grid, W, i, j, s, isinf(g), fixp, eg, sc, seed, gy0 + i, gx0 + j, h);
+        }
+    }
+}
+
+/* _block_sockets: grid (H, W) block aligned, cell (0, 0) = world (gy0, gx0)
+ * with gy0, gx0 multiples of B.  Rows of the schedule: sb K + k. */
+static void block_sockets(const hw_model *m, int32_t *grid, int64_t H, int64_t W, int64_t gy0, int64_t gx0,
+                          uint64_t seed, hw_scratch *sc) {
+    const int64_t B = m->B, Sb = m->Sb, K = m->K;
+    const int T = m->T;
+    sock_init(m, grid, H, W, gy0, gx0, seed);
+    double eg[5];
+    for (int64_t hb = 1; hb <= 2 * Sb; hb++) {
+        int64_t sb = (hb - 1) >> 1, bpar = (hb - 1) & 1;
+        int64_t off = (m->shift && (sb & 1)) ? (B >> 1) : 0;
+        int64_t lo = (hb - 1) * B + 1;
+        for (int64_t y0 = off - B; y0 < H; y0 += B) {
+            if (y0 < lo || y0 + B > H - lo) continue;
+            int64_t BYg = fdiv(gy0 + y0 - off, B);
+            for (int64_t x0 = off - B; x0 < W; x0 += B) {
+                if (x0 < lo || x0 + B > W - lo) continue;
+                if (((BYg + fdiv(gx0 + x0 - off, B)) & 1) != bpar) continue;
+                for (int64_t k = 0; k < K; k++) {
+                    int row = (int)(sb * K + k);
+                    double g = m->gamma[row];
+                    int hard_inf = isinf(g);
+                    eg_row(g, eg);
+                    for (int64_t p = 0; p < 2; p++) {
+                        int64_t key = 1 + (((hb - 1) * K + k) << 1) + p;
+                        for (int64_t i = y0; i < y0 + B; i++) {
+                            int64_t j0 = x0 + ((p - (gy0 + i + gx0 + x0)) & 1);
+                            for (int64_t j = j0; j < x0 + B; j += 2)
+                                grid[i * W + j] = sock_cell(m, grid, W, i, j, row, hard_inf, 0, eg, sc, seed,
+                                                            gy0 + i, gx0 + j, key);
                         }
                     }
-                    if (nc > 0) {
-                        double acc = 0.0;
-                        for (int k = 0; k < nc; k++) {
-                            w[k] = bs[cand[k]];
-                            acc += w[k];
-                            c[k] = acc;
-                        }
-                        out = cand[draw_prefix(w, c, nc, r)];
-                    } else if (fixp) {
-                        out = T;
-                    } else {
-                        int vmin = 4;
-                        for (int t = 0; t < T; t++) {
-                            int n = (sN[t] != a_up) + (sS[t] != a_dn) + (sW[t] != a_lf) + (sE[t] != a_rt);
-                            v[t] = (uint8_t)n;
-                            if (n < vmin) vmin = n;
-                        }
-                        double acc = 0.0;
-                        for (int t = 0; t < T; t++) {
-                            w[t] = v[t] == vmin ? bs[t] : 0.0;
-                            acc += w[t];
-                            c[t] = acc;
-                        }
-                        out = draw_prefix(w, c, T, r);
-                    }
-                } else if (m->fast) {
-                    int32_t a[4] = {a_up, a_rt, a_dn, a_lf};
-                    out = draw_fast(m, s, bs, eg, a, mark, ulist, c, r, seed, gy0 + i, gx0 + j, h);
-                } else {
-                    /* w = bs eg[4] everywhere, then the tiles matching a side
-                     * patched to bs eg[4 - matches] (the same products) */
-                    memcpy(w, w4, 8 * (size_t)T);
-                    int32_t a[4] = {a_up, a_rt, a_dn, a_lf};
-                    int nu = 0;
-                    for (int d = 0; d < 4; d++) {
-                        int sk = a[d];
-                        if (sk < 0 || sk >= m->nsock) continue;
-                        const int32_t *L = m->lidx[d] + m->loff[d][sk];
-                        int n = m->loff[d][sk + 1] - m->loff[d][sk];
-                        for (int k = 0; k < n; k++) {
-                            int t = L[k];
-                            if (!mark[t]) ulist[nu++] = t;
-                            mark[t]++;
-                        }
-                    }
-                    for (int k = 0; k < nu; k++) {
-                        int t = ulist[k];
-                        w[t] = bs[t] * eg[4 - mark[t]];
-                        mark[t] = 0;
-                    }
-                    double acc = 0.0;
-                    for (int t = 0; t < T; t++) {
-                        acc += w[t];
-                        c[t] = acc;
-                    }
-                    out = draw_prefix(w, c, T, r);
                 }
-                grid[i * W + j] = out;
             }
         }
     }
+    if (m->wild) {
+        int64_t m0 = 2 * Sb * B + 1;
+        int64_t key = 1 + ((2 * Sb * K) << 1);
+        int row = (int)(Sb * K - 1);
+        eg_row(INFINITY, eg);
+        for (int64_t i = m0; i < H - m0; i++) {
+            int64_t j0 = m0 + ((0 - (gy0 + i + gx0 + m0)) & 1);
+            for (int64_t j = j0; j < W - m0; j += 2)
+                grid[i * W + j] = sock_cell(m, grid, W, i, j, row, 1, 1, eg, sc, seed, gy0 + i, gx0 + j, key);
+        }
+    }
+    (void)T;
 }
 
 /* ------------------------------------------------------------------ model */
@@ -346,7 +428,7 @@ void hw_model_free(hw_model *m) {
     if (!m) return;
     free(m->beta); free(m->gamma); free(m->u); free(m->Eh); free(m->Ev); free(m->Hh); free(m->Hv);
     for (int d = 0; d < 4; d++) { free(m->sock[d]); free(m->loff[d]); free(m->lidx[d]); }
-    free(m->base); free(m->cdf0); free(m->bcum);
+    free(m->base); free(m->w4); free(m->cdf0); free(m->bcum);
     free(m);
 }
 
@@ -362,15 +444,19 @@ hw_model *hw_model_load(const char *path) {
     FILE *f = fopen(path, "rb");
     if (!f) return NULL;
     char magic[4];
-    uint32_t hd[4];
-    if (!rd(f, magic, 1, 4) || memcmp(magic, "HWM1", 4) || !rd(f, hd, 4, 4) || hd[0] > 1 || hd[1] == 0 ||
-        hd[2] == 0) {
+    uint32_t hd[4], bk[4] = {0, 0, 0, 0};
+    int ver = 0;
+    if (rd(f, magic, 1, 4) && !memcmp(magic, "HWM", 3) && (magic[3] == '1' || magic[3] == '2'))
+        ver = magic[3] - '0';
+    if (!ver || !rd(f, hd, 4, 4) || (ver == 2 && !rd(f, bk, 4, 4)) || hd[0] > 1 || hd[1] == 0 || hd[2] == 0 ||
+        (bk[0] && (hd[0] != 1 || bk[1] == 0 || bk[2] == 0 || (uint64_t)bk[1] * bk[2] != hd[2]))) {
         fclose(f);
         return NULL;
     }
     hw_model *m = calloc(1, sizeof *m);
     int ok = 1;
     m->kind = (int)hd[0]; m->T = (int)hd[1]; m->S = (int)hd[2]; m->wild = (int)(hd[3] & 1);
+    m->B = (int)bk[0]; m->Sb = (int)bk[1]; m->K = (int)bk[2]; m->shift = bk[3] ? 1 : 0;
     size_t T = (size_t)m->T, S = (size_t)m->S;
     m->beta = rdalloc(f, 8, S, &ok);
     m->gamma = rdalloc(f, 8, S, &ok);
@@ -392,6 +478,12 @@ hw_model *hw_model_load(const char *path) {
         m->cdf0 = malloc(8 * T);
         double acc = 0.0;
         for (size_t t = 0; t < T; t++) { acc += m->base[t]; m->cdf0[t] = acc; }
+        m->w4 = malloc(8 * S * T);
+        for (size_t r = 0; r < S; r++) {
+            double eg[5];
+            eg_row(m->gamma[r], eg);
+            for (size_t t = 0; t < T; t++) m->w4[r * T + t] = m->base[r * T + t] * eg[4];
+        }
         m->bcum = malloc(8 * S * (T + 1));
         for (size_t s = 0; s < S; s++) {
             double *cm = m->bcum + s * (T + 1);
@@ -421,32 +513,50 @@ hw_model *hw_model_load(const char *path) {
 
 int hw_model_T(const hw_model *m) { return m->T; }
 int hw_model_S(const hw_model *m) { return m->S; }
-int hw_model_pad(const hw_model *m) { return 2 * m->S + (m->kind == 1 && m->wild); }
+int hw_model_B(const hw_model *m) { return m->B; }
+/* tiles of context per side (a block schedule rounds up to block alignment) */
+int hw_model_pad(const hw_model *m) {
+    if (m->B) return (2 * m->Sb + m->wild) * m->B;
+    return 2 * m->S + (m->kind == 1 && m->wild);
+}
 void hw_model_set_fast(hw_model *m, int on) { m->fast = on ? 1 : 0; }
 
 /* ------------------------------------------------------------------ generate */
 int hw_tiles(const hw_model *m, uint64_t seed, int64_t y0, int64_t x0, int H, int W, int32_t *out) {
     if (H <= 0 || W <= 0) return 0;
-    int P = hw_model_pad(m);
-    int GH = H + 2 * P, GW = W + 2 * P;
+    int64_t gy0, gx0, GH, GW;
+    if (m->B) {                                /* _generate_blocks: block-aligned padded grid */
+        int64_t B = m->B, pb = 2 * (int64_t)m->Sb + m->wild;
+        int64_t BY0 = fdiv(y0, B) - pb, BX0 = fdiv(x0, B) - pb;
+        int64_t BY1 = -fdiv(-(y0 + H), B) + pb, BX1 = -fdiv(-(x0 + W), B) + pb;
+        gy0 = BY0 * B; gx0 = BX0 * B; GH = (BY1 - BY0) * B; GW = (BX1 - BX0) * B;
+    } else {
+        int64_t P = hw_model_pad(m);
+        gy0 = y0 - P; gx0 = x0 - P; GH = H + 2 * P; GW = W + 2 * P;
+    }
     size_t T = (size_t)m->T;
     int32_t *grid = calloc((size_t)GH * GW, 4);
     double *w = malloc(8 * (T + 1)), *c = malloc(8 * (T + 1));
     int64_t *v64 = m->kind == 0 ? malloc(8 * T) : NULL;
-    uint8_t *v8 = m->kind == 1 ? malloc(T) : NULL;
-    int32_t *cand = m->kind == 1 ? malloc(4 * T) : NULL;
-    int32_t *mark = m->kind == 1 ? calloc(T + 1, 4) : NULL;
-    int32_t *ulist = m->kind == 1 ? malloc(4 * T) : NULL;
-    double *w4 = m->kind == 1 ? malloc(8 * T) : NULL;
-    int ok = grid && w && c && (m->kind == 0 ? v64 != NULL : (v8 && cand && mark && ulist && w4));
+    hw_scratch sc = {w, c, NULL, NULL, NULL, NULL};
+    if (m->kind == 1) {
+        sc.v = malloc(T);
+        sc.cand = malloc(4 * T);
+        sc.mark = calloc(T + 1, 4);
+        sc.ulist = malloc(4 * T);
+    }
+    int ok = grid && w && c && (m->kind == 0 ? v64 != NULL : (sc.v && sc.cand && sc.mark && sc.ulist));
     if (ok) {
         if (m->kind == 0)
-            anneal_pairs(m, grid, GH, GW, y0 - P, x0 - P, seed, c, v64, w);
+            anneal_pairs(m, grid, (int)GH, (int)GW, gy0, gx0, seed, c, v64, w);
+        else if (m->B)
+            block_sockets(m, grid, GH, GW, gy0, gx0, seed, &sc);
         else
-            anneal_sockets(m, grid, GH, GW, y0 - P, x0 - P, seed, w, c, v8, cand, mark, ulist, w4);
-        for (int i = 0; i < H; i++) memcpy(out + (size_t)i * W, grid + (size_t)(i + P) * GW + P, 4 * (size_t)W);
+            anneal_sockets(m, grid, (int)GH, (int)GW, gy0, gx0, seed, &sc);
+        int64_t oy = y0 - gy0, ox = x0 - gx0;
+        for (int i = 0; i < H; i++) memcpy(out + (size_t)i * W, grid + (size_t)(i + oy) * GW + ox, 4 * (size_t)W);
     }
-    free(grid); free(w); free(c); free(v64); free(v8); free(cand); free(mark); free(ulist); free(w4);
+    free(grid); free(w); free(c); free(v64); free(sc.v); free(sc.cand); free(sc.mark); free(sc.ulist);
     return ok ? 0 : -1;
 }
 
@@ -516,7 +626,6 @@ void hw_world_free(hw_world *wd) {
     free(wd);
 }
 
-static inline int64_t fdiv(int64_t a, int64_t b) { int64_t q = a / b; return (a % b != 0 && a < 0) ? q - 1 : q; }
 
 int hw_world_chunks(hw_world *wd) {
     pthread_mutex_lock(&wd->mu);

@@ -34,6 +34,7 @@ local seed = tonumber(S:get("hierwave_seed") or "1") or 1
 local provider_mode = S:get("hierwave_provider") or "auto"   -- auto|sampler|placeholder
 local env_mode = S:get("hierwave_gen_env") or "auto"         -- auto|main|mapgen
 local chunk_tiles = tonumber(S:get("hierwave_chunk_tiles") or "32") or 32
+local fast = S:get_bool("hierwave_fast", true)
 local repo = modpath .. "/../../../../.."
 local lib_path = S:get("hierwave_lib") or (repo .. "/cache/libhwsampler.dylib")
 local hwm_path = S:get("hierwave_model") or (modpath .. "/data/" .. set .. ".hwm")
@@ -105,6 +106,7 @@ if provider_mode ~= "placeholder" then
 				why = "hw_model_load failed on " .. hwm_path
 			else
 				model_T = lib.hw_model_T(model)
+				if fast then lib.hw_model_set_fast(model, 1) end
 				local world = lib.hw_world_new(model, seed, chunk_tiles)
 				provider = hw.sampler_provider(ffi, lib, world)
 				new_buffer = function(n) return ffi.new("int32_t[?]", n) end
