@@ -12,10 +12,15 @@ uv run python luanti/tools/make_textures.py      # textures + hierwave_nodes/pal
 luanti/build.sh                                  # luanti/build/libhwdummy.dylib (FFI smoke test)
 luanti/setup_app.sh                              # luanti/build/luanti.app (see "FFI" below)
 ```
-The sampler library `cache/libhwsampler.dylib` and the model files
-`games/hierwave/mods/hierwave_gen/data/{biomes,city}.hwm` come from the
-Python side (thread A); the templates `data/{biomes,city}.hwt` from the
-prefab assembler (thread C).
+The sampler library `cache/libhwsampler.dylib`, the model files
+`games/hierwave/mods/hierwave_gen/data/{biomes,city}.hwm` and the templates
+`data/{biomes,city}.hwt` are generated (gitignored).  From the repo root:
+```sh
+PYTHONPATH=. uv run python -m castlegen.export_models   # data/*.hwm
+PYTHONPATH=. uv run python -m castlegen.prefabs         # data/*.hwt
+PYTHONPATH=. uv run python -c "import castlegen.hwsampler as h; h.lib()"   # cache/libhwsampler.dylib
+```
+Delete `luanti/worlds/<set>-<seed>` after changing any of them.
 
 ## Launch
 

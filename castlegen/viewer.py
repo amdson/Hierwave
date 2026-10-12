@@ -106,19 +106,9 @@ def make_c_backend(set_name, seed, C):
     """hwsampler World for the exported model file; raises on any problem."""
     from castlegen import hwsampler
     path = os.path.join(DATA_DIR, f"{set_name}.hwm")
-    model = None
-    errors = []
-    for nm in ("load_model", "Model", "load", "HwModel"):
-        f = getattr(hwsampler, nm, None)
-        if f is None:
-            continue
-        try:
-            model = f(path)
-            break
-        except Exception as e:                  # noqa: BLE001
-            errors.append(f"{nm}: {e}")
-    if model is None:
-        raise RuntimeError(f"no model loader in hwsampler for {path} ({'; '.join(errors) or 'none found'})")
+    if not os.path.exists(path):
+        raise RuntimeError(f"{path} missing (python -m castlegen.export_models)")
+    model = hwsampler.Model.load(path)
     world = hwsampler.World(model, seed, C)
     probe = np.asarray(world.region(0, 0, 1, 1))
     if probe.shape != (1, 1):
