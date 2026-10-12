@@ -218,8 +218,9 @@ def load(root="cache/marian"):
                      faces, pname)
 
 
-# Empty's weight per layer (bottom -> top); None keeps Marian's (10 everywhere).
-AIR_WEIGHTS = None
+# Empty's weight per layer (bottom -> top), rising so buildings thin out with
+# height (a designed stand-in for a coarse height level); None keeps Marian's 10.
+AIR_WEIGHTS = [2, 3, 4, 5, 6, 8]
 
 
 def air_layer_unary(ms: MarianSet, air_weights):
