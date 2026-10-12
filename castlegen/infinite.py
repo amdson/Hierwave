@@ -499,7 +499,19 @@ def _generate_blocks(model, bs, seed, y0, x0, H, W, stats=None):
 def generate(model, sched: Schedule, seed, y0, x0, H, W, pad=None, stats=None):
     """The world cells [y0, y0 + H) x [x0, x0 + W), (H, W) int32.  pad
     defaults to the light cone 2S (smaller pads are for tests: they are not
-    exact).  A BlockSchedule runs block Gibbs (pad ignored)."""
+    exact).  A BlockSchedule runs block Gibbs (pad ignored).  A TileModel3D
+    returns (L, H, W): all layers of the requested columns."""
+    if isinstance(model, TileModel3D):
+        if isinstance(sched, BlockSchedule):
+            return _generate_blocks3d(model, sched, seed, y0, x0, H, W, stats)
+        P = sched.pad + model.extra_pad if pad is None else pad
+        grid = np.zeros((model.L, H + 2 * P, W + 2 * P), np.int32)
+        ups = np.zeros(1, np.int64)
+        model.run(grid, np.int64(y0 - P), np.int64(x0 - P), np.uint64(seed & M64), sched, ups)
+        if stats is not None:
+            stats["updates"] = stats.get("updates", 0) + int(ups[0])
+            stats["cells"] = stats.get("cells", 0) + model.L * H * W
+        return grid[:, P:P + H, P:P + W].copy()
     if isinstance(sched, BlockSchedule):
         return _generate_blocks(model, sched, seed, y0, x0, H, W, stats)
     P = sched.pad + getattr(model, "extra_pad", 0) if pad is None else pad
@@ -524,7 +536,8 @@ def bulk(model, sched, seed, H, W):
 
 class World:
     """Chunks of C x C cells generated on demand.  chunk (cy, cx) covers the
-    cells [cy C, cy C + C) x [cx C, cx C + C)."""
+    cells [cy C, cy C + C) x [cx C, cx C + C).  For a TileModel3D a chunk
+    and a region are (L, rows, cols): every layer of those columns."""
 
     def __init__(self, model: TileModel, sched: Schedule, seed=0, C=32):
         self.model, self.sched, self.seed, self.C = model, sched, int(seed), int(C)
@@ -546,7 +559,8 @@ class World:
         for cy in range(cy0, cy1):
             for cx in range(cx0, cx1):
                 if (cy, cx) not in self.chunks:
-                    self.chunks[(cy, cx)] = g[(cy - cy0) * C:(cy - cy0 + 1) * C, (cx - cx0) * C:(cx - cx0 + 1) * C].copy()
+                    self.chunks[(cy, cx)] = g[..., (cy - cy0) * C:(cy - cy0 + 1) * C,
+                                              (cx - cx0) * C:(cx - cx0 + 1) * C].copy()
 
     def chunk(self, cy, cx):
         self.ensure([(cy, cx)])
@@ -558,12 +572,313 @@ class World:
         cy0, cy1 = y0 // C, -(-(y0 + H) // C)
         cx0, cx1 = x0 // C, -(-(x0 + W) // C)
         self.ensure([(cy, cx) for cy in range(cy0, cy1) for cx in range(cx0, cx1)])
-        out = np.empty(((cy1 - cy0) * C, (cx1 - cx0) * C), np.int32)
+        lead = self.chunks[(cy0, cx0)].shape[:-2]
+        out = np.empty(lead + ((cy1 - cy0) * C, (cx1 - cx0) * C), np.int32)
         for cy in range(cy0, cy1):
             for cx in range(cx0, cx1):
-                out[(cy - cy0) * C:(cy - cy0 + 1) * C, (cx - cx0) * C:(cx - cx0 + 1) * C] = self.chunks[(cy, cx)]
+                out[..., (cy - cy0) * C:(cy - cy0 + 1) * C, (cx - cx0) * C:(cx - cx0 + 1) * C] = self.chunks[(cy, cx)]
         oy, ox = y0 - cy0 * C, x0 - cx0 * C
-        return out[oy:oy + H, ox:ox + W]
+        return out[..., oy:oy + H, ox:ox + W]
+
+
+# ------------------------------------------------------------------ 3D layered tiles
+# Grid (L, H, W): L fixed layers (index k, up), rows y (south), cols x (east);
+# chunks stay 2D (columns), every request holds all L layers.  Directions in
+# Marian's order (castlegen/marian.py): d = 0 col - 1, 1 layer - 1, 2 row + 1,
+# 3 col + 1, 4 layer + 1, 5 row - 1; opposite (d + 3) % 6.
+# Checkerboard parity (k + y + x) & 1 with world y, x.  The hashed draw for
+# layer k at step key h uses _u01(seed, y, x, (h << 8) | k) (L <= 256): the
+# layer is folded into the step key.  Layers out of range have no neighbour;
+# the boundary is a per-layer domain dom[k] (hard: a cell never takes a module
+# outside its layer's domain).
+_D3 = ((0, 0, -1), (-1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 0, 0), (0, -1, 0))
+
+
+@njit(cache=True, inline="always")
+def _key3(h, k):
+    return (np.int64(h) << np.int64(8)) | np.int64(k)
+
+
+@njit(cache=True)
+def _site3(grid, k, i, j, F, E, soft, u, b, bs, g, hard_inf, eg, fix, v, w, e, r):
+    """New module for cell (k, i, j) of grid (L, H, W).  F[d, n, t] = 1 if
+    module t with neighbour n in direction d is forbidden; E the same soft
+    energies (used if soft).  bs[t] = exp(-b (u[t] - min u)) times the layer
+    domain (0 outside it).  fix: lexicographic, wildcard T where nothing in
+    the domain fits all neighbours.  r: the uniform."""
+    L = grid.shape[0]
+    T = bs.shape[0]
+    for t in range(T):
+        v[t] = 0
+    if soft:
+        for t in range(T):
+            e[t] = u[t]
+    for d in range(6):
+        kk = k + (d == 4) - (d == 1)
+        if kk < 0 or kk >= L:
+            continue
+        ii = i + (d == 2) - (d == 5)
+        jj = j + (d == 3) - (d == 0)
+        n = grid[kk, ii, jj]
+        Fr = F[d, n]
+        for t in range(T):
+            v[t] += Fr[t]
+        if soft:
+            Er = E[d, n]
+            for t in range(T):
+                e[t] += Er[t]
+    vmin = 1 << 30
+    for t in range(T):
+        if bs[t] > 0.0 and v[t] < vmin:
+            vmin = v[t]
+    if fix:
+        if vmin > 0:
+            return T
+        hard_inf = True
+    if not soft:
+        if hard_inf:
+            for t in range(T):
+                w[t] = bs[t] if v[t] == vmin else 0.0
+        else:
+            for t in range(T):
+                w[t] = bs[t] * eg[v[t]]
+        return _draw(w, T, r)
+    xmin = np.inf
+    for t in range(T):
+        if bs[t] == 0.0 or (hard_inf and v[t] != vmin):
+            e[t] = np.inf
+            continue
+        x = b * e[t] if hard_inf else b * e[t] + g * v[t]
+        e[t] = x
+        if x < xmin:
+            xmin = x
+    for t in range(T):
+        w[t] = np.exp(-(e[t] - xmin))
+    return _draw(w, T, r)
+
+
+@njit(cache=True)
+def _init3(grid, gy0, gx0, seed, base0):
+    """Step 0: cell (k, y, x) from base0[k] (unnormalised, domain applied)."""
+    L, H, W = grid.shape
+    T = base0.shape[1]
+    cdf = np.empty(T)
+    for k in range(L):
+        acc = 0.0
+        for t in range(T):
+            acc += base0[k, t]
+            cdf[t] = acc
+        for i in range(H):
+            for j in range(W):
+                r = _u01(seed, gy0 + i, gx0 + j, _key3(0, k)) * acc
+                grid[k, i, j] = min(np.searchsorted(cdf, r, side="right"), T - 1)
+
+
+@njit(cache=True)
+def _anneal3d(grid, gy0, gx0, seed, base, beta, gamma, u, F, E, soft, ups, fix):
+    """_anneal for layered 3D tiles, grid (L, H, W) whose column (0, 0) is
+    world (gy0, gx0).  base[s, k, t] = exp(-beta[s] (u[t] - min u)) dom[k, t].
+    Half-step h updates the cells of parity (k + y + x) & 1 == (h - 1) & 1 at
+    column margin >= h (all layers).  fix: half-step 2S + 1 on parity 0,
+    lexicographic, wildcard T where nothing fits; margin >= 2S + 1 exact."""
+    L, H, W = grid.shape
+    T = base.shape[2]
+    S = beta.shape[0]
+    v = np.empty(T, np.int64)
+    w = np.empty(T)
+    e = np.empty(T)
+    eg = np.empty(7)
+    _init3(grid, gy0, gx0, seed, base[0])
+    for h in range(1, 2 * S + 1 + fix):
+        last = h > 2 * S
+        s = min((h - 1) >> 1, S - 1)
+        g = np.inf if last else gamma[s]
+        hard_inf = np.isinf(g)
+        for n in range(7):
+            eg[n] = 0.0 if hard_inf and n > 0 else np.exp(-g * n)
+        par = (h - 1) & 1
+        b = beta[s]
+        for k in range(L):
+            bs = base[s, k]
+            for i in range(h, H - h):
+                j0 = h + ((par - (k + gy0 + i + gx0 + h)) & 1)
+                for j in range(j0, W - h, 2):
+                    r = _u01(seed, gy0 + i, gx0 + j, _key3(h, k))
+                    grid[k, i, j] = _site3(grid, k, i, j, F, E, soft, u, b, bs, g, hard_inf, eg, last, v, w, e, r)
+                    ups[0] += 1
+
+
+@njit(cache=True)
+def _block3d(grid, BY0, BX0, B, seed, base, beta, gam, Sb, K, u, F, E, soft, ups, fix, shift):
+    """_block_sockets for layered 3D tiles: blocks of B x B columns x all L
+    layers; grid (L, H, W) block aligned, column (0, 0) = world (BY0 B,
+    BX0 B).  Inner sweep k of block sweep sb uses row sb K + k of base
+    (Sb K, L, T), beta, gam; inner parity (layer + y + x) & 1.  Same cone and
+    shift rules; fix: one tile half-step on parity 0 at column margin
+    >= 2 Sb B + 1."""
+    L, H, W = grid.shape
+    T = base.shape[2]
+    gy0, gx0 = BY0 * B, BX0 * B
+    v = np.empty(T, np.int64)
+    w = np.empty(T)
+    e = np.empty(T)
+    eg = np.empty(7)
+    _init3(grid, gy0, gx0, seed, base[0])
+    for hb in range(1, 2 * Sb + 1):
+        sb = (hb - 1) >> 1
+        bpar = (hb - 1) & 1
+        off = (B >> 1) if (shift and (sb & 1)) else 0
+        lo = (hb - 1) * B + 1
+        for y0 in range(off - B, H, B):
+            if y0 < lo or y0 + B > H - lo:
+                continue
+            BYg = (gy0 + y0 - off) // B
+            for x0 in range(off - B, W, B):
+                if x0 < lo or x0 + B > W - lo:
+                    continue
+                if ((BYg + (gx0 + x0 - off) // B) & 1) != bpar:
+                    continue
+                for kin in range(K):
+                    row = sb * K + kin
+                    g = gam[row]
+                    hard_inf = np.isinf(g)
+                    for n in range(7):
+                        eg[n] = 0.0 if hard_inf and n > 0 else np.exp(-g * n)
+                    b = beta[row]
+                    for p in range(2):
+                        hkey = 1 + (((hb - 1) * K + kin) << 1) + p
+                        for k in range(L):
+                            bs = base[row, k]
+                            for i in range(y0, y0 + B):
+                                j0 = x0 + ((p - (k + gy0 + i + gx0 + x0)) & 1)
+                                for j in range(j0, x0 + B, 2):
+                                    r = _u01(seed, gy0 + i, gx0 + j, _key3(hkey, k))
+                                    grid[k, i, j] = _site3(grid, k, i, j, F, E, soft, u, b, bs, g, hard_inf,
+                                                           eg, False, v, w, e, r)
+                                    ups[0] += 1
+    if fix:
+        m0 = 2 * Sb * B + 1
+        hkey = 1 + ((2 * Sb * K) << 1)
+        row = base.shape[0] - 1
+        b = beta[row]
+        for k in range(L):
+            bs = base[row, k]
+            for i in range(m0, H - m0):
+                j0 = m0 + ((0 - (k + gy0 + i + gx0 + m0)) & 1)
+                for j in range(j0, W - m0, 2):
+                    r = _u01(seed, gy0 + i, gx0 + j, _key3(hkey, k))
+                    grid[k, i, j] = _site3(grid, k, i, j, F, E, soft, u, b, bs, np.inf, True, eg, True,
+                                           v, w, e, r)
+                    ups[0] += 1
+
+
+@njit(cache=True)
+def _violations3(grid, F, dom):
+    """(forbidden neighbour pairs, cells outside their layer domain); the
+    wildcard (id >= T) fits anything and every layer."""
+    L, H, W = grid.shape
+    T = F.shape[2]
+    n = 0
+    nd = 0
+    for k in range(L):
+        for i in range(H):
+            for j in range(W):
+                a = grid[k, i, j]
+                if a >= T:
+                    continue
+                nd += not dom[k, a]
+                if j + 1 < W and grid[k, i, j + 1] < T:
+                    n += F[3, grid[k, i, j + 1], a]
+                if i + 1 < H and grid[k, i + 1, j] < T:
+                    n += F[2, grid[k, i + 1, j], a]
+                if k + 1 < L and grid[k + 1, i, j] < T:
+                    n += F[4, grid[k + 1, i, j], a]
+    return n, nd
+
+
+@dataclass
+class TileModel3D:
+    """Layered 3D tiles on (L, H, W) = (layers, rows, cols).  u (T,) soft
+    unary; F (6, T, T): F[d, n, t] = 1 if t with neighbour n in direction d
+    is forbidden (symmetrised: F[d, n, t] |= F[opp d, t, n]); dom (L, T)
+    bool, the modules allowed on each layer (L = dom.shape[0]); E optional
+    soft pair energies in the same layout (finite, symmetrised by summing
+    nothing: give both directions consistently).  wild: a final fix
+    half-step puts the wildcard T where no module fits (ids then include T).
+    colors (T, 3) for render."""
+    names: list
+    u: np.ndarray
+    F: np.ndarray
+    dom: np.ndarray
+    colors: np.ndarray
+    E: np.ndarray = None
+    wild: bool = True
+
+    def __post_init__(self):
+        T = len(self.names)
+        self.u = np.ascontiguousarray(self.u, np.float64).reshape(T)
+        F = np.asarray(self.F).astype(bool).reshape(6, T, T)
+        F = F | np.stack([F[(d + 3) % 6].T for d in range(6)])
+        self.F = np.ascontiguousarray(F, np.uint8)
+        self.dom = np.ascontiguousarray(self.dom, bool).reshape(-1, T)
+        if self.L > 256:
+            raise ValueError("L <= 256 (layer folded into the hash key)")
+        if not self.dom.any(1).all():
+            raise ValueError("every layer needs a non-empty domain")
+        self.soft = self.E is not None
+        self.E = (np.zeros((6, 1, 1)) if self.E is None
+                  else np.ascontiguousarray(self.E, np.float64).reshape(6, T, T))
+        if not np.isfinite(self.E).all():
+            raise ValueError("E: finite soft energies; forbid pairs with F")
+        self.colors = np.asarray(self.colors, np.uint8).reshape(T, 3)
+
+    @property
+    def T(self):
+        return len(self.names)
+
+    @property
+    def L(self):
+        return self.dom.shape[0]
+
+    @property
+    def extra_pad(self):
+        return 1 if self.wild else 0
+
+    def base(self, beta):
+        """(S, L, T): exp(-beta (u - min u)) on each layer's domain."""
+        b = np.exp(-np.asarray(beta)[:, None] * (self.u - self.u.min())[None, :])
+        return np.ascontiguousarray(b[:, None, :] * self.dom[None, :, :])
+
+    def run(self, grid, gy0, gx0, seed, sched, ups):
+        _anneal3d(grid, gy0, gx0, seed, self.base(sched.beta), sched.beta, sched.gamma, self.u, self.F,
+                  self.E, self.soft, ups, self.wild)
+
+    def violations(self, grid):
+        """(forbidden pairs, domain misses) of a finite (L, H, W) grid."""
+        return tuple(int(x) for x in _violations3(np.ascontiguousarray(grid, np.int32), self.F, self.dom))
+
+    def energy(self, grid):
+        """(unary energy, forbidden pairs + domain misses); wildcards count 0."""
+        u = np.append(self.u, 0.0)
+        p, d = self.violations(grid)
+        return float(u[np.minimum(grid, self.T)].sum()), p + d
+
+
+def _generate_blocks3d(model, bs, seed, y0, x0, H, W, stats=None):
+    B = bs.B
+    pb = 2 * bs.Sb + model.extra_pad
+    BY0, BX0 = y0 // B - pb, x0 // B - pb
+    BY1, BX1 = -(-(y0 + H) // B) + pb, -(-(x0 + W) // B) + pb
+    grid = np.zeros((model.L, (BY1 - BY0) * B, (BX1 - BX0) * B), np.int32)
+    ups = np.zeros(1, np.int64)
+    beta = bs.beta.ravel()
+    _block3d(grid, np.int64(BY0), np.int64(BX0), np.int64(B), np.uint64(seed & M64), model.base(beta), beta,
+             bs.gamma.ravel(), bs.Sb, bs.K, model.u, model.F, model.E, model.soft, ups, model.wild, bs.shift)
+    if stats is not None:
+        stats["updates"] = stats.get("updates", 0) + int(ups[0])
+        stats["cells"] = stats.get("cells", 0) + model.L * H * W
+    oy, ox = y0 - BY0 * B, x0 - BX0 * B
+    return grid[:, oy:oy + H, ox:ox + W].copy()
 
 
 # ------------------------------------------------------------------ test tile sets
