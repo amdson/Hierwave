@@ -1,0 +1,29 @@
+#    Tile set: model data/<set>.hwm, templates data/<set>.hwt.
+hierwave_set (Tile set) enum biomes biomes,city
+
+#    Sampler seed (uint64 in the C API; values below 2^53 here).
+hierwave_seed (Sampler seed) int 1 0
+
+#    Tile provider: auto uses the C sampler when cache/libhwsampler.dylib, the
+#    .hwm model and LuaJIT FFI are all available, else the Lua placeholder.
+hierwave_provider (Tile provider) enum auto auto,sampler,placeholder
+
+#    Where mapchunks are generated: auto = main thread for the sampler with
+#    mod security on (FFI only there), async mapgen env otherwise.
+hierwave_gen_env (Generation environment) enum auto auto,main,mapgen
+
+#    Sampler chunk-cache size C (tiles per side, hw_world_new).
+hierwave_chunk_tiles (Sampler chunk tiles) int 32 8 256
+
+#    Overrides: sampler dylib, model file, template file (absolute paths).
+hierwave_lib (Sampler library path) string
+hierwave_model (Model file path) string
+hierwave_template (Template file path) string
+
+#    Log per-mapchunk timings.
+hierwave_log_chunks (Log chunk timings) bool false
+
+#    Test hooks (headless): emerge radius in mapchunks, then shut down.
+hierwave_test_radius (Test emerge radius) int 0
+hierwave_test_shutdown (Shut down after test) bool false
+hierwave_ffi_selftest (Call hw_dummy at startup) bool false

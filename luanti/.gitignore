@@ -1,0 +1,10 @@
+build/
+worlds/
+user/
+ffi_test/world/
+ffi_test/user/
+ffi_test/probe.conf
+ffi_test/games/hwprobe/game.conf
+ffi_test/games/hwprobe/mods/hwprobe/mod.conf
+games/hierwave/mods/hierwave_gen/data/*.hwt
+games/hierwave/mods/hierwave_gen/data/*.hwm
