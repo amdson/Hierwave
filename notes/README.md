@@ -30,6 +30,7 @@ In the order they were run; each builds on the previous.
 | `convpot_test.md` | Learned conv potentials over value embeddings. |
 | `paintpot_test.md` | Paint potentials: the induced free energy as a local energy over the painted map, exact on held-out pairs. |
 | `circles_biome_test.md` | The next-version DSL built and validated: per-channel samplers, support from stamps, the bootstrap trainer with collapsed targets, stamp versus learned features, scaling, migration of the real channel sets, the boundary, the Potts leak explained. |
+| `infinite_test.md` | Infinite worlds: annealed checkerboard Gibbs with position-hashed noise, exact chunk-by-chunk access, cost of the light cone, soft + hard tile constraints. |
 
 ## Reading
 
