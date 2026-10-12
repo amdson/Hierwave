@@ -70,7 +70,8 @@ def main():
         lu = m.lu if m.lu is not None else np.zeros((m.L, m.T))
         lu[1:, t] += -np.log(solid_w)
         m.lu = lu
-    bs = BlockSchedule.anneal(B=8, Sb=3, K=32, shift=True, restart=False, beta0=1.0, gamma0=2.0)
+    bs = BlockSchedule.anneal(B=8, Sb=3, K=int(os.environ.get("K", "32")), shift=True, restart=False,
+                              beta0=1.0, gamma0=2.0)
     g = generate(m, bs, seed, 0, 0, n, n)
     tpl = mm.module_templates(8)
     V = voxels(g, tpl)

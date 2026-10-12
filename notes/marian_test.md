@@ -192,3 +192,13 @@ give 0.0105-0.0121 against 0.0126: marginal.  All wildcard comparisons need
 composition held fixed; the export is back to 2 -> 8.  The per-layer air
 weights sit near a sharp transition, another reason to replace them with a
 learned coarse height level.
+
+### Double sweeps, taller (2026-10-12)
+K64 (ramp 2 -> 8) with air weights [2, 3, 3, 3.5, 5, 8] against the K32
+default [2, 3, 4, 5, 6, 8], 40^2 x 2 seeds: air per layer .00/.00/.06/.49/.97/1
+against .00/.01/.20/.68/.97/1; columns >= 4 storeys 51% against 32%, mean
+height 3.48 against 3.15, wildcards 0.0060 against 0.0126, prototypes 89
+against 88.  Neighbouring weights: [2,3,3,4,6,8] 0.0060 but 72 prototypes,
+[2,3,2.5,3,4.5,8] 77% >= 4 storeys at 0.0075.  Render
+images/marian_world_k64.png (`K=64 marian_world.py ... "[2,3,3,3.5,5,8]"`).
+Luanti: 27 mapchunks in 8.8 s (4.3 s at K32), 0/2000 mismatches.
