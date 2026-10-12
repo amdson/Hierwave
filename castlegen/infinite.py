@@ -173,6 +173,9 @@ class TileModel:
     def T(self):
         return len(self.names)
 
+    def run(self, grid, gy0, gx0, seed, sched, ups):
+        _anneal(grid, gy0, gx0, seed, self.u, self.Eh, self.Ev, self.Hh, self.Hv, sched.beta, sched.gamma, ups)
+
     def energy(self, grid):
         """(soft energy, hard violations) of a finite grid, interior pairs only."""
         g = grid
@@ -184,6 +187,101 @@ class TileModel:
         if scale > 1:
             img = np.repeat(np.repeat(img, scale, 0), scale, 1)
         return img
+
+
+@njit(cache=True)
+def _anneal_sockets(grid, gy0, gx0, seed, base, sN, sE, sS, sW, beta, gamma, ups, cone=True):
+    """_anneal for socket tiles: tile t fits its left neighbour l iff
+    sE[l] == sW[t] (likewise right, up, down); V counts misfits; the soft
+    energy is unary only.  base[s, t] = exp(-beta[s] (u[t] - min u)).
+    cone=False updates every cell but the border at every half-step (a
+    fixed-boundary run for statistics, not exact)."""
+    H, W = grid.shape
+    T = base.shape[1]
+    S = beta.shape[0]
+    w = np.empty(T)
+    v = np.empty(T, np.int64)
+    cdf = np.empty(T)
+    acc = 0.0
+    for t in range(T):
+        acc += base[0, t]
+        cdf[t] = acc
+    for i in range(H):
+        for j in range(W):
+            r = _u01(seed, gy0 + i, gx0 + j, 0) * acc
+            grid[i, j] = min(np.searchsorted(cdf, r, side="right"), T - 1)
+    eg = np.empty(5)
+    for h in range(1, 2 * S + 1):
+        s = (h - 1) >> 1
+        g = gamma[s]
+        hard_inf = np.isinf(g)
+        for k in range(5):
+            eg[k] = 0.0 if hard_inf and k > 0 else np.exp(-g * k)
+        par = (h - 1) & 1
+        bs = base[s]
+        m = h if cone else 1
+        for i in range(m, H - m):
+            j0 = m + ((par - (gy0 + i + gx0 + m)) & 1)
+            for j in range(j0, W - m, 2):
+                a_up, a_dn = sS[grid[i - 1, j]], sN[grid[i + 1, j]]
+                a_lf, a_rt = sE[grid[i, j - 1]], sW[grid[i, j + 1]]
+                vmin = 4
+                for t in range(T):
+                    n = (sN[t] != a_up) + (sS[t] != a_dn) + (sW[t] != a_lf) + (sE[t] != a_rt)
+                    v[t] = n
+                    if n < vmin:
+                        vmin = n
+                if hard_inf:
+                    for t in range(T):
+                        w[t] = bs[t] if v[t] == vmin else 0.0
+                else:
+                    for t in range(T):
+                        w[t] = bs[t] * eg[v[t]]
+                grid[i, j] = _draw(w, T, _u01(seed, gy0 + i, gx0 + j, h))
+                ups[0] += 1
+
+
+@njit(cache=True)
+def _socket_violations(grid, sN, sE, sS, sW):
+    H, W = grid.shape
+    n = 0
+    for i in range(H):
+        for j in range(W):
+            if j + 1 < W:
+                n += sE[grid[i, j]] != sW[grid[i, j + 1]]
+            if i + 1 < H:
+                n += sS[grid[i, j]] != sN[grid[i + 1, j]]
+    return n
+
+
+@dataclass
+class SocketModel:
+    """Edge-socket tiles for large T: tile t has sockets sN, sE, sS, sW
+    (ints); horizontal neighbours fit iff sE[left] == sW[right], vertical iff
+    sS[top] == sN[bottom].  Soft energy unary u (e.g. -log WFC weight).  Cost
+    per update O(T) socket compares, no T x T tables."""
+    u: np.ndarray
+    sN: np.ndarray
+    sE: np.ndarray
+    sS: np.ndarray
+    sW: np.ndarray
+
+    def __post_init__(self):
+        self.u = np.ascontiguousarray(self.u, np.float64)
+        for k in ("sN", "sE", "sS", "sW"):
+            setattr(self, k, np.ascontiguousarray(getattr(self, k), np.int64))
+
+    @property
+    def T(self):
+        return self.u.size
+
+    def run(self, grid, gy0, gx0, seed, sched, ups, cone=True):
+        base = np.exp(-sched.beta[:, None] * (self.u - self.u.min())[None, :])
+        _anneal_sockets(grid, gy0, gx0, seed, base, self.sN, self.sE, self.sS, self.sW,
+                        sched.beta, sched.gamma, ups, cone)
+
+    def energy(self, grid):
+        return float(self.u[grid].sum()), int(_socket_violations(grid, self.sN, self.sE, self.sS, self.sW))
 
 
 @dataclass
@@ -222,19 +320,28 @@ class Schedule:
         return cls(beta, gamma)
 
 
-def generate(model: TileModel, sched: Schedule, seed, y0, x0, H, W, pad=None, stats=None):
+def generate(model, sched: Schedule, seed, y0, x0, H, W, pad=None, stats=None):
     """The world cells [y0, y0 + H) x [x0, x0 + W), (H, W) int32.  pad
     defaults to the light cone 2S (smaller pads are for tests: they are not
     exact)."""
     P = sched.pad if pad is None else pad
     grid = np.zeros((H + 2 * P, W + 2 * P), np.int32)
     ups = np.zeros(1, np.int64)
-    _anneal(grid, np.int64(y0 - P), np.int64(x0 - P), np.uint64(seed & M64), model.u, model.Eh, model.Ev,
-            model.Hh, model.Hv, sched.beta, sched.gamma, ups)
+    model.run(grid, np.int64(y0 - P), np.int64(x0 - P), np.uint64(seed & M64), sched, ups)
     if stats is not None:
         stats["updates"] = stats.get("updates", 0) + int(ups[0])
         stats["cells"] = stats.get("cells", 0) + H * W
     return grid[P:P + H, P:P + W].copy()
+
+
+def bulk(model, sched, seed, H, W):
+    """Statistics run: an (H, W) block with a fixed random border, every
+    interior cell updated at every half-step (SocketModel only).  Not exact
+    across requests; measure away from the border."""
+    grid = np.zeros((H, W), np.int32)
+    ups = np.zeros(1, np.int64)
+    model.run(grid, np.int64(0), np.int64(0), np.uint64(seed & M64), sched, ups, cone=False)
+    return grid
 
 
 class World:

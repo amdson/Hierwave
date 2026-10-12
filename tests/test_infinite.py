@@ -28,3 +28,15 @@ def test_quench_removes_violations_on_biomes():
     m = biomes()
     g = generate(m, Schedule.anneal(S=32), 2, 0, 0, 64, 64)
     assert m.energy(g)[1] == 0
+
+
+def test_socket_model_chunks_exact():
+    from castlegen import citytiles as ct
+    from castlegen.infinite import SocketModel
+    ts = ct.TileSet()
+    m = SocketModel(-np.log(ts.w), ts.sN, ts.sE, ts.sS, ts.sW)
+    s = Schedule.anneal(S=4, quench=1)
+    w = World(m, s, seed=2, C=8)
+    for k in [(0, 1), (-1, 0), (0, 0), (-1, 1)]:
+        w.chunk(*k)
+    assert np.array_equal(w.region(-8, 0, 16, 16), generate(m, s, 2, -8, 0, 16, 16))

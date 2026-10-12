@@ -42,3 +42,38 @@ request as one batch (bounding rectangle, padded).
 - Coarse levels: a level at stride s with S_c sweeps adds s * 2 S_c to the
   pad; random access survives.
 - Run on the real tile set when it lands (build a `TileModel` from it).
+
+## City tiles (2026-10-12)
+`castlegen/citytiles.py` (from branch worktree-city-tiles, cherry-picked):
+3907 dual-grid Wang tiles, sockets (corner, corner, feature), weights w.
+`SocketModel` runs them with u = -log w and V = mismatched sockets, O(T)
+compares per update, no T x T tables (~9 us per update at T = 3907).
+`bulk` is a statistics mode (every interior cell updated each half-step,
+fixed border; not exact).  Experiment `notes/experiments/infinite_city.py`.
+
+| S | beta0 | violations / cell | corner zones |
+|---|---|---|---|
+| 32 | 0.1 | 0.137 | P .20 R .30 C .45 D .01 I .04 |
+| 32 | 0.3 | 0.066 | P .02 R .84 C .13 I .01 |
+| 32 | 1.0 | 0 | R 1.0 |
+| 64 | 0.1 | 0.041 | P .10 R .38 C .50 I .01 |
+| 64 | 0.3 | 0.0018 | R .97 C .03 |
+| 128 | 0.1 | 0.011 | P .06 R .47 C .48 |
+| 128 | 0.3 | 0 | R 1.0 |
+| 256 | 0.1 | 0 | P .002 R .64 C .36 |
+
+- Exact worlds: 256^2 from 32^2 chunks in two batches equals one batch
+  (S = 32, 33 s, 61 updates per stored cell).
+- Every clean result is low in variety: the tile weights' equilibrium at
+  T = 1 is one or two big districts (R has the top weight and every zone
+  boundary costs x0.12).  Parks, industry, water, highways and airports exist
+  only as transients of a hot start and die out as the run anneals (they
+  survive in the hot S = 32 world at 0.13 violations per cell).  Slower
+  annealing does not fix it, since it only gets closer to that equilibrium.
+- The missing structure is large scale: the other agent's coarse district
+  plan is what brought downtown, rings, industry and a river under WFC.
+  Next: a coarse level (stride s, its own World, hashed by level) whose
+  zones bias the corners of the fine tiles, per the hierarchical plan.
+  Images: images/infinite_city_hot.png (varied, defective),
+  images/infinite_city_bulk256.png (clean, two zones),
+  images/infinite_city.png (clean, all R).
