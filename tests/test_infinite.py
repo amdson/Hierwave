@@ -54,3 +54,35 @@ def test_wildcard_fix_pass():
     g = w.region(-8, 0, 16, 16)
     assert np.array_equal(g, generate(m, s, 2, -8, 0, 16, 16))
     assert m.energy(g)[1] == 0 and (g == m.T).any()
+
+
+def test_block_gibbs_exact_and_order_independent():
+    from castlegen import citytiles as ct
+    from castlegen.infinite import BlockSchedule, SocketModel
+    ts = ct.TileSet()
+    m = SocketModel(-np.log(ts.w), ts.sN, ts.sE, ts.sS, ts.sW, wild_u=20.0)
+    bs = BlockSchedule.anneal(B=4, Sb=1, K=2, quench=1)
+    a = generate(m, bs, 3, -9, -6, 20, 18)
+    b = generate(m, bs, 3, -3, 2, 20, 18)
+    assert np.array_equal(a[6:, 8:], b[:14, :10])
+    w = World(m, bs, seed=3, C=8)
+    for k in [(0, 1), (-1, 0), (0, 0), (-1, 1)]:
+        w.chunk(*k)
+    g = w.region(-8, 0, 16, 16)
+    assert np.array_equal(g, generate(m, bs, 3, -8, 0, 16, 16))
+    assert m.energy(g)[1] == 0
+
+
+def test_block_gibbs_shifted_exact():
+    from castlegen import citytiles as ct
+    from castlegen.infinite import BlockSchedule, SocketModel
+    ts = ct.TileSet()
+    m = SocketModel(-np.log(ts.w), ts.sN, ts.sE, ts.sS, ts.sW, wild_u=20.0)
+    bs = BlockSchedule.anneal(B=4, Sb=2, K=2, quench=1, shift=True)
+    a = generate(m, bs, 5, -9, -6, 20, 18)
+    b = generate(m, bs, 5, -3, 2, 20, 18)
+    assert np.array_equal(a[6:, 8:], b[:14, :10])
+    w = World(m, bs, seed=5, C=8)
+    for k in [(0, 1), (-1, 0), (0, 0), (-1, 1)]:
+        w.chunk(*k)
+    assert np.array_equal(w.region(-8, 0, 16, 16), generate(m, bs, 5, -8, 0, 16, 16))

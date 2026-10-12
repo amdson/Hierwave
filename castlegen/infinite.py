@@ -341,10 +341,167 @@ class Schedule:
         return cls(beta, gamma)
 
 
+
+# ------------------------------------------------------------------ block Gibbs
+@njit(cache=True)
+def _block_sockets(grid, BY0, BX0, B, seed, base, gam, Sb, K, sN, sE, sS, sW, ups, fix, shift):
+    """Block Gibbs on socket tiles.  grid (H, W) is block aligned: its cell
+    (0, 0) is world (BY0 B, BX0 B), H and W multiples of B.  Block half-step
+    hb = 1 .. 2 Sb solves every block of global block parity (BY + BX) & 1 ==
+    (hb - 1) & 1 at block margin >= hb by K inner tile-checkerboard sweeps,
+    its neighbouring blocks frozen; inner sweep k of block sweep sb uses row
+    sb K + k of base (exp(-beta (u - min u))) and gam.  Blocks at margin >= 2 Sb
+    are exact.  fix: one last tile half-step on parity 0 at tile margin
+    >= 2 Sb B + 1 puts the wildcard T where no tile fits.
+    shift: odd block sweeps use the block lattice offset by B / 2 (world
+    coordinates), so earlier seams fall inside blocks.  Light cone, either
+    lattice: half-step hb solves a block only if all its cells sit at tile
+    margin >= (hb - 1) B + 1 (its ring is exact); then margin >= hb B is exact."""
+    H, W = grid.shape
+    T = base.shape[1]
+    nby, nbx = H // B, W // B
+    gy0, gx0 = BY0 * B, BX0 * B
+    w = np.empty(T)
+    v = np.empty(T, np.int64)
+    cdf = np.empty(T)
+    eg = np.empty(5)
+    acc = 0.0
+    for t in range(T):
+        acc += base[0, t]
+        cdf[t] = acc
+    for i in range(H):
+        for j in range(W):
+            r = _u01(seed, gy0 + i, gx0 + j, 0) * acc
+            grid[i, j] = min(np.searchsorted(cdf, r, side="right"), T - 1)
+    for hb in range(1, 2 * Sb + 1):
+        sb = (hb - 1) >> 1
+        bpar = (hb - 1) & 1
+        off = (B >> 1) if (shift and (sb & 1)) else 0
+        lo = (hb - 1) * B + 1
+        for y0 in range(off - B, H, B):
+            if y0 < lo or y0 + B > H - lo:
+                continue
+            BYg = (gy0 + y0 - off) // B
+            for x0 in range(off - B, W, B):
+                if x0 < lo or x0 + B > W - lo:
+                    continue
+                if ((BYg + (gx0 + x0 - off) // B) & 1) != bpar:
+                    continue
+                for k in range(K):
+                    row = sb * K + k
+                    g = gam[row]
+                    hard_inf = np.isinf(g)
+                    for n in range(5):
+                        eg[n] = 0.0 if hard_inf and n > 0 else np.exp(-g * n)
+                    bs = base[row]
+                    for p in range(2):
+                        hkey = 1 + (((hb - 1) * K + k) << 1) + p
+                        for i in range(y0, y0 + B):
+                            j0 = x0 + ((p - (gy0 + i + gx0 + x0)) & 1)
+                            for j in range(j0, x0 + B, 2):
+                                a_up, a_dn = sS[grid[i - 1, j]], sN[grid[i + 1, j]]
+                                a_lf, a_rt = sE[grid[i, j - 1]], sW[grid[i, j + 1]]
+                                vmin = 4
+                                for t in range(T):
+                                    m = (sN[t] != a_up) + (sS[t] != a_dn) + (sW[t] != a_lf) + (sE[t] != a_rt)
+                                    v[t] = m
+                                    if m < vmin:
+                                        vmin = m
+                                if hard_inf:
+                                    for t in range(T):
+                                        w[t] = bs[t] if v[t] == vmin else 0.0
+                                else:
+                                    for t in range(T):
+                                        w[t] = bs[t] * eg[v[t]]
+                                grid[i, j] = _draw(w, T, _u01(seed, gy0 + i, gx0 + j, hkey))
+                                ups[0] += 1
+    if fix:
+        m0 = 2 * Sb * B + 1
+        hkey = 1 + ((2 * Sb * K) << 1)
+        bs = base[base.shape[0] - 1]
+        for i in range(m0, H - m0):
+            j0 = m0 + ((0 - (gy0 + i + gx0 + m0)) & 1)
+            for j in range(j0, W - m0, 2):
+                a_up, a_dn = sS[grid[i - 1, j]], sN[grid[i + 1, j]]
+                a_lf, a_rt = sE[grid[i, j - 1]], sW[grid[i, j + 1]]
+                vmin = 4
+                for t in range(T):
+                    m = (sN[t] != a_up) + (sS[t] != a_dn) + (sW[t] != a_lf) + (sE[t] != a_rt)
+                    v[t] = m
+                    if m < vmin:
+                        vmin = m
+                ups[0] += 1
+                if vmin > 0:
+                    grid[i, j] = T
+                    continue
+                for t in range(T):
+                    w[t] = bs[t] if v[t] == 0 else 0.0
+                grid[i, j] = _draw(w, T, _u01(seed, gy0 + i, gx0 + j, hkey))
+
+
+@dataclass
+class BlockSchedule:
+    """Block Gibbs schedule: blocks of B x B tiles, Sb block sweeps (two
+    block half-steps each), K inner sweeps per block solve; beta[sb, k],
+    gamma[sb, k] for inner sweep k of block sweep sb.  The light cone is
+    2 Sb blocks, independent of K."""
+    B: int
+    beta: np.ndarray
+    gamma: np.ndarray
+    shift: bool = False
+
+    def __post_init__(self):
+        self.beta = np.ascontiguousarray(self.beta, np.float64)
+        self.gamma = np.ascontiguousarray(self.gamma, np.float64)
+        if self.beta.ndim != 2 or self.beta.shape != self.gamma.shape:
+            raise ValueError("beta, gamma: equal (Sb, K)")
+
+    @property
+    def Sb(self):
+        return self.beta.shape[0]
+
+    @property
+    def K(self):
+        return self.beta.shape[1]
+
+    @classmethod
+    def anneal(cls, B=8, Sb=3, K=32, restart=True, shift=False, **kw):
+        """restart: every block solve runs Schedule.anneal(S=K, **kw) (melt
+        the block, its frozen neighbours carry the information).  Otherwise
+        one Schedule.anneal(S=Sb K, **kw) spread over all inner sweeps."""
+        if restart:
+            s = Schedule.anneal(S=K, **kw)
+            return cls(B, np.tile(s.beta, (Sb, 1)), np.tile(s.gamma, (Sb, 1)), shift)
+        s = Schedule.anneal(S=Sb * K, **kw)
+        return cls(B, s.beta.reshape(Sb, K), s.gamma.reshape(Sb, K), shift)
+
+
+def _generate_blocks(model, bs, seed, y0, x0, H, W, stats=None):
+    if not isinstance(model, SocketModel):
+        raise TypeError("block Gibbs is implemented for SocketModel")
+    B = bs.B
+    pb = 2 * bs.Sb + (0 if model.wild_u is None else 1)
+    BY0, BX0 = y0 // B - pb, x0 // B - pb
+    BY1, BX1 = -(-(y0 + H) // B) + pb, -(-(x0 + W) // B) + pb
+    grid = np.zeros(((BY1 - BY0) * B, (BX1 - BX0) * B), np.int32)
+    ups = np.zeros(1, np.int64)
+    beta = bs.beta.ravel()
+    base = np.exp(-beta[:, None] * (model.u - model.u.min())[None, :])
+    _block_sockets(grid, np.int64(BY0), np.int64(BX0), np.int64(B), np.uint64(seed & M64), base,
+                   bs.gamma.ravel(), bs.Sb, bs.K, model.sN, model.sE, model.sS, model.sW, ups,
+                   model.wild_u is not None, bs.shift)
+    if stats is not None:
+        stats["updates"] = stats.get("updates", 0) + int(ups[0])
+        stats["cells"] = stats.get("cells", 0) + H * W
+    oy, ox = y0 - BY0 * B, x0 - BX0 * B
+    return grid[oy:oy + H, ox:ox + W].copy()
+
 def generate(model, sched: Schedule, seed, y0, x0, H, W, pad=None, stats=None):
     """The world cells [y0, y0 + H) x [x0, x0 + W), (H, W) int32.  pad
     defaults to the light cone 2S (smaller pads are for tests: they are not
-    exact)."""
+    exact).  A BlockSchedule runs block Gibbs (pad ignored)."""
+    if isinstance(sched, BlockSchedule):
+        return _generate_blocks(model, sched, seed, y0, x0, H, W, stats)
     P = sched.pad + getattr(model, "extra_pad", 0) if pad is None else pad
     grid = np.zeros((H + 2 * P, W + 2 * P), np.int32)
     ups = np.zeros(1, np.int64)

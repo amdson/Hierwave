@@ -90,3 +90,36 @@ fixed border; not exact).  Experiment `notes/experiments/infinite_city.py`.
   0.10, 0.047, 0.019 (about 20 per 32^2 chunk at S = 128), in small
   diagonal pairs on district fronts.  Image:
   images/infinite_city_fix_bw.5_rare.png (wildcards magenta).
+
+## Block Gibbs (2026-10-12)
+`BlockSchedule` + `generate` (SocketModel): blocks of B x B tiles, block
+parity from world block coordinates; block half-step hb solves every block
+of one colour by K inner tile-checkerboard sweeps with its neighbouring
+blocks frozen.  The light cone is one block per block half-step, so the pad
+is 2 Sb B tiles (+1 block for the wildcard pass) whatever K is.  `shift`
+offsets the block lattice by B/2 on odd block sweeps; the cone rule (solve a
+block only if all its cells sit at margin >= (hb - 1) B + 1) covers both
+lattices.  `restart` re-runs the inner anneal on every solve; otherwise one
+anneal spans all Sb K inner sweeps.  Exact across requests and chunk order
+(tests).  City, contract weights, beta0 1, gamma0 2, 64^2 x 2-3 seeds:
+
+| schedule | wildcards | on block edge | lone 32^2 chunk | zones |
+|---|---|---|---|---|
+| baseline S = 64 | 0.0040 | - | 17.3 s | C .77 R .17 I .04 |
+| B8 Sb2 K32 restart | 0.026 | 0.77 | 3.2 s | C .59 R .23 I .11 D .06 |
+| B16 Sb2 K32 restart | 0.0145 | 0.60 | | C .72 R .17 I .08 |
+| B8 Sb2 K32 shift | 0.0137 | 0.50 | | C .61 R .25 I .09 D .05 |
+| B16 Sb2 K32 shift | 0.0083 | 0.26 | | C .74 R .17 I .07 |
+| B8 Sb2 K32 shift global | 0.016 | 0.57 | 3.4 s | C .68 R .17 I .11 |
+| B8 Sb2 K64 shift global | 0.0082 | 0.63 | 6.8 s | C .63 R .26 I .10 |
+| B8 Sb3 K32 shift global | 0.0048 | 0.54 | 7.9 s | C .67 R .21 I .11 |
+
+- Without shifting, wildcards pile up on block seams (60-86% on edge cells
+  against 23-44% of cells): a seam is only resolved Sb times.  Shifting
+  removes the excess (B16: 0.26 against 0.23 by area).
+- B8 Sb3 K32 shift global matches the baseline's wildcard rate at 2.2x less
+  time per lone chunk (pad 56 against 129) and keeps more industry.  The
+  saving is smaller than the pad ratio alone because it does 96 inner sweeps
+  against 64.
+- Next: port to the C sampler with its fast socket mode (~7x), which would
+  put a lone city chunk near 1 s.
