@@ -233,10 +233,54 @@ def air_layer_unary(ms: MarianSet, air_weights):
     return lu
 
 
-def tile_model(ms: MarianSet, L=MAP_HEIGHT, domains="ac", colors=None, air_weights="default"):
+# Manual group weights: a module group's weight is multiplied by w on the
+# layers in GROUP_LAYERS (default: every layer above the ground layer).
+# Groups are found from the voxel templates (castlegen.marian_meshes):
+#   flat_top  full 8x8 footprint, >= 90% of columns topped at one height
+#             (Floor, Interior_Floor(_High, _High_to_Low_Adapter),
+#             Roof_2_Floor_Corner_2, Solid)
+GROUP_WEIGHTS = {"flat_top": 1.0}
+GROUP_LAYERS = None                     # None: layers 1 .. L-1
+
+
+def flat_top_modules(ms: MarianSet, share=0.9, k=8):
+    """(T,) bool: modules whose voxel template covers its whole footprint
+    and has >= share of its columns topped at the same height."""
+    from castlegen import marian_meshes as mm
+    tpl = mm.module_templates(k)[:ms.T]
+    solid = tpl > 0
+    has = solid.any(1)
+    top = np.where(has, k - 1 - np.argmax(solid[:, ::-1], axis=1), -1).reshape(ms.T, -1)
+    out = np.zeros(ms.T, bool)
+    for t in range(ms.T):
+        if has[t].all():
+            out[t] = np.bincount(top[t]).max() / top.shape[1] >= share
+    return out
+
+
+GROUPS = {"flat_top": flat_top_modules}
+
+
+def group_layer_unary(ms: MarianSet, L, group_weights, layers=None):
+    """(L, T) unary adding -log w to each group's modules on `layers`."""
+    lu = np.zeros((L, ms.T))
+    layers = range(1, L) if layers is None else layers
+    for name, w in group_weights.items():
+        if w == 1.0:
+            continue
+        sel = GROUPS[name](ms)
+        for l in layers:
+            lu[l, sel] += -np.log(w)
+    return lu
+
+
+def tile_model(ms: MarianSet, L=MAP_HEIGHT, domains="ac", colors=None, air_weights="default",
+               group_weights="default", group_layers="default"):
     """TileModel3D: u = -log weight, forbidden pairs = not allowed in either
     listing (union of the two directions' bitsets), per-layer domains
-    ('ac' propagated, 'raw' boundary only, None unconstrained)."""
+    ('ac' propagated, 'raw' boundary only, None unconstrained); per-layer
+    unaries from air_weights (AIR_WEIGHTS) and group_weights (GROUP_WEIGHTS on
+    GROUP_LAYERS)."""
     from castlegen.infinite import TileModel3D
     F = np.zeros((6, ms.T, ms.T), np.uint8)
     for d in range(6):
@@ -249,6 +293,13 @@ def tile_model(ms: MarianSet, L=MAP_HEIGHT, domains="ac", colors=None, air_weigh
     if isinstance(air_weights, str):
         air_weights = AIR_WEIGHTS
     lu = None if air_weights is None else air_layer_unary(ms, air_weights)
+    if isinstance(group_weights, str):
+        group_weights = GROUP_WEIGHTS
+    if isinstance(group_layers, str):
+        group_layers = GROUP_LAYERS
+    if group_weights and any(w != 1.0 for w in group_weights.values()):
+        g = group_layer_unary(ms, L, group_weights, group_layers)
+        lu = g if lu is None else lu + g
     return TileModel3D(list(ms.names), -np.log(ms.weight), F, dom, colors, lu=lu)
 
 

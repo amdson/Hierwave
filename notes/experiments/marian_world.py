@@ -63,7 +63,8 @@ def main():
     n = int(sys.argv[3]) if len(sys.argv) > 3 else 12
     seed = int(sys.argv[4]) if len(sys.argv) > 4 else 1
     ms = marian.load()
-    m = marian.tile_model(ms, air_weights=prof)
+    m = marian.tile_model(ms, air_weights=prof,
+                          group_weights={"flat_top": float(os.environ.get("FLAT_W", "1"))})
     solid_w = float(os.environ.get("SOLID_W", "1"))
     if solid_w != 1:                                           # Solid's weight on layers >= 1
         t = ms.names.index("Solid R0")

@@ -202,3 +202,28 @@ against 88.  Neighbouring weights: [2,3,3,4,6,8] 0.0060 but 72 prototypes,
 [2,3,2.5,3,4.5,8] 77% >= 4 storeys at 0.0075.  Render
 images/marian_world_k64.png (`K=64 marian_world.py ... "[2,3,3,3.5,5,8]"`).
 Luanti: 27 mapchunks in 8.8 s (4.3 s at K32), 0/2000 mismatches.
+
+### Flat-top group weight (2026-10-12)
+`marian.GROUP_WEIGHTS["flat_top"]` multiplies the weight of the flat-top
+group on layers 1-5 (`GROUP_LAYERS`); the group is found from the voxel
+templates: full footprint, >= 90% of columns topped at one height (Floor,
+Interior_Floor(_High, _High_to_Low_Adapter), Roof_2_Floor_Corner_2, Solid).
+K64, 40^2 x 2 seeds; "flat share" = flat-top modules among non-air cells on
+layers >= 1, "exposed" = flat-top cells with air above, per column:
+
+| flat w | air weights | >= 4 storeys | flat share | exposed | wildcards | prototypes |
+|---|---|---|---|---|---|---|
+| 1 | 2,3,3,3.5,5,8 | 0.51 | 0.41 | 0.50 | 0.0060 | 89 |
+| 0.5 | 2,3,3,3.5,5,8 | 0.17 | 0.30 | 0.41 | 0.0093 | 80 |
+| 0.25 | 2,3,3,3.5,5,8 | 0.07 | 0.29 | 0.38 | 0.0120 | 87 |
+| 0.1 | 2,3,3,3.5,5,8 | 0.09 | 0.21 | 0.29 | 0.0170 | 93 |
+| 0.5 | 2,3,1.5,2,3.5,8 | 0.82 | 0.29 | 0.49 | 0.0065 | 86 |
+| 0.25 | 2,3,1,1.5,3,8 | 0.89 | 0.20 | 0.41 | 0.0136 | 91 |
+
+Downweighting alone makes buildings shorter (floors and Solid carry the
+upper storeys); lowering the mid-layer air weights restores and exceeds the
+height.  Exposed flat tops per column stay ~0.4-0.5: a column still ends in a
+flat-topped module (roof modules are rare), so from above the town remains a
+terrace (images/marian_world_flat05.png).  Targeting the look needs a term on
+"flat top with air above" (a vertical pair energy) or roof weights, not a
+unary on the group.
