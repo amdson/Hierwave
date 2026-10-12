@@ -100,3 +100,25 @@ with two runs in parallel.
   would give the same 5-10x as the city's fast mode.
 - Statistics: fit per-layer (or coarse-level) energies so the Gibbs
   measure reproduces WFC's height / prototype marginals.
+
+## 2x2 Metropolis-Hastings groups (2026-10-12, first stats)
+`castlegen/plaquette.py`: inside each 3D block solve, a group sweep clears
+2x2 cells on one layer and refills them in order NW, NE, SW, SE from
+single-site conditionals given the outside and the refilled cells; accepted
+with the independence-sampler ratio (exact detailed balance; lexicographic at
+gamma = inf).  Exact across requests.  Default AIR_WEIGHTS, B8 Sb3 shift
+global, 48^2 columns, seeds 0-2 (`notes/experiments/marian_mh2x2.py`):
+
+| run | wildcards | time / 48^2 | accept (finite / hard) |
+|---|---|---|---|
+| base K32 | 0.0125 | 10.7 s | |
+| MH in the last quarter, K32 | 0.0119 | 10.9 s | 0.74 / 0.75 |
+| MH every inner sweep, K32 | 0.0082 | 23.4 s | 0.66 / 0.76 |
+| MH every inner sweep, K16 | 0.0164 | 11.8 s | 0.64 / 0.73 |
+| base K64 | 0.0053 | 18.7 s | |
+
+- Moves are accepted often (64-76%), but at equal time plain extra sweeps
+  win (K64: 0.53% against 0.82% at 23 s).  The 2x2 groups lie in one layer;
+  the defects may need vertical or larger joint moves, untested.
+- With the rising air profile the wildcard rate is 1.25% at K32 (Marian's
+  uniform weights gave 0.52%): taller structure is harder.
