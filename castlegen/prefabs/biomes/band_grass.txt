@@ -1,0 +1,7 @@
+name: band_grass
+size: 8 8
+legend: d=dirt g=grass t=stone .=air
+layer 0-1: t
+layer 2-3: d
+layer 4: g
+layer 5-12: .

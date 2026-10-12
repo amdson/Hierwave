@@ -1,0 +1,44 @@
+name: zone_C
+size: 4 4
+legend: d=dirt s=shop_wall n=glass p=paving .=air
+layer 0-2: d
+layer 3:
+sssp
+sssp
+sssp
+pppp
+layer 4:
+sss.
+snn.
+snn.
+....
+layer 5:
+sss.
+sss.
+sss.
+....
+layer 6:
+sss.
+snn.
+snn.
+....
+layer 7:
+sss.
+sss.
+sss.
+....
+layer 8:
+sss.
+snn.
+snn.
+....
+layer 9:
+sss.
+sss.
+sss.
+....
+layer 10:
+sss.
+sss.
+sss.
+....

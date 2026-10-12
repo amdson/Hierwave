@@ -1,0 +1,109 @@
+name: zone_D
+size: 4 4
+legend: d=dirt t=tower_wall n=glass u=tower_top p=paving .=air
+layer 0-2: d
+layer 3:
+tttp
+tttp
+tttp
+pppp
+layer 4:
+ttt.
+tnn.
+tnn.
+....
+layer 5:
+ttt.
+tnn.
+tnn.
+....
+layer 6:
+nnn.
+nnn.
+nnn.
+....
+layer 7:
+ttt.
+tnn.
+tnn.
+....
+layer 8:
+ttt.
+tnn.
+tnn.
+....
+layer 9:
+nnn.
+nnn.
+nnn.
+....
+layer 10:
+ttt.
+tnn.
+tnn.
+....
+layer 11:
+ttt.
+tnn.
+tnn.
+....
+layer 12:
+nnn.
+nnn.
+nnn.
+....
+layer 13:
+ttt.
+tnn.
+tnn.
+....
+layer 14:
+ttt.
+tnn.
+tnn.
+....
+layer 15:
+nnn.
+nnn.
+nnn.
+....
+layer 16:
+ttt.
+tnn.
+tnn.
+....
+layer 17:
+ttt.
+tnn.
+tnn.
+....
+layer 18:
+nnn.
+nnn.
+nnn.
+....
+layer 19:
+ttt.
+tnn.
+tnn.
+....
+layer 20:
+ttt.
+tnn.
+tnn.
+....
+layer 21:
+nnn.
+nnn.
+nnn.
+....
+layer 22:
+ttt.
+tnn.
+tnn.
+....
+layer 23:
+uuu.
+uuu.
+uuu.
+....

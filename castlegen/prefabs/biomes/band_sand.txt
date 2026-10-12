@@ -1,0 +1,15 @@
+name: band_sand
+size: 8 8
+legend: s=sand t=stone .=air
+layer 0-1: t
+layer 2: s
+layer 3:
+ssssssss
+ssssssss
+ssssssss
+ssssssss
+ssssssss
+ssssssss
+ssssssss
+ssssssss
+layer 4-12: .

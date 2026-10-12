@@ -1,0 +1,7 @@
+name: band_deep
+size: 8 8
+legend: g=gravel w=deep_water n=water .=air
+layer 0: g
+layer 1: w
+layer 2: n
+layer 3-12: .

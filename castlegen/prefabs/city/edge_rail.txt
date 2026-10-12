@@ -1,0 +1,13 @@
+name: edge_rail
+size: 4 2
+legend: a=asphalt l=road_line c=concrete b=ballast r=rail p=pillar d=deck m=lamp _=keep .=air
+layer 3:
+bb
+bb
+bb
+bb
+layer 4:
+rr
+rr
+rr
+rr

@@ -1,0 +1,31 @@
+name: wildcard
+size: 8 8
+legend: d=dirt p=plaza f=fountain m=lamp c=curb w=water .=air _=keep
+layer 0-2: d
+layer 3:
+pppppppp
+pccccccp
+pcppppcp
+pcpffpcp
+pcpffpcp
+pcppppcp
+pccccccp
+pppppppp
+layer 4:
+m______m
+________
+________
+___ff___
+___ff___
+________
+________
+m______m
+layer 5:
+m______m
+________
+________
+________
+________
+________
+________
+m______m

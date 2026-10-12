@@ -1,0 +1,7 @@
+name: zone_W
+size: 4 4
+legend: s=stone a=sand w=water .=air
+layer 0: s
+layer 1: a
+layer 2: w
+layer 3: .

@@ -1,0 +1,7 @@
+name: band_snow
+size: 8 8
+legend: x=rock t=stone S=snow .=air
+layer 0-5: t
+layer 6-8: x
+layer 9: S
+layer 10-12: .

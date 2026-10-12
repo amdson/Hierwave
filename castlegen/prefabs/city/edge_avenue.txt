@@ -1,0 +1,13 @@
+name: edge_avenue
+size: 4 2
+legend: a=asphalt l=road_line c=concrete b=ballast r=rail p=pillar d=deck m=lamp _=keep .=air
+layer 3:
+ll
+aa
+aa
+ll
+layer 4:
+..
+m.
+..
+..

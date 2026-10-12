@@ -1,0 +1,29 @@
+name: zone_R
+size: 4 4
+legend: g=grass d=dirt w=house_wall n=window r=house_roof p=paving .=air _=keep
+layer 0-2: d
+layer 3:
+gggg
+gwwg
+gwwg
+gppp
+layer 4:
+____
+_wn_
+_nw_
+____
+layer 5:
+____
+_ww_
+_ww_
+____
+layer 6:
+____
+rrrr
+rrrr
+____
+layer 7:
+____
+_rr_
+_rr_
+____

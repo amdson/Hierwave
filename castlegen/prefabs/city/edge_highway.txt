@@ -1,0 +1,33 @@
+name: edge_highway
+size: 4 2
+legend: a=asphalt l=road_line c=concrete b=ballast r=rail p=pillar d=deck m=lamp _=keep .=air
+layer 3:
+p_
+__
+__
+__
+layer 4:
+p_
+__
+__
+__
+layer 5:
+p_
+__
+__
+__
+layer 6:
+p_
+__
+__
+__
+layer 7:
+p_
+__
+__
+__
+layer 8:
+dl
+dd
+dd
+dl

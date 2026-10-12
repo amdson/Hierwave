@@ -1,0 +1,7 @@
+name: band_hill
+size: 8 8
+legend: d=dirt g=grass t=stone .=air
+layer 0-3: t
+layer 4-5: d
+layer 6: g
+layer 7-12: .

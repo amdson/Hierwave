@@ -1,0 +1,39 @@
+name: zone_P
+size: 4 4
+legend: g=grass d=dirt p=paving t=trunk l=leaves h=hedge m=lamp .=air _=keep
+layer 0-2: d
+layer 3:
+gggg
+gppg
+gpgg
+gggg
+layer 4:
+h___
+_t__
+___m
+____
+layer 5:
+____
+_t__
+___m
+____
+layer 6:
+____
+_t__
+____
+____
+layer 7:
+lll_
+ltl_
+lll_
+____
+layer 8:
+lll_
+lll_
+lll_
+____
+layer 9:
+____
+_l__
+____
+____

@@ -1,0 +1,9 @@
+name: zone_A
+size: 4 4
+legend: t=tarmac m=runway_mark d=dirt
+layer 0-2: d
+layer 3:
+tttt
+tmtt
+tmtt
+tttt

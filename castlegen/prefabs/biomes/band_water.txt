@@ -1,0 +1,7 @@
+name: band_water
+size: 8 8
+legend: s=sand w=water g=gravel .=air
+layer 0: g
+layer 1: s
+layer 2: w
+layer 3-12: .
