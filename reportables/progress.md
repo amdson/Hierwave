@@ -17,6 +17,11 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-13 · cbig · stopped early
+Approach: cfast on the GPU box with large batches; pre-selected subsample recording (memory), vectorised + overlapped designed inputs, batched cached generation with cached log q. Folder 2026-10-13_cbig/.
+Result: no bench yet. cfast speed on 3090: toy_support flat to B~256 (4.5 ms @8, 22 ms @1024); ground saturates at B~64 (14/34/116 ms @8/64/256, OOM @1024, host designed inputs > GPU time). Fresh GPU compile 45-150 s eats the 150 s budget (autotune_level=0: 132 -> 29 s on toy_support); box pids limit 2304 vs ~316 threads/JAX process causes ptxas launch failures (taskset to 8 cores -> 44 threads).
+Next: warm cache or scoped autotune off; profile cbig; SNR vs B; benches at B=256/1024; check collapse/fill tracking vs B.
+
 ## 2026-10-13 · exactopt (diagnostic) · stopped early
 Approach: ideas.md #10. Exact J and its gradient by enumerating the reachable outcomes, with deduplicated draw contexts; mlp, feature-table and full-history-table actors, compared with cpass and cfast sampled training from the same init. Problems: tiny, and single toy_support / toy_modes blocks (non-periodic 4x4).
 Result: machinery and tests built (5/6 tests pass; the history-table convergence test was lengthened and its rerun is unconfirmed). Partial toy_modes numbers only (KL from 2.04): exact mlp 0.90 at step 150; at 20 steps exact 0.57-0.81 against sampled cpass 1.79 and cfast 1.43. No verdict. The full runs are still going on the box (nohup, /tmp/eo_modes.log). [Report](2026-10-13_exactopt/report.md).

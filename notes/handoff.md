@@ -31,6 +31,17 @@ These are not all in the repo elsewhere.
   (`scripts/gpu.sh` is the Mac-side wrapper).
 - No persistent volume: destroying or recycling the instance wipes it, so push to git often. Stopping and restarting is safe.
 - If you work in a git clone on the box rather than the rsynced copy, note that `/workspace/hierwave` was populated by rsync and isn't a git checkout.
+- **WARNING: thread limit.**
+  - The container's pid limit (pids.max 2304) is shared by every process, and each default JAX process holds about 400 threads. With several processes running, the GPU client fails: "Failed to launch ptxas / pthread_create failed".
+  - Cap threads per process: `XLA_FLAGS="--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"`, `taskset -c <few cores>`, and for CPU-only jobs `JAX_PLATFORMS=cpu`.
+  - Run only a few JAX processes at once.
+- **Left running by round 2 (nohup):**
+  - exactopt's runs: `/tmp/eo_modes.log` → `/tmp/eo_runs/*.json`, `/tmp/eo_support_enum.log`, `/tmp/eo_test.log`.
+  - Check `ps aux | grep python` for others.
+- **Round 2 status:**
+  - creplay stopped mid-refactor and is currently broken; see its report for the fix plan.
+  - exactopt stopped early, but early numbers show exact training well ahead of the sampled estimators on the toy_modes block.
+  - Check each `reportables/2026-10-13_<name>/report.md`.
 - GPU results go to `results/gpu/` (separate board). The GPU only pays off with large batches; B = 8 is slower than the Mac.
 
 ## Where things stand
