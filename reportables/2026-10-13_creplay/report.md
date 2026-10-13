@@ -12,9 +12,7 @@
   - Costs outside the cone match to float32 round-off. They are not bitwise equal, because XLA's MLP reduction order depends on the vmapped batch size.
   - Replaying the drawn action reproduces G_i.
   - The batched cone return equals the brute-force sum over the cone's members.
-- **Gradcheck** (tiny enumerable problem, `_gradcheck` machinery, 300 × 16 worlds):
-  - **Passes** for the config that branches every draw at both levels with K = 4 (all enumerated).
-  - The other configs (LOO at the top level, random subsets, wrong critic) were running when the session ended. Their result is unknown.
+- **Gradcheck** (tiny enumerable problem, `_gradcheck` machinery, 300 × 16 worlds): **all 4 configurations pass** on the pre-refactor code: every draw branched and enumerated (K = 4), top level sampled with leave-one-out (K = 2), random subsets at both levels, and a wrong fixed critic.
 - **No windowed replay.** At the branched levels the cones cover 94–99.9 % of later draws on ground, and these draws come first in the schedule, so a window would save almost nothing.
 
 ## Numbers (GPU box, ground, B = 8)

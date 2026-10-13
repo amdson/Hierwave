@@ -39,7 +39,7 @@ Next: pull /tmp/eo_runs, run toy_support and tiny, plot, and apply the decision 
 
 ## 2026-10-13 23:59 · creplay · stopped early
 Approach: cfast + coupled replays for many coarse draws per world (cone-scored, enumerated when |A| <= K, else LOO), batched over (world, draw, action) on the GPU. Folder 2026-10-13_creplay/.
-Result: no bench. Replay faithfulness tests pass (4 problems). Gradcheck passes for all-enumerated branching (others unfinished). Ground on the GPU: 4096 replays/update = 6.1 s/update and 222 s compile, so it does not fit the budget as configured. Per branched draw, the across-action spread (~30) is ~1/35 of the return noise (~1000-1500): about 10^3x variance reduction per draw. Code is mid-refactor (importance-weighted subset estimator: t1 for all draws, (N/R)·Σ coupled terms for a random subset), so it does not run yet. Fill-context clamp diagnostic written (_creplay_clamp.py), not run.
+Result: no bench. Replay faithfulness tests pass (4 problems). Gradcheck passes in all 4 configurations (enumerated, LOO, random subsets, wrong critic; pre-refactor code). Ground on the GPU: 4096 replays/update = 6.1 s/update and 222 s compile, so it does not fit the budget as configured. Per branched draw, the across-action spread (~30) is ~1/35 of the return noise (~1000-1500): about 10^3x variance reduction per draw. Code is mid-refactor (importance-weighted subset estimator: t1 for all draws, (N/R)·Σ coupled terms for a random subset), so it does not run yet. Fill-context clamp diagnostic written (_creplay_clamp.py), not run.
 Next: finish the refactor, R = 16 per level, bench against cfast on the GPU, run the clamp diagnostic.
 
 ## 2026-10-13 · exactopt (diagnostic) · started
