@@ -66,6 +66,26 @@ Applies to views and channels with more than 8 values; small domains keep per-va
 
 > **Annotation (2026-10-13, cordinal):** tried. Cosine basis (8 terms per ordered view; certificates use their A and B views, counts their id order) plus 0.1-scaled residual, mask-relative u; estimator unchanged. Ground (about 55 updates): worst final viol 0.029 vs cpass 0.070, F 1.85 vs 1.92, far fewer floating cells, but more dirt. toy_support KL 0.082 vs 0.095. Columns neutral to worse (one seed collapsed to empty), confounded: (a) inflates the critic's input 3-5x and columns fit about 90 vs about 150 updates. Ground ablation: (a) alone = cpass (0.090); (a+b) 0.043; (a+b+c) 0.029; (c) within the seed spread. Report text in the orchestrator's 2026-10-13_cordinal folder. Status: mixed. (b) works on ground, (a) does nothing measurable, (c) is probably useful but not shown.
 
+> **Annotation (2026-10-13, Codex / cfast_head):** tested (b) alone on cfast with original inputs/critic and absolute coordinates. Ground, 2 x 150 s: worst final violations 9.16e-5 versus fresh cfast 6.59e-3; F 1.204 versus 0.813. Both head seeds meet the violation budget but collapse to 50%-dirt stripes / all dirt, fail coverage probes and seed agreement. 585/622 updates versus control 926/825. Status: mixed for validity, does not fix collapse. [Report](2026-10-13_cfast_head/report.md). Columns not run; creplay/cbig are already investigating lower-variance training.
+
+## 8. Average downstream costs over candidates (from astra, via the user, 2026-10-13)
+In returns for earlier draws, replace each later draw's sampled immediate cost with its expectation under its own q: ℓ̄_j = Σ_a q_j(a)[s_j(a) + λ n_j(a) + τ log q_j(a)]. Keep sampling normally, and change only the return. This is unbiased by conditional expectation (stop-gradient on the return; keep the direct terms). Check against exact gradients, then measure gradient variance per second at frozen parameters; it may complement creplay.
+
+> **Annotation (2026-10-13, orchestrator):** agreed: this is Rao-Blackwellisation of the per-draw sampling noise, which is the dominant variance term. Launched as variant `crb` on cfast. Status: untested.
+
+## 9. Train the critic to minimise actor-gradient variance (from astra, via the user, 2026-10-13)
+Instead of return-prediction MSE, fit the critic to minimise the second moment of the corrected actor-gradient estimate. Its mean doesn't depend on the critic, so this minimises variance. Start on the enumerable problem, using separate or previous batches; the acceptance criterion is lower measured gradient variance, not critic MSE.
+
+> **Annotation (2026-10-13, orchestrator):** agreed, later; it has precedent in RELAX (Grathwohl et al. 2018). It needs per-sample gradient norms, so it costs more; queue it after #8 and #10. Status: untested.
+
+## 10. Optimise a tiny case with exact gradients (from astra, via the user, 2026-10-13)
+On the enumerable hierarchy, optimise the objective with exact expectations, and compare with sampled-gradient training from the same initialisation:
+- If exact training succeeds and sampled training fails, the problem is variance.
+- If both fail, look at optimisation, representation or the sampling order.
+- If both succeed, increase the difficulty until they separate.
+
+> **Annotation (2026-10-13, orchestrator):** agreed. This separates the variance hypothesis from the "fine levels can't realise the contexts" hypothesis (see the cfast_head report). Launched as `exactopt` (a diagnostic, not a variant), also on a single toy_support block. Status: untested.
+
 ## 7. Low-to-high scheduling of 1-step updates (from chat, 2026-10-13; low priority)
 "scheduling low to high 1-step updates. not high priority, just worth considering"
 
