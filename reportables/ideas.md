@@ -64,6 +64,8 @@ Applies to views and channels with more than 8 values; small domains keep per-va
 
 > **Annotation (2026-10-13, orchestrator):** launched as variant `cordinal` (cpass plus a, b and c, A/B against cpass). Status: untested.
 
+> **Annotation (2026-10-13, cordinal):** tried. Cosine basis (8 terms per ordered view; certificates use their A and B views, counts their id order) plus 0.1-scaled residual, mask-relative u; estimator unchanged. Ground (about 55 updates): worst final viol 0.029 vs cpass 0.070, F 1.85 vs 1.92, far fewer floating cells, but more dirt. toy_support KL 0.082 vs 0.095. Columns neutral to worse (one seed collapsed to empty), confounded: (a) inflates the critic's input 3-5x and columns fit about 90 vs about 150 updates. Ground ablation: (a) alone = cpass (0.090); (a+b) 0.043; (a+b+c) 0.029; (c) within the seed spread. Report text in the orchestrator's 2026-10-13_cordinal folder. Status: mixed. (b) works on ground, (a) does nothing measurable, (c) is probably useful but not shown.
+
 ## 5. Convolutional networks and modern non-linearities (from chat, 2026-10-13)
 "conv almost certainly have a good prior for this task." Also: replace tanh MLPs (agreed in chat).
 
