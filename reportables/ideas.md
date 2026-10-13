@@ -24,6 +24,8 @@ What it sounds like. Varying temperature, or softening hard constraints, during 
 ## 2. Truncated depth forward passes
 Extremes are depth one forward passes from arbitrary levels, with a low-variance but biased gradient from the model recursively evaluated on child latents. 
 
+> **Annotation (2026-10-13, orchestrator):** approved by the user on 2026-10-13 as an experiment, although it breaks constitution constraint 3 (unbiased gradient). Being tried in round 1 as variant `ctrunc`. Status: untested.
+
 ## 3. Multi-pass sampling within hierarchy level
 Get around issues with conditional independence assumptions within same color groups by simply sampling multiple times. May speed things up in net by allowing for fewer colors. In the limit, two color checkerboard would be possible. 
 
