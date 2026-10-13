@@ -17,6 +17,41 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-13 · exactopt (diagnostic) · started
+Approach: ideas.md #10. Enumerate every reachable draw outcome of small hierarchies (gradcheck tiny; a single toy_support block; a single toy_modes block), precompute each draw's context once, and optimise the cpass actor with the exact gradient of J = E_q[S + lam H + tau log q]; compare exact KL curves with cpass- and cfast-estimator training from the same init and step count; a tabular actor (per feature context, and per full history) separates representation from optimisation.
+Result: pending.
+Next: -
+
+## 2026-10-13 · Codex / cfast_head · finished
+Approach: ideas.md #6(b) only on cfast: smooth absolute-domain cosine head, original inputs/critic/estimator. Cheap agent implemented; parent reviewed and benchmarked.
+Result: ground, 2 x 150 s: worst final viol 9.16e-5 versus fresh cfast 6.59e-3; F 1.204 versus 0.813. Head seeds collapse to 50% dirt stripes / 100% dirt; both fail coverage probes and across-seed agreement. Nothing accepted. Updates 585/622 versus 926/825. Ten cone tests and four new head tests pass; gradient equivalence rechecked with actual cone returns. [Report](2026-10-13_cfast_head/report.md).
+Next: keep as an ablation; creplay and cbig already address lower-variance credit. Columns and mask-relative follow-ups not run because coverage did not improve.
+
+## 2026-10-13 23:10 · creplay · started
+Approach: cfast plus coupled replays for many coarse draws per world (all draws at the top level, a random subset at the next), K actions each under the world's stored noise, each replay scored by the draw's dependency cone; enumeration when |A| <= K, leave-one-out baseline otherwise; replays batched over (world, draw, action) on the GPU. Gradcheck on the tiny enumerable problem; bench on the GPU box against cfast.
+Result: pending.
+Next: -
+
+## 2026-10-13 · cconv · started
+Approach: ideas.md #5 on cfast. Actor = per-level conv trunk (input planes: the level's channels embedded, known and exists flags, parent planes upsampled, position-in-parent, row), 3x3 stem + residual pre-LayerNorm 3x3 SiLU blocks at fixed radius r, recomputed densely each step; per-channel linear head plus candidate-scoring head (site features + value embedding, s(t), nv(t), lookahead). Loss re-evaluates the trunk on (2r+1)^2 patches at the subsampled sites (state at the step rebuilt from the final state and the static schedule). Critic reads stop-gradient trunk features. Cone and margin use the conv reach. Bench on the GPU box vs cfast.
+Result: pending.
+Next: -
+
+## 2026-10-13 · cmulti · started
+Approach: ideas.md #3 on cfast: P passes per level (pass 1 = cfast's coloured pass; passes 2..P resample every site, colour by colour, given all current neighbours, own actor per pass). log q(final) is intractable, so the objective is the auxiliary-variable upper bound E_q[S(x_P) + lam c + tau(log q(trajectory) - log r(earlier | x_P))] with a learned per-site backward kernel r (needs user approval before candidacy). Bench on the box vs cfast: dimers, columns, toy_support.
+Result: pending.
+Next: -
+
+## 2026-10-13 · cbig · started
+Approach: cfast on the GPU box with large batches (B = 8 ... 1024 worlds per update): profile s/update and memory vs B, remove whatever stops scaling, measure per-batch gradient SNR vs B, batch/jit-cached generation; bench toy_support, toy_modes, dimers, ground, columns (+ cfast on the box for ground, toy_support).
+Result: pending.
+Next: -
+
+## 2026-10-13 · Codex / cfast_head · started
+Approach: isolate ideas.md #6(b): cfast with the smooth cosine output head (8 terms per declared ordered view, 0.1 residual, absolute coordinates), unchanged input features and critic. Cheaper agent implements isolated variant; parent reviews and runs checks. User permits up to two concurrent jobs.
+Result: pending. Paired ground benchmark: cfast versus cfast_head, two seeds x 150 seconds, 16 held-out worlds per seed.
+Next: assess violations per level, dirt excess, floating cells, probe availability, and throughput; advance to columns only if promising.
+
 ## 2026-10-13 16:50 · cordinal · finished
 Approach: ideas.md #6 on cpass, estimator untouched: (a) thermometer + one-hot inputs, (b) cosine-basis actor head (8 per ordered view) + 0.1 residual for D > 8, (c) basis over the range of A. Folder 2026-10-13_cordinal/.
 Result: nothing accepted. toy_support viol 2e-3 (one repaired cell), F -0.387 (KL 0.082 vs cpass 0.095); ground viol 0.029 vs 0.070, F 1.846 vs 1.918, floating 153/651 vs ~1130, more dirt; columns viol 0.15 (= cpass), F -0.645, seed 0 collapsed to empty, 90 vs 150 updates (critic input 3-5x larger under (a)). Ground ablation: a only 0.090 (= cpass), a+b 0.043, a+b+c 0.029.
