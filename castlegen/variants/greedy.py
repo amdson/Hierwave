@@ -22,11 +22,12 @@ from ._local import cond, factor_reach
 P = 4
 
 
-def colour_classes(h, w, periodic):
+def colour_classes(h, w, periodic, xoff=0):
+    """Colours by absolute coordinates; xoff is the region's first column at this level."""
     px = P if (not periodic or w % P == 0) else w
     for cy in range(P):
         for cx in range(min(px, w)):
-            Y, X = np.meshgrid(np.arange(cy, h, P), np.arange(cx, w, px), indexing="ij")
+            Y, X = np.meshgrid(np.arange(cy, h, P), np.arange((cx - xoff) % px, w, px), indexing="ij")
             if Y.size:
                 yield Y.ravel(), X.ravel()
 
@@ -43,7 +44,7 @@ def coloured_pass(problem, seed, region, forced=None):
     for l in range(problem.T, -1, -1):
         chans = problem.level_chans(l)
         h, w = problem.H >> l, region.W >> l
-        for Y, X in colour_classes(h, w, region.periodic):
+        for Y, X in colour_classes(h, w, region.periodic, 0 if region.periodic else region.x0 >> l):
             for c in chans:
                 if c.designed is not None:
                     continue

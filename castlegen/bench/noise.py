@@ -41,9 +41,11 @@ def hash32(xp, seed, tag, level, Y, X, v=0):
 
 
 def uniform(xp, seed, tag, level, Y, X, v=0):
-    """Uniform in (0, 1), strictly inside."""
+    """Uniform in (0, 1), strictly inside, exactly representable in float32
+    (23 bits: with 24, (2^24 - 1) + 0.5 rounds to 2^24 and u = 1 gives an
+    infinite Gumbel)."""
     h = hash32(xp, seed, tag, level, Y, X, v)
-    return ((h >> 8).astype(xp.float32) + 0.5) * (1.0 / (1 << 24))
+    return ((h >> 9).astype(xp.float32) + 0.5) * (1.0 / (1 << 23))
 
 
 def gumbel(xp, seed, tag, level, Y, X, D):

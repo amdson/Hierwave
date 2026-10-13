@@ -58,6 +58,10 @@ def test_noise_numpy_matches_jax():
     u = noise.uniform(np, 1, 2, 0, np.zeros((200, 200), int), np.arange(200)[None, :] + np.zeros((200, 1), int)
                       + 1000 * np.arange(200)[:, None])
     assert 0 < u.min() and u.max() < 1 and abs(u.mean() - 0.5) < 0.005
+    # the extreme hashes stay strictly inside (0, 1) in float32
+    for h in (np.uint32(0), np.uint32(0xFFFFFFFF)):
+        e = ((h >> 9).astype(np.float32) + np.float32(0.5)) * np.float32(1.0 / (1 << 23))
+        assert 0 < e < 1
 
 
 @pytest.mark.parametrize("periodic", [True, False])
