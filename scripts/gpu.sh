@@ -13,6 +13,9 @@ PORT=26359
 SSH="ssh -p $PORT -o BatchMode=yes -o ConnectTimeout=20"
 DIR=/workspace/hierwave
 ENV="source /venv/main/bin/activate >/dev/null && cd $DIR && export PYTHONPATH=. XLA_PYTHON_CLIENT_PREALLOCATE=false NUMBA_NUM_THREADS=1"
+# the container's pid limit (2304) is shared: pin each job to 8 of the 80 cores (~44 threads instead of ~316)
+CORES=$(( (RANDOM % 10) * 8 ))
+PIN="taskset -c $CORES-$((CORES + 7))"
 quiet() { grep -v -E "^(Welcome to vast|Have fun|AI agents:)" || true; }
 
 case "$1" in
@@ -21,11 +24,11 @@ case "$1" in
       -e "$SSH" ./ $HOST:$DIR/ 2>&1 | quiet ;;
   run)
     shift
-    $SSH $HOST "$ENV && $*" 2>&1 | quiet ;;
+    $SSH $HOST "$ENV && $PIN $*" 2>&1 | quiet ;;
   bench)
     shift
     $0 push
-    $SSH $HOST "$ENV && python -m castlegen.bench run $*" 2>&1 | quiet ;;
+    $SSH $HOST "$ENV && $PIN python -m castlegen.bench run $*" 2>&1 | quiet ;;
   pull)
     mkdir -p results/gpu images/gpu
     rsync -az -e "$SSH" $HOST:$DIR/results/bench.jsonl results/gpu/bench.jsonl 2>&1 | quiet
