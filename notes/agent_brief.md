@@ -35,6 +35,16 @@ Success is the bench verdict on held-out noise. Training curves, losses and nice
 - **Bench:** `NUMBA_NUM_THREADS=1 PYTHONPATH=. python -m castlegen.bench run <variant> <problem> --tag <short>` takes 2 seeds × 150 s training, about 5–6 minutes.
   - Run **at most one bench process at a time**, and keep any single experiment to 5–10 minutes. No parameter sweeps; pick runs deliberately.
   - Quick checks: `--seeds 1 --train 30 --eval 4`.
+- **GPU box (from round 2):** run all benches and experiments on the GPU box, never on the Mac. The Mac is reserved for the user's other agents.
+  - The box is a Vast.ai RTX 3090 with 24 GB, shared by every agent.
+  - Use `scripts/gpu.sh`, run from the worktree root:
+    - `scripts/gpu.sh bench <variant> <problem> [args]` pushes the code and runs the bench there.
+    - `scripts/gpu.sh run "<cmd>"` runs any command in the repo there, with `PYTHONPATH`, no GPU preallocation and `/venv/main` active.
+    - `scripts/gpu.sh pull` fetches results into `results/gpu/` and images into `images/gpu/`. GPU results stay separate from Mac results.
+  - The GPU only pays off with large batches. Small kernels are launch-latency bound, so B = 8 is slower than on the Mac. Aim for hundreds of worlds per update, and batch generation in evaluation where you can.
+  - Keep each experiment to 5–10 minutes. The 150 s training budget on the GPU is directly comparable only to other GPU runs.
+  - Several processes share the GPU. Run at most one bench of your own at a time.
+- **Other agents in the same worktree:** a Codex (GPT) agent also works here, with files named `cfast_head*` and an `astra_` prefix. Never touch its files.
 - **Baseline:** the reference results are in `reportables/2026-10-13_cpass-first-results/report.md`. Read it.
 - **Reporting:**
   - Put your figures and a short `report.md` in `reportables/2026-10-13_<your_variant>/`. `notes/experiments/bench_report.py <out_dir> <variants...>` makes sample grids and training curves (your train log entries need the same keys as cpass's for the curves).
