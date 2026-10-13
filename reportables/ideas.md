@@ -66,6 +66,15 @@ Applies to views and channels with more than 8 values; small domains keep per-va
 
 > **Annotation (2026-10-13, cordinal):** tried. Cosine basis (8 terms per ordered view; certificates use their A and B views, counts their id order) plus 0.1-scaled residual, mask-relative u; estimator unchanged. Ground (about 55 updates): worst final viol 0.029 vs cpass 0.070, F 1.85 vs 1.92, far fewer floating cells, but more dirt. toy_support KL 0.082 vs 0.095. Columns neutral to worse (one seed collapsed to empty), confounded: (a) inflates the critic's input 3-5x and columns fit about 90 vs about 150 updates. Ground ablation: (a) alone = cpass (0.090); (a+b) 0.043; (a+b+c) 0.029; (c) within the seed spread. Report text in the orchestrator's 2026-10-13_cordinal folder. Status: mixed. (b) works on ground, (a) does nothing measurable, (c) is probably useful but not shown.
 
+## 7. Low-to-high scheduling of 1-step updates (from chat, 2026-10-13; low priority)
+"scheduling low to high 1-step updates. not high priority, just worth considering"
+
+> **Annotation (2026-10-13, orchestrator):** how I read it (the user may correct this): a bottom-up curriculum of depth-1 (truncated) updates.
+> - Train the finest level first, from coarse latents.
+> - Then move up one level at a time, so each coarser level trains against finer levels (and their values) that have already converged, rather than against moving targets.
+>
+> It relates to ctrunc: depth 1 there suffered from a weak value function, and converged children might fix that. Not yet tried. Status: untested.
+
 ## 5. Convolutional networks and modern non-linearities (from chat, 2026-10-13)
 "conv almost certainly have a good prior for this task." Also: replace tanh MLPs (agreed in chat).
 
