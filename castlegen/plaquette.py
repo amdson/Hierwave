@@ -354,7 +354,7 @@ def _block3d_mh(grid, BY0, BX0, B, seed, base, beta, gam, Sb, K, u, F, E, soft, 
                                 j0 = x0 + ((p - (k + gy0 + i + gx0 + x0)) & 1)
                                 for j in range(j0, x0 + B, 2):
                                     r = _u01(seed, gy0 + i, gx0 + j, _key3(hkey, k))
-                                    grid[k, i, j] = _site3(grid, k, i, j, F, E, soft, u, b, bs, g, hard_inf,
+                                    grid[k, i, j] = _site3(grid, k, i, j, F, E, soft, u[k], b, bs, g, hard_inf,
                                                            eg, False, v, w, e, r)
                                     ups[0] += 1
                     if domino and hard_inf:
@@ -382,7 +382,7 @@ def _block3d_mh(grid, BY0, BX0, B, seed, base, beta, gam, Sb, K, u, F, E, soft, 
                 j0 = m0 + ((0 - (k + gy0 + i + gx0 + m0)) & 1)
                 for j in range(j0, W - m0, 2):
                     r = _u01(seed, gy0 + i, gx0 + j, _key3(hkey, k))
-                    grid[k, i, j] = _site3(grid, k, i, j, F, E, soft, u, b, bs, np.inf, True, eg, True,
+                    grid[k, i, j] = _site3(grid, k, i, j, F, E, soft, u[k], b, bs, np.inf, True, eg, True,
                                            v, w, e, r)
                     ups[0] += 1
 
@@ -410,7 +410,7 @@ def generate_mh(model, bs, seed, y0, x0, H, W, mh_from=0, stats=None, shapes=("h
     st = np.zeros(8, np.int64)
     beta = bs.beta.ravel()
     _block3d_mh(grid, np.int64(BY0), np.int64(BX0), np.int64(B), np.uint64(seed & M64), model.base(beta), beta,
-                bs.gamma.ravel(), bs.Sb, bs.K, model.u, model.F, model.E, model.soft, ups, model.wild, bs.shift,
+                bs.gamma.ravel(), bs.Sb, bs.K, model.ul, model.F, model.E, model.soft, ups, model.wild, bs.shift,
                 np.int64(mh_from), st, *_shape_arrays(shapes), domino)
     if stats is not None:
         for kk, vv in zip(("prop", "acc", "dead", "prop_hard", "acc_hard", "dom_pairs", "dom_trunc", "dom_gain"),

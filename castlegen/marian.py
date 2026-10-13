@@ -239,7 +239,8 @@ def air_layer_unary(ms: MarianSet, air_weights):
 #   flat_top  full 8x8 footprint, >= 90% of columns topped at one height
 #             (Floor, Interior_Floor(_High, _High_to_Low_Adapter),
 #             Roof_2_Floor_Corner_2, Solid)
-GROUP_WEIGHTS = {"flat_top": 1.0}
+#   roof      any roof-material voxel
+GROUP_WEIGHTS = {"flat_top": 1.0, "roof": 1.0}
 GROUP_LAYERS = None                     # None: layers 1 .. L-1
 
 
@@ -258,7 +259,26 @@ def flat_top_modules(ms: MarianSet, share=0.9, k=8):
     return out
 
 
-GROUPS = {"flat_top": flat_top_modules}
+def roof_modules(ms: MarianSet, k=8):
+    """(T,) bool: modules whose voxel template contains roof material."""
+    from castlegen import marian_meshes as mm
+    tpl = mm.module_templates(k)[:ms.T]
+    rid = mm.palette()["house_roof"]
+    return (tpl == rid).any(axis=(1, 2, 3))
+
+
+GROUPS = {"flat_top": flat_top_modules, "roof": roof_modules}
+
+
+def flat_air_energy(ms: MarianSet, lam):
+    """(6, T, T) soft pair energy: lam for a flat-top module with Empty
+    directly above it (both directions given, as TileModel3D expects)."""
+    E = np.zeros((6, ms.T, ms.T))
+    flat = np.flatnonzero(flat_top_modules(ms))
+    a = ms.air()
+    E[4, a, flat] = lam          # t flat, its neighbour above is air
+    E[1, flat, a] = lam          # t air, its neighbour below is flat
+    return E
 
 
 def group_layer_unary(ms: MarianSet, L, group_weights, layers=None):
@@ -275,12 +295,13 @@ def group_layer_unary(ms: MarianSet, L, group_weights, layers=None):
 
 
 def tile_model(ms: MarianSet, L=MAP_HEIGHT, domains="ac", colors=None, air_weights="default",
-               group_weights="default", group_layers="default"):
+               group_weights="default", group_layers="default", flat_air=0.0):
     """TileModel3D: u = -log weight, forbidden pairs = not allowed in either
     listing (union of the two directions' bitsets), per-layer domains
     ('ac' propagated, 'raw' boundary only, None unconstrained); per-layer
     unaries from air_weights (AIR_WEIGHTS) and group_weights (GROUP_WEIGHTS on
-    GROUP_LAYERS)."""
+    GROUP_LAYERS); flat_air > 0 adds the soft pair energy flat_air_energy
+    (numba only: the C sampler takes hard tables only)."""
     from castlegen.infinite import TileModel3D
     F = np.zeros((6, ms.T, ms.T), np.uint8)
     for d in range(6):
@@ -300,7 +321,8 @@ def tile_model(ms: MarianSet, L=MAP_HEIGHT, domains="ac", colors=None, air_weigh
     if group_weights and any(w != 1.0 for w in group_weights.values()):
         g = group_layer_unary(ms, L, group_weights, group_layers)
         lu = g if lu is None else lu + g
-    return TileModel3D(list(ms.names), -np.log(ms.weight), F, dom, colors, lu=lu)
+    E = flat_air_energy(ms, flat_air) if flat_air else None
+    return TileModel3D(list(ms.names), -np.log(ms.weight), F, dom, colors, E=E, lu=lu)
 
 
 def proto_colors(ms: MarianSet):

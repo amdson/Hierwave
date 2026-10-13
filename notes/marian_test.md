@@ -227,3 +227,34 @@ flat-topped module (roof modules are rare), so from above the town remains a
 terrace (images/marian_world_flat05.png).  Targeting the look needs a term on
 "flat top with air above" (a vertical pair energy) or roof weights, not a
 unary on the group.
+
+### Roof group and the flat-top-under-air energy (2026-10-12)
+`marian.GROUP_WEIGHTS["roof"]` (97 modules with roof-material voxels: the
+Roof_* families) and `tile_model(flat_air=lam)`: soft pair energy lam for a
+flat-top module with Empty directly above (numba only; the 3D soft path now
+also takes per-layer unaries via `TileModel3D.ul`).  K64, air weights
+[2, 3, 3, 3.5, 5, 8], 40^2 x 2 seeds (`notes/experiments/marian_roofs.py`):
+
+| run | exposed flat / column | columns topped by a roof | roof cells | >= 4 storeys | wildcards | prototypes | time |
+|---|---|---|---|---|---|---|---|
+| base | 0.50 | 0.01 | 0.003 | 0.51 | 0.0060 | 89 | 17 s |
+| roof x1.5 | 0.36 | 0.24 | 0.077 | 0.43 | 0.0106 | 96 | 19 s |
+| roof x2 | 0.08 | 0.84 | 0.288 | 0.51 | 0.0194 | 88 | 17 s |
+| roof x2.5 | 0.01 | 0.98 | 0.353 | 0.58 | 0.0226 | 77 | 17 s |
+| roof x3 | 0.00 | 0.99 | 0.370 | 0.57 | 0.0214 | 75 | 16 s |
+| roof x10 | 0.00 | 1.00 | 0.521 | 0.68 | 0.1058 | 64 | 18 s |
+| flat_air 0.5 | 0.45 | 0.00 | 0.001 | 0.47 | 0.0083 | 83 | 38 s |
+| flat_air 1 | 0.41 | 0.03 | 0.009 | 0.40 | 0.0088 | 84 | 39 s |
+| flat_air 2 | 0.33 | 0.02 | 0.007 | 0.34 | 0.0120 | 89 | 39 s |
+| roof x3 + flat_air 1 | 0.00 | 1.00 | 0.362 | 0.62 | 0.0241 | 70 | 40 s |
+
+- The roof weight is another sharp switch (x1.5: a quarter of columns, x2:
+  most).  Rendered, x1.5 is the terraces with a stray roof and x2 is one
+  continuous roof sheet over everything with more wildcards
+  (images/marian_world_roof15.png, _roof2.png): Marian's roof modules tile
+  into each other, so a favoured roof spreads instead of capping houses.
+- The pair energy barely moves the exposed flat tops, lowers the height and
+  doubles the time (soft path).
+- Neither unary nor pair weights give separate roofed houses: that needs
+  footprint-scale structure (a coarse level saying where buildings are and
+  how big), as with the heights.

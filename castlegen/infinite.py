@@ -704,7 +704,7 @@ def _anneal3d(grid, gy0, gx0, seed, base, beta, gamma, u, F, E, soft, ups, fix):
                 j0 = h + ((par - (k + gy0 + i + gx0 + h)) & 1)
                 for j in range(j0, W - h, 2):
                     r = _u01(seed, gy0 + i, gx0 + j, _key3(h, k))
-                    grid[k, i, j] = _site3(grid, k, i, j, F, E, soft, u, b, bs, g, hard_inf, eg, last, v, w, e, r)
+                    grid[k, i, j] = _site3(grid, k, i, j, F, E, soft, u[k], b, bs, g, hard_inf, eg, last, v, w, e, r)
                     ups[0] += 1
 
 
@@ -753,7 +753,7 @@ def _block3d(grid, BY0, BX0, B, seed, base, beta, gam, Sb, K, u, F, E, soft, ups
                                 j0 = x0 + ((p - (k + gy0 + i + gx0 + x0)) & 1)
                                 for j in range(j0, x0 + B, 2):
                                     r = _u01(seed, gy0 + i, gx0 + j, _key3(hkey, k))
-                                    grid[k, i, j] = _site3(grid, k, i, j, F, E, soft, u, b, bs, g, hard_inf,
+                                    grid[k, i, j] = _site3(grid, k, i, j, F, E, soft, u[k], b, bs, g, hard_inf,
                                                            eg, False, v, w, e, r)
                                     ups[0] += 1
     if fix:
@@ -767,7 +767,7 @@ def _block3d(grid, BY0, BX0, B, seed, base, beta, gam, Sb, K, u, F, E, soft, ups
                 j0 = m0 + ((0 - (k + gy0 + i + gx0 + m0)) & 1)
                 for j in range(j0, W - m0, 2):
                     r = _u01(seed, gy0 + i, gx0 + j, _key3(hkey, k))
-                    grid[k, i, j] = _site3(grid, k, i, j, F, E, soft, u, b, bs, np.inf, True, eg, True,
+                    grid[k, i, j] = _site3(grid, k, i, j, F, E, soft, u[k], b, bs, np.inf, True, eg, True,
                                            v, w, e, r)
                     ups[0] += 1
 
@@ -806,7 +806,7 @@ class TileModel3D:
     nothing: give both directions consistently).  wild: a final fix
     half-step puts the wildcard T where no module fits (ids then include T).
     colors (T, 3) for render.  lu (L, T) optional per-layer unary added to u
-    (enters through base(); not supported together with soft E)."""
+    (enters through base(), and through ul in the soft path)."""
     names: list
     u: np.ndarray
     F: np.ndarray
@@ -834,8 +834,6 @@ class TileModel3D:
             raise ValueError("E: finite soft energies; forbid pairs with F")
         self.colors = np.asarray(self.colors, np.uint8).reshape(T, 3)
         if self.lu is not None:
-            if self.soft:
-                raise ValueError("lu with soft E is not supported")
             self.lu = np.ascontiguousarray(self.lu, np.float64).reshape(self.L, T)
             if not np.isfinite(self.lu).all():
                 raise ValueError("lu: finite")
@@ -847,6 +845,13 @@ class TileModel3D:
     @property
     def L(self):
         return self.dom.shape[0]
+
+    @property
+    def ul(self):
+        """(L, T) unary per layer, u + lu (what the soft path uses)."""
+        if self.lu is None:
+            return np.ascontiguousarray(np.broadcast_to(self.u, (self.L, self.T)))
+        return np.ascontiguousarray(self.u[None, :] + self.lu)
 
     @property
     def extra_pad(self):
@@ -864,7 +869,7 @@ class TileModel3D:
         return np.ascontiguousarray(b * self.dom[None, :, :])
 
     def run(self, grid, gy0, gx0, seed, sched, ups):
-        _anneal3d(grid, gy0, gx0, seed, self.base(sched.beta), sched.beta, sched.gamma, self.u, self.F,
+        _anneal3d(grid, gy0, gx0, seed, self.base(sched.beta), sched.beta, sched.gamma, self.ul, self.F,
                   self.E, self.soft, ups, self.wild)
 
     def violations(self, grid):
@@ -892,7 +897,7 @@ def _generate_blocks3d(model, bs, seed, y0, x0, H, W, stats=None):
     ups = np.zeros(1, np.int64)
     beta = bs.beta.ravel()
     _block3d(grid, np.int64(BY0), np.int64(BX0), np.int64(B), np.uint64(seed & M64), model.base(beta), beta,
-             bs.gamma.ravel(), bs.Sb, bs.K, model.u, model.F, model.E, model.soft, ups, model.wild, bs.shift)
+             bs.gamma.ravel(), bs.Sb, bs.K, model.ul, model.F, model.E, model.soft, ups, model.wild, bs.shift)
     if stats is not None:
         stats["updates"] = stats.get("updates", 0) + int(ups[0])
         stats["cells"] = stats.get("cells", 0) + model.L * H * W
