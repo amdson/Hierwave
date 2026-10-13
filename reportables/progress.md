@@ -17,6 +17,11 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-13 · cconv · stopped early
+Approach: ideas.md #5 on cfast: per-level conv trunk (3x3 stem + residual pre-LN SiLU 3x3 blocks, fixed radius r), dense each step; per-channel linear + candidate-scoring head (s(t), nv, lookahead, value embedding); loss re-evaluates the trunk on (2r+1)^2 patches at subsampled sites; critic on stop-grad trunk features; cone and margin from the conv window. Files: castlegen/variants/cconv.py, _cconv_core.py, tests/variants/test_cconv.py, reportables/2026-10-13_cconv/.
+Result: implementation done; 15/15 tests pass on the box (dense == patch trunk, loss recomputes pass log q, scoring, changes-inside-cone on all 5 problems, open windows agree on toy_support and ground). No bench runs yet (session ended). Box note: pids.max 2304 and each jax process uses about 300-500 threads; run under `taskset -c <8 cpus>` (44 threads) or compiles die with pthread_create / ptxas errors.
+Next: bench cconv vs cfast on the box (toy_support gate, dimers, ground, columns), B=64, r=4, under taskset.
+
 ## 2026-10-13 · crb · stopped early
 Approach: ideas.md #8 on cfast: cone returns use each later draw's expected cost lbar_j = sum_a q_j(a) l_j(a) instead of its realised cost (tower-property unbiased).
 Result: gradcheck passes (proj 1.017/0.989; negative control rejected z=10/-31). toy_support variance at frozen params: no reduction (ratio 0.99-1.01 at init; 0.99/0.95/0.73 at l0/l1/l2 after 1500 updates with trained critic). No benches run (stopped). [Report](2026-10-13_crb/report.md).
