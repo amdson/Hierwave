@@ -17,6 +17,16 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-13 · exactopt (diagnostic) · stopped early
+Approach: ideas.md #10. Exact J and its gradient by enumerating the reachable outcomes, with deduplicated draw contexts; mlp, feature-table and full-history-table actors, compared with cpass and cfast sampled training from the same init. Problems: tiny, and single toy_support / toy_modes blocks (non-periodic 4x4).
+Result: machinery and tests built (5/6 tests pass; the history-table convergence test was lengthened and its rerun is unconfirmed). Partial toy_modes numbers only (KL from 2.04): exact mlp 0.90 at step 150; at 20 steps exact 0.57-0.81 against sampled cpass 1.79 and cfast 1.43. No verdict. The full runs are still going on the box (nohup, /tmp/eo_modes.log). [Report](2026-10-13_exactopt/report.md).
+Next: pull /tmp/eo_runs, run toy_support and tiny, plot, and apply the decision rule.
+
+## 2026-10-13 23:59 · creplay · stopped early
+Approach: cfast + coupled replays for many coarse draws per world (cone-scored, enumerated when |A| <= K, else LOO), batched over (world, draw, action) on the GPU. Folder 2026-10-13_creplay/.
+Result: no bench. Replay faithfulness tests pass (4 problems). Gradcheck passes for all-enumerated branching (others unfinished). Ground on the GPU: 4096 replays/update = 6.1 s/update and 222 s compile, so it does not fit the budget as configured. Per branched draw, the across-action spread (~30) is ~1/35 of the return noise (~1000-1500): about 10^3x variance reduction per draw. Code is mid-refactor (importance-weighted subset estimator: t1 for all draws, (N/R)·Σ coupled terms for a random subset), so it does not run yet. Fill-context clamp diagnostic written (_creplay_clamp.py), not run.
+Next: finish the refactor, R = 16 per level, bench against cfast on the GPU, run the clamp diagnostic.
+
 ## 2026-10-13 · exactopt (diagnostic) · started
 Approach: ideas.md #10. Enumerate every reachable draw outcome of small hierarchies (gradcheck tiny; a single toy_support block; a single toy_modes block), precompute each draw's context once, and optimise the cpass actor with the exact gradient of J = E_q[S + lam H + tau log q]; compare exact KL curves with cpass- and cfast-estimator training from the same init and step count; a tabular actor (per feature context, and per full history) separates representation from optimisation.
 Result: pending.
