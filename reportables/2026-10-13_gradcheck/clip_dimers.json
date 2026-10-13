@@ -1,0 +1,19 @@
+{
+ "problem": "dimers",
+ "updates": 423,
+ "levels": [
+  0
+ ],
+ "actor_norm_median": [
+  0.7919221520423889
+ ],
+ "actor_norm_p90": [
+  4.8348529815673835
+ ],
+ "actor_clip_frac": [
+  0.05200945626477541
+ ],
+ "critic_clip_frac": [
+  0.44208037825059104
+ ]
+}

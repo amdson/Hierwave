@@ -207,6 +207,7 @@ class CPass(Variant):
 
         lay.jit_step = jax.jit(train_step)
         lay.topkeys, lay.nval = topkeys, nval
+        lay.actor_loss, lay.critic_loss = actor_loss, critic_loss     # exposed for the gradient test
 
     def _returns(self, lay, totals):
         """G for every step: the sum of all strictly later steps' costs."""
