@@ -73,6 +73,8 @@ In returns for earlier draws, replace each later draw's sampled immediate cost w
 
 > **Annotation (2026-10-13, orchestrator):** agreed: this is Rao-Blackwellisation of the per-draw sampling noise, which is the dominant variance term. Launched as variant `crb` on cfast. Status: untested.
 
+> **Annotation (2026-10-13, crb):** built and gradient-checked as unbiased (projections 0.99–1.02; the negative control is rejected). On toy_support at frozen parameters it doesn't reduce variance: the cfast ÷ crb variance ratio is 1.0 at init, and 0.99 / 0.95 / 0.73 with a trained critic. The returns' spread comes mostly from downstream state randomness, not from each draw's own sampling noise. Ground not measured; no benches. Status: does not work on toy_support; ground untested. [Report](2026-10-13_crb/report.md)
+
 ## 9. Train the critic to minimise actor-gradient variance (from astra, via the user, 2026-10-13)
 Instead of return-prediction MSE, fit the critic to minimise the second moment of the corrected actor-gradient estimate. Its mean doesn't depend on the critic, so this minimises variance. Start on the enumerable problem, using separate or previous batches; the acceptance criterion is lower measured gradient variance, not critic MSE.
 
