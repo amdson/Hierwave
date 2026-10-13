@@ -17,6 +17,11 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-13 · crb · stopped early
+Approach: ideas.md #8 on cfast: cone returns use each later draw's expected cost lbar_j = sum_a q_j(a) l_j(a) instead of its realised cost (tower-property unbiased).
+Result: gradcheck passes (proj 1.017/0.989; negative control rejected z=10/-31). toy_support variance at frozen params: no reduction (ratio 0.99-1.01 at init; 0.99/0.95/0.73 at l0/l1/l2 after 1500 updates with trained critic). No benches run (stopped). [Report](2026-10-13_crb/report.md).
+Next: ground variance check before any bench; joint (per-step) RB or combine with creplay. Box note: pids limit -> use taskset.
+
 ## 2026-10-13 · cmulti · stopped early
 Approach: ideas.md #3 on cfast: P = 2 passes per level (pass 1 = cfast's pass; pass 2 redraws every site colour by colour given all current neighbours, own actor). Objective = auxiliary-variable upper bound E_q[S(x_P) + lam c + tau(log q(traj) - log r(x_{<P} | x_P))], learned per-site backward kernel r; needs user approval. Tests (11) pass on the box: P=1 = cfast, telescoping costs = S + log q(traj) - log r exactly, cone containment, finite support.
 Result: partial. GPU, 2 x 150 s: cfast toy_support viol 0, F -0.432 / -0.441. cmulti toy_support seed 0 viol 0, F_ub in info (bench F = None: score() unavailable). Smoke run (1 x 60 s): cmulti dimers collapses to 100 % vertical, log q(traj) ~ 0, so pass 2 does not break the collapse. On a valid matching, single-site redraws are frozen. Dimers and columns benches did not run: the box's pid limit killed XLA thread creation. scripts/chain2.sh (taskset, retry) is ready but was not started.
