@@ -12,9 +12,35 @@ order I would do them.  Each item names its source.
 - [ ] **Objects over a textured fine level** (the stretch case; Q4).
       Footprint tiles coupled by a Potts `J`, so no exact collapsed
       target exists: `AISTargets` only, judged end to end against a
-      long oracle chain on a periodic world.  This is the first test of
-      the recursion where the AIS targets are not exact.
+      long oracle chain on a periodic world.  Done for a chain terrain
+      (`trees_test.md` stage A: AIS within noise of the exact hook, end
+      to end 2-3x eval noise); still owed for a Potts texture.
       `circles_biome_test.md` stretch, `dsl_updates.md` Q4.
+- [ ] **The limb free energy** (`trees_test.md` stage B): neither
+      `AISTargets` nor `actais.ActivityAIS` (activity annealed under the
+      certificate kernel) estimates the log Z of a limb window to better
+      than 3 nats between seeds, because the structure grows by single-site
+      moves over ~150 sweeps.  Needs joint growth moves in the tile kernel
+      (group 2), or limbs as coarse records (group 4), before any
+      structured type's placement can be learned.
+- [ ] **Limb shape**: counted from the big root exemplar flipped the limbs
+      branch (15 %) but sprawl wide and low like a root system.  The tree
+      exemplar itself copies with guarantees through the coordinate
+      pipeline (`trees_test.md` stage C); the counted limb set is the
+      stand-in where a copy is not wanted.
+- [ ] **Recombination without pruning** (stage C): a recombined copy is
+      cut wherever a window's signature matches nothing at a seam; the
+      refinement prunes the outer part.  Either let the joint kernel grow
+      the cut subtree back (it does not, at 60 sweeps), or choose windows
+      whose crossings into FREE are tips only (a signature-aware bonus).
+- [ ] **Level-8 joins quadratic in the windows** (`coord.Coarse.joins`, a
+      (4, D8, D8) table the certificate reads): 10 GB for a sheet of 16
+      panels.  Compute joins from the per-position seam codes inside the
+      kernel, as the seams already are.
+- [ ] **Learning on top of a copied structure** (stage C): the copy's soft
+      terms are coordinate coupling and coherence; nothing is fitted.  The
+      induced free energy of a copied crown on the terrain or the slot is
+      the same open item as the limbs' (group 1).
 - [ ] **Adaptive features / stencil growth.**  Grow the feature set or
       offsets where the residual or the consistency violation is
       significant; never tested, every fit so far used a fixed OFF8
@@ -46,6 +72,9 @@ order I would do them.  Each item names its source.
       at ~1 us/site).  `dsl_updates.md` Q5, stage 7b.
 - [ ] **Certificates with a candidate cap**: the certificate draw
       enumerates the whole domain; `K` is asserted off there.  Stage 8.
+- [ ] **Joint growth moves for certificate channels** (add / remove a
+      segment of the structure in one move): what both the tower negative
+      result and the limb free energy (`trees_test.md`) ask for.
 - [ ] **Tempered kernel and `unary_logZ` for coordinate channels**, so
       AIS targets can run over an exemplar-coordinate child.  Stage 8.
 - [ ] **Dormancy for coordinate channels** if their parents' writes ever
@@ -190,6 +219,10 @@ this yet.
 - [ ] **AIS standard error under-reports at the default K, M** (delta
       method from 16 chains); widen or use more chains when a target's
       error matters.  Package D deviation 5.
+- [ ] **Windowed targets and the consistency probe**: targets at p and q
+      condition on different fine boundaries, so `viol_targets` of ~1 nat
+      is expected and not a bug (`trees_test.md` stage A); report the
+      fit's closure instead, or probe with a shared window.
 
 ## 6. Documentation
 

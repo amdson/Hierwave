@@ -272,6 +272,7 @@ class AISTargets:
             hg[y, x] = old
             c.grid[y0:y1, x0:x1] = saved
             c.fixed[:] = fixed0
+            self.after_change(model, home, y, x)                    # the painted channels back to the old value
             self.after_change(model, home, y, x)
         self.n_calls += 1
         self.t_calls += time.perf_counter() - t0

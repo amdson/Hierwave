@@ -31,6 +31,7 @@ In the order they were run; each builds on the previous.
 | `paintpot_test.md` | Paint potentials: the induced free energy as a local energy over the painted map, exact on held-out pairs. |
 | `circles_biome_test.md` | The next-version DSL built and validated: per-channel samplers, support from stamps, the bootstrap trainer with collapsed targets, stamp versus learned features, scaling, migration of the real channel sets, the boundary, the Potts leak explained. |
 | `infinite_test.md` | Infinite worlds: annealed checkerboard Gibbs with position-hashed noise, exact chunk-by-chunk access, cost of the light cone, soft + hard tile constraints. |
+| `trees_test.md` | Trees on terrain: the recursion with a sampled chain terrain (exact and AIS targets within noise of the oracle); the first structured type (limbs under the certificate, the root set mirrored) generates and reacts to the terrain through the hard rules; its free energy is not estimable by AIS (single-site growth mixing), with the estimator kept (`actais.py`); the legacy tree exemplar copied with every guarantee through the roots' coordinate pipeline run upside down (`treecopy.py`). |
 
 ## Reading
 

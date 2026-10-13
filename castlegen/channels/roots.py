@@ -142,13 +142,14 @@ def _pmi(C):
     return -np.log(p / (p.sum(1, keepdims=True) * p.sum(0, keepdims=True)))
 
 
-def tables(kinds: Kinds, alpha=0.1, dangle=4.0, counted=True):
+def tables(kinds: Kinds, alpha=0.1, dangle=4.0, counted=True, rows=EXEMPLAR):
     """(unary over rclass+ports as a (D,) table on the identity view,
     seam_h over (mE, mW), seam_v over (mS, mN)).  A port facing a non-port
     costs `dangle` (soft: an unfinished tip is how a root grows under
-    single-site updates; inf would need two-site moves to nucleate)."""
+    single-site updates; inf would need two-site moves to nucleate).
+    rows: the exemplar (limbs.py passes a tree)."""
     v = views(kinds)
-    p_root, p_mass, p_deg, p_side, Ch, Cv, p_crowd = exemplar_stats(alpha=alpha)
+    p_root, p_mass, p_deg, p_side, Ch, Cv, p_crowd = exemplar_stats(rows, alpha=alpha)
     deg = sum(v["p" + s] for s in SIDES)
     is_root = v["root"] == ROOT
     with np.errstate(divide="ignore"):
