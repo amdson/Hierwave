@@ -17,6 +17,11 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 03:40 · ccol · finished
+Approach: columns analogue of csat: cfast 120 s with per-level entropy/density instrumentation, bench v2 block check (60 s), clamp test at L=4..1.
+Result: top level (L4) deterministic first, at update 125, in the same window density drops 0.38 -> 0.06 (settles at 0.055, never < 0.05); empty x-columns 0.5-0.7. Block check: probes starved 99.9-100 % at L3-4, 98 % L2, 44 % L0-1 (null ~0). Clamp: trained fine cost 0.35 own vs 4.35 probe-lifted at every L=1..4, violations 0.24/cell; density follows the counts but columns are invalid. [Report](2026-10-14_ccol/report.md).
+Next: give the fine level positional information (counts alone cannot tell it where columns end), then retest the clamp.
+
 ## 2026-10-14 02:58 · ccoarse · finished
 Approach: ideas #14 source: generic restricted-energy Gibbs (all factors with participants at levels >= L, hard included; single-site least-violating Gibbs over derived colour classes + exact chain moves over count-factor runs). castlegen/variants/_coarse_prior.py, tests/variants/test_coarse_prior.py (25 pass).
 Result: 0 hard violations on ground/columns/toys; deterministic per seed. Ground rho is target-like (L=3 line_match_L 0.83 vs own draws 0.58, count residual 6 vs 67) but cert is uniform over feasible and independent of rho: rho-cert consistent 10-18 % (probes 100 %, own 0-15 %); cert mixes slowly at L=3. Clamp gate with prior contexts: fine line_match 0.51, viol 4-12x probe contexts; clamping rho only -> model's cert all full -> all dirt. Columns/toys: counts uniform (density 0.50 vs 0.82 / 0.71): not target-like. Cost 0.019 s/world (L=4), 0.066 (L=3), 8 sweeps, 1 core. Deeper restriction (down to tiles) does not fix cert (consistency <= 0.26, frozen). Report: reportables/2026-10-14_ccoarse/report.md.
