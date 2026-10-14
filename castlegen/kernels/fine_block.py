@@ -150,6 +150,7 @@ class JaxFineBlockGibbs(JaxBlockGibbs):
         self.comps = np.asarray(K.comps, np.int32)
         C = self.comps.shape[0]
         self.chunk = C
+        self.nchunk = 1
         self.valid_c = np.ones((1, C), bool)
         self.comps_c = self.comps[None]
         self.classes = []

@@ -17,7 +17,7 @@ from castlegen.variants._cfast_core import train_pass
 
 init, budget, outf = sys.argv[1], float(sys.argv[2]), sys.argv[3]
 cfg = dict(k_list="2,3", n_sweeps=3, mt_k=4, mt_moves=8, K_mt=8, nctx=32, upi=8, ml_B=8, ml_lr=1e-3, lam_k=20.0, seed=0,
-           mt_on=1, fb_on=1, fb_lam=0.0, wlam=0.0)
+           mt_on=1, fb_on=1, fb_lam=0.0, wlam=0.0, rkl_n=0, rkl_lr=1e-3)
 for a in sys.argv[4:]:
     k, v = a.split("="); cfg[k] = type(cfg[k])(v) if not isinstance(cfg[k], str) else v
 ks = [int(x) for x in cfg["k_list"].split(",") if x]
@@ -110,6 +110,26 @@ for k in ks:                                     # compile every offset's sweep 
         jax.block_until_ready(J.sweep(to_flat(st), key))
 _ = mlstep(c.params, opt, {k: x[:cfg["ml_B"]] for k, x in st2.items()}, jnp.ones(cfg["ml_B"]), jnp.float32(cfg["ml_lr"]), on)
 c.params0 = c.params
+c.updates = 0; c.rkl_updates = 0
+if cfg["rkl_n"] > 0:
+    c.fn = c.train_fns(lay); c._measure_baseline(lay, lambda d: None)
+def rkl_steps(n):
+    out = []
+    for _ in range(n):
+        seeds = np.arange(c.train_seed, c.train_seed + c.cfg["B"]); c.train_seed += c.cfg["B"]
+        des = c._batch(seeds, region)
+        lam = jnp.asarray(c.lam, jnp.float32)
+        res = c.fn["fused"](c.params, c.cparams, c.opt, c.copt, c.gs, jnp.asarray(seeds, jnp.int32), des, jnp.float32(1.0), lam,
+                            cfg["rkl_lr"], c.cfg["lr_critic"], c.cfg["clip"], jax.random.PRNGKey(c.rkl_updates + 7919 * cfg["seed"] + 1))
+        _, c.params, c.cparams, c.opt, c.copt, loss, closs, viol, tot, _ = res
+        hf = np.where(c.nhard > 0, np.asarray(viol) / np.maximum(c.nhard, 1), 0.0)
+        c.vbar = (1 - c.cfg["alpha"]) * c.vbar + c.cfg["alpha"] * hf
+        step = c.cfg["eta"] * np.clip(c.vbar / c.eps - 1, -1, 1)
+        c.lam = np.where(c.nhard > 0, np.clip(c.lam + step, 0, c.cfg["lam_max"]), 0.0)
+        c.rkl_updates += 1; out.append(hf)
+    return np.mean(out, 0)
+if cfg["rkl_n"] > 0:
+    rkl_steps(1)
 ts = time.time(); t_setup = ts - t0
 f = open(outf, "w")
 def log(d): f.write(json.dumps(d) + "\n"); f.flush()
@@ -128,7 +148,10 @@ while time.time() - ts < budget:
         vw = nvw[idx]; w = np.exp(-cfg["wlam"] * (vw - vw.min())); w = w / w.sum() * cfg["ml_B"]
         c.params, opt, info = mlstep(c.params, opt, {k: x[idx] for k, x in st.items()}, jnp.asarray(w, jnp.float32), jnp.float32(cfg["ml_lr"]), on)
         losses.append(float(info["loss"]) / cells); ninf += int(info["n_infeasible"]); updates += 1
-    log({"iter": it, "update": updates, "t": time.time() - ts, "orient_raw": o_raw, "orient_refined": ostats(st), **kd, "loss_per_cell": float(np.mean(losses)),
+    rk = {}
+    if cfg["rkl_n"] > 0:
+        rk = {"rkl_raw_viol": rkl_steps(cfg["rkl_n"]).tolist(), "lam": c.lam.tolist()}
+    log({**rk, "iter": it, "update": updates, "t": time.time() - ts, "orient_raw": o_raw, "orient_refined": ostats(st), **kd, "loss_per_cell": float(np.mean(losses)),
          "infeasible_per_state": ninf / (cfg["upi"] * cfg["ml_B"]), "viol_raw": float(np.asarray(nv0).mean() / cells),
          "viol_refined": float(np.asarray(nv1).mean() / cells), "valid_frac_refined": float((np.asarray(nv1) == 0).mean()), "valid_frac_raw": float((np.asarray(nv0) == 0).mean()), "t_kernel": tm - ti, "t_ml": time.time() - tm})
 log({"done": True, "updates": updates, "iters": it})

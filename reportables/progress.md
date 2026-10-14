@@ -22,6 +22,16 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 12:00 · dimers-kernel Part 2 (kernel loop + reverse-KL steps) · finished
+Approach: dimers loop of Part 1 plus N=16/32 cfast reverse-KL steps per iteration (lr 1e-3), from the collapsed cfast-60s start, 300 s.
+Result: N=32 keeps own-draw violations 3.4e-4/cell (N=16: 2.2e-3) but own draws stay two orientations (.50/.50/.001); refined states carry d=0.07 but ML does not move q there. Reverse-KL steps are the collapse pressure. Report: reportables/2026-10-14_dimers_kernel/report.md (Part 2).
+Next: more ML weight relative to rkl, longer run, second seed.
+
+## 2026-10-14 09:37 · wave3-explore (persistent own chains, certificate moves) · started
+Approach: ckernel_pop (castlegen/variants/ckernel_own.py): a persistent population of own-started chains (refresh 10 % / 3 % from fresh own draws per iteration), kernel cycle = coarse Gibbs + tempered transitions L4/L3 + MTM L2 + fine Gibbs, ML on the population; then certificate-aware moves (lambda-only tempered transitions) and a lift count of the cells a column-freeing move must change.
+Result: pending.
+Next: pending.
+
 ## 2026-10-14 23:30 · methodology writer · finished
 Approach: extended notes/methodology.md with the kernel route (new sections 7-8, status, glossary, paths); no experiments. Result: pieces, ground results, caveats and status table documented, TBD markers left for wave2-explore, wave2-bench2, speed-1b, dimers part 2. Next: fill the TBD markers when those reports land.
 

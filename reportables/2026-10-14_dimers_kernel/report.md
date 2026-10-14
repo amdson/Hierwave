@@ -47,3 +47,20 @@ Local block moves can leave the h/v-only state (k=3), but k=3 does not equilibra
 
 ## Files
 castlegen/kernels/fine_block.py; tests/kernels/test_fine_block.py; scripts/{dk_loop.py, chain_relax.py, train60.py, plot.py, run.sh}; runs/{cfast60.pkl, a1_*.jsonl, a2_*.jsonl, summary_a1/a2.json, chain_relax.json, chain_relax600.json}; images/orientation_vs_update_{a1,a2}.png.
+
+# Part 2: kernel loop + lambda-controlled reverse-KL steps (wave2-bench recipe)
+
+Same loop as above (k=2 and k=3 fine-block Gibbs with lam 20, 4x4 multiple-try redraws from q, draw-wise ML with unit weights, 8 updates per iteration), plus N cfast fused reverse-KL steps (tau 1, own draws, adaptive lambda <= 20, lr 1e-3) per iteration. Start: cfast 60 s (collapsed, h/v/d .467/.533/0). 300 s, one seed, shared GPU. Script: scripts/dk_loop.py `rkl_n=N`; runs/p2_rkl16.jsonl, p2_rkl32.jsonl. Numbers are means over the last 10 iterations.
+
+| arm | updates (ML) | own draws h/v/d | refined h/v/d | viol/cell own draws | viol/cell refined | lambda end |
+| --- | --- | --- | --- | --- | --- | --- |
+| N = 16 | 1816 | .521/.469/.011 | .466/.449/.085 | 2.2e-3 | 1.4e-3 | 20 |
+| N = 32 | 1256 | .496/.503/.001 | .472/.459/.069 | 3.4e-4 | 1.9e-4 | 20 |
+| ML only, no rkl (a2) | 1800 | .358/.323/.319 | .353/.325/.322 | 5.6e-2 | 1.6e-2 | - |
+| cbound_lam | | .47/.30/.23 | | 6e-5 | | |
+| cfast | | .51/.49/.00 | | 5e-5 | | |
+
+- **Validity:** N = 32 keeps own draws near budget (3.4e-4 per cell, target < 2e-4; individual iterations reach 6e-5 to 2e-4). N = 16 does not (2.2e-3, rising over the run from 2e-4 at the start to 2.5e-3).
+- **Diagonal:** it does not appear in own draws. N = 32 stays at d = 0.000-0.001 for the whole run; N = 16 creeps to 0.01 as violations rise (the diagonal appears together with violations, as in cdim's curve). The mix stays two orientations, as cfast.
+- **Refined states do carry a diagonal** (d = 0.07-0.09 after one kernel cycle, as in Part 1), so the kernel does move mass to the third orientation and ML is trained on it, but 8 ML updates per iteration at lr 1e-3 do not move q's draws there: the reverse-KL steps pull them back. This is the collapse pressure: with enough reverse-KL steps to keep violations near budget, the own-draw mix is the two-orientation one; with too few, the validity goes and the diagonal returns only as violations. At these settings I found no regime with valid draws and three orientations.
+- Caveats: one seed per arm; refined-state violations (1.9e-4 at N = 32) are those of the repaired-by-kernel states, comparable with the raw level; the refined diagonal fraction (0.07) is far below the cbound_lam 0.23, so even the kernel's output is not near the three-orientation mix after one cycle. Untested: more ML updates per iteration or higher ML lr relative to the reverse-KL steps, longer runs.
