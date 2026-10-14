@@ -17,6 +17,16 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 05:45 · methodology (writer) · finished
+Approach: documentation only; no experiments, no code changes. Wrote notes/methodology.md, a self-contained write-up of the current coloured-pass methodology (problem, sampler, training and estimators, constitution, evaluation incl. bench v2 and the ground fast loop, established results with report citations, open decisions, glossary).
+Result: [notes/methodology.md](../notes/methodology.md), ~3.2k words of prose. Flags: cbig256 toy_support seed 1 misses the violation budget (4.9e-4) although summaries call the toys solved; clamp-gate cfast reference varies by ~0.3-0.5 nats between runs; ground_hard has no written spec in the repo. ccombo left as a TBD placeholder.
+Next: fill the ccombo placeholder when its report lands.
+
+## 2026-10-14 05:41 · ccombo · started
+Approach: box_waves next step 1: cstart early phase (frac 1, L 3) decaying to full depth (ideas #14) + LN+SiLU 6x6 actor + cbound's whole-logit tau 8->1 and lambda ramp 1->20 (ideas #12/#17), on ground with the fast loop (300 s diag run, clamp gate, bench only if the gate passes).
+Result: pending.
+Next: pending.
+
 ## 2026-10-14 04:10 · cbound2 · finished
 Approach: confirmation of cbound_lam on dimers, seeds 11/12, 120 s, cfast control seed 11, then bench once.
 Result: [report](2026-10-14_cbound/report.md) section 'Confirmation (cbound2)'. cbound_lam h/v/d 0.491/0.266/0.243 (seed 11, never collapsed) and 0.439/0.182/0.379 (seed 12, vertical dipped to 0.02 at update 3495, recovered to 0.18); entropy 0.274/0.299; raw viol 7.8e-5/1.1e-4, both within 2e-4. cfast seed 11 lost vertical (h/d 0.48/0.52, entropy 0.255). Bench 300 s x 2 seeds: viol 1.1e-4 worst, h/v/d ~0.44-0.47/0.39/0.14-0.17, F -0.291/-0.288 (cfast -0.227); not accepted (probe flag only).
