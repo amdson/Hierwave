@@ -1,0 +1,36 @@
+{
+ "B": 64,
+ "W": 64,
+ "device": "cuda:0",
+ "level0": {
+  "channels": [
+   "t"
+  ],
+  "cell_updates": 262144,
+  "sec": 0.0019138336181640625,
+  "cells_per_s": 136973244.44090095,
+  "compile_s": 0.8555471897125244
+ },
+ "level3": {
+  "channels": [
+   "rho3",
+   "cert3"
+  ],
+  "cell_updates": 8192,
+  "sec": 0.0019410133361816406,
+  "cells_per_s": 4220475.896428045,
+  "compile_s": 0.9477119445800781
+ },
+ "anneal_L3": {
+  "blocks": 64,
+  "tau_hi": 8,
+  "steps": 32,
+  "sec": 0.09522541364034016,
+  "compile_s": 5.925666809082031,
+  "sec_per_block": 0.001487897088130315,
+  "cells_in_block": 106,
+  "logw_mean": -324.5162353515625,
+  "logw_std": 107.50202178955078,
+  "nv_end_mean": 11.265625
+ }
+}
