@@ -17,6 +17,14 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 cdim · finished
+Approach: dimers (T = 0) entropy collapse vs lambda and tau, cfast cfg overrides only (5 `_variant`s appended to cfast.py), 60 s each, one seed.
+Result: diag < 0.05 at update 10 (defaults, lambda 20), 65 (lr 1e-3); survives at lambda 1, lambda 4, tau 2 + lambda 4, but those runs barely cut violations (4.4 %, 1.9 %, 3.6 % vs 4.0 % untrained). Entropy and violations trade along one curve; none meets 2e-4 except defaults (0). Lambda 1 is not stripes, it is no learning. See reportables/2026-10-14_cdim/report.md.
+Next: lambda 4 run longer / exact-gradient fit to test whether a mixed-orientation policy can reach zero violations (lookahead + colour order suspect).
+
+## 2026-10-14 cdim · started
+Approach: dimers entropy collapse vs fixed lambda, constant tau, lower lr (cfast cfg overrides), 60 s runs.
+
 ## 2026-10-14 02:25 · cconv3 · finished
 Approach: cconv_r2 vs cfast, ground and columns, 2 seeds x 300 s, GPU shared (ideas #5).
 Result: ground cconv_r2 (~1000 upd): final viol <=1.8e-4 (within budget, levels 1-2) but 99.94 % dirt, line_match 0.500: all-dirt collapse; cfast (~4200 upd) 95-99.7 % dirt, s1 viol 1.1e-2. Columns cconv_r2 (1600-2000 upd): ALL AIR collapse (F 0, 0 viol); cfast 1.5-1.9 % density, 0.7-3.6 % viol at l0-l1. None accepted. Report: reportables/2026-10-13_cconv/report.md (round 3).

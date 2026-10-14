@@ -462,3 +462,11 @@ _variant("cfast_s64_lr3")                 # development runs: the default
 _variant("cresid", resid=True)            # count-residual features for every declared count factor
 _variant("cln", net="ln")                 # LayerNorm + SiLU actor 64 x 2, 4 x 4 window (exactopt)
 _variant("cln6", net="ln", win=(-2, 3))   # LayerNorm + SiLU actor, 6 x 6 same-level window
+
+
+# cdim (2026-10-14): dimers entropy-collapse probes; cfg overrides only (eta=0 turns the lambda control off)
+_variant("cfast_lam1", lam0=1.0, eta=0.0)                 # lambda fixed at 1
+_variant("cfast_lam4", lam0=4.0, eta=0.0)                 # lambda fixed at 4
+_variant("cfast_lam20", lam0=20.0, eta=0.0)               # lambda fixed at 20 (= lam_max)
+_variant("cfast_tau2_lam4", lam0=4.0, eta=0.0, tau1=2.0)  # tau = 2 throughout (tau0 = tau1 = 2), lambda fixed at 4
+_variant("cfast_lr1e3", lr=1e-3)                          # actor lr 1e-3, defaults otherwise (same as cfast_s64)
