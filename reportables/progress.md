@@ -22,6 +22,11 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 10:00 · wave2-bench2 (ckernel upper-bound arm, follow-up) · finished
+Approach: (#18; UPPER BOUND, probe-lift contexts, change request #1) level-split objectives with lambda = inf coarse kernels; bench compile warmed in the bench's own cache dir (/workspace/jax_cache via load_variants); speed-1b's batched kernels.
+Result: [report](2026-10-14_wave2_bench2/report.md). Split (ML L0-2, RKL L2-4) collapses to dirt (0.95, lm 0.50). Bench 300 s x 2, NOT accepted: ckernel_rkl123 (ML all, RKL L0-3) seed 1 within budget (worst 1.8e-4, F -0.098, lm 0.646, starved L3/L4 11/2.8 %), seed 0 L3 7.3e-4; ckernel_rkl32inf (RKL all) worst 4.3e-4 (L2), L3 = 0, but L4 starvation 33-36 %. RKL at L4 is what cleans L3 and what starves L4.
+Next: weaker, separate RKL step at L4; residual is 1-4 violations per level per 16 worlds.
+
 ## 2026-10-14 12:00 · dimers-kernel Part 2 (kernel loop + reverse-KL steps) · finished
 Approach: dimers loop of Part 1 plus N=16/32 cfast reverse-KL steps per iteration (lr 1e-3), from the collapsed cfast-60s start, 300 s.
 Result: N=32 keeps own-draw violations 3.4e-4/cell (N=16: 2.2e-3) but own draws stay two orientations (.50/.50/.001); refined states carry d=0.07 but ML does not move q there. Reverse-KL steps are the collapse pressure. Report: reportables/2026-10-14_dimers_kernel/report.md (Part 2).

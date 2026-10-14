@@ -50,7 +50,9 @@ CK = dict(net="ln", win=(-2, 3), init=S2A_INIT, nctx=32, own_frac=0.5, upi=8, ml
           ml_wlam=0.0,        # ML weight of a refined state: exp(-ml_wlam * V) normalised per minibatch
           rkl_n=0,            # cfast fused reverse-KL steps (tau 1, own draws, lambda control) per iteration
           rkl_lr=1e-3, rkl_lam0=None,   # rkl_lam0: restart lambda at cfast's lam0 (None: keep the init's lambda)
-          diag_every=2)
+          diag_every=2,
+          rkl_levels=None,    # levels whose parameters the RKL step may change (None: all); others are restored
+          coarse_lam=None)    # lam of the coarse kernels (flips L3/L4, coarse Gibbs); None: kernel_lam; inf = infeasible
 
 
 class CKernel(CFast):
@@ -79,12 +81,14 @@ class CKernel(CFast):
         lamg = None if np.isinf(lamk) else lamk        # lam = inf: violating completions infeasible (logged as kernel_lam)
         self.J20 = JaxBlockGibbs(p, region, 2, 0, lam=lamg)
         self.J11 = JaxBlockGibbs(p, region, 1, 1, lam=lamg)
-        self.Gc = {L: JaxBlockGibbs(p, region, L, 0, lam=lamg, chunk=4096) for L in sorted(c["flip_Ls"], reverse=True)}
+        lamc = lamk if c.get("coarse_lam") is None else float(c["coarse_lam"])
+        self.Gc = {L: JaxBlockGibbs(p, region, L, 0, lam=None if np.isinf(lamc) else lamc, chunk=4096)
+                   for L in sorted(c["flip_Ls"], reverse=True)}
         self.fl = self.J11.K.flat
         self.E = make_energy(self.fl, self.J11.K.insts, fine_max=2)
         lay = self.layout(region)
         self.mtm = bm.make_chain(lay, [2], 1.0, lamk, c["K_l2"])
-        self.flip = cf.make_flip_chain(lay, list(c["flip_Ls"]), 1.0, c["tau_c"], c["flip_mode"], lamk, c["K_flip"])
+        self.flip = cf.make_flip_chain(lay, list(c["flip_Ls"]), 1.0, c["tau_c"], c["flip_mode"], lamc, c["K_flip"])
         self.mlstep = make_ml_update_drawwise(lay)
         lam_gen = jnp.asarray(self.lam, jnp.float32)
         self.gen = jax.jit(jax.vmap(lambda pr, s, d: train_pass(lay, pr, s, d, jnp.float32(1.0), lam_gen, record=False)[0],
@@ -158,7 +162,11 @@ class CKernel(CFast):
             res = self.fn["fused"](self.params, self.cparams, self.opt, self.copt, self.gs, jnp.asarray(seeds, jnp.int32),
                                    des, jnp.float32(1.0), lam, cfg["rkl_lr"], cfg["lr_critic"], cfg["clip"],
                                    jax.random.PRNGKey(self.updates + 7919 * self.seed + 1))
+            p_old = self.params
             _, self.params, self.cparams, self.opt, self.copt, loss, closs, viol, tot, _ = res
+            if cfg.get("rkl_levels") is not None:
+                keep = set(cfg["rkl_levels"])
+                self.params = {k: (v if int(k[1:k.index("_")]) in keep else p_old[k]) for k, v in self.params.items()}
             viol = np.asarray(viol)
             hf = np.where(self.nhard > 0, viol / np.maximum(self.nhard, 1), 0.0)
             self.vbar = (1 - cfg["alpha"]) * self.vbar + cfg["alpha"] * hf
@@ -304,4 +312,10 @@ _variant("ckernel_w20", ml_wlam=20.0)
 _variant("ckernel_rkl", ml_wlam=20.0, rkl_n=16, rkl_lam0=10.0)
 _variant("ckernel_rkl32", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0)   # rkl_lr 1e-3
 _variant("ckernel_rkl48", ml_wlam=20.0, rkl_n=48, rkl_lam0=10.0)   # rkl_lr 1e-3
+# wave2-bench2: level-split objectives, coarse kernels at lam = inf (infeasible)
+_variant("ckernel_split", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, level_on=[1.0, 1.0, 1.0, 0.0, 0.0], rkl_levels=[2, 3, 4],
+         coarse_lam=float("inf"))
+_variant("ckernel_fine_rkl", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, rkl_levels=[0, 1, 2], coarse_lam=float("inf"))
+_variant("ckernel_rkl32inf", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, coarse_lam=float("inf"))
+_variant("ckernel_rkl123", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, rkl_levels=[0, 1, 2, 3], coarse_lam=float("inf"))
 _variant("ckernel_inf", ml_wlam=20.0, kernel_lam=float("inf"))
