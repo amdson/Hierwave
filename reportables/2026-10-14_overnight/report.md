@@ -8,6 +8,11 @@ Goals: (1) ground's coarse levels trained by the kernel route; (2) own-draw line
 
 (waves are appended here as they finish)
 
+### Wave 2 (partial): speed-2 part 2, valid annealed blocks (commit after 2a88434; 27 colour-Gibbs tests pass)
+- `castlegen/kernels/anneal.py`: `anneal_block_valid`. Annealed L3 / L4 subtree blocks started from VALID states (probe lifts or q's own draws; tau 8 -> 1, lambda fixed at 20, hard final phase, 32 steps, 0.10 s per 64 blocks) are 98-100 % valid; 16-17 % (L3) and 25-34 % (L4) of all-dirt q-draw blocks become partially filled. Random starts stay 0-2 % valid; a lambda ramp destroys valid starts.
+- AIS weights from these non-equilibrium starts are heuristic (ESS 1.5-2 of 64 from q draws; 16-18 from probes). Passed to wave2-explore as the exploration move for own draws.
+- dimers-kernel (Sonnet) launched: generic k x k fine-block Gibbs for T = 0 and the kernel loop on dimers, to see whether local block moves can rebalance the three orientations.
+
 ### Wave 1: sweep2b, coarse kernels and the first own-draw line-following (commits through df29fb5)
 - Coarse flip and any-level single-cell Gibbs kernels built and verified (8 tests; |z| <= 1.25 on toys; dropping the q ratio gives z 800).
 - Bottom-up hypothesis confirmed: with kernel-a's fitted fine levels, q-subtree proposals from probe lifts are accepted .79 / .44 / .03 at L2 / L3 / L4 (cfast: 0 / 0 / 0); the L2 log-ratio gap shrinks from -35 to -1.4 nats.
