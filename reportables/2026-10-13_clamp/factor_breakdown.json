@@ -1,0 +1,96 @@
+{
+ "untrained/own": {
+  "soft_by_factor": {
+   "noise4": 0.0018,
+   "smooth4": 0.0015,
+   "prior4": 0.4525,
+   "smooth3": 0.018,
+   "prior3": 0.3047,
+   "smooth2": 0.0417,
+   "prior2": 0.3226,
+   "smooth1": 0.0942,
+   "prior1": 1.4527,
+   "smooth0": 0.0487
+  },
+  "rho4_minus_256f_mean_abs": 4.34375,
+  "rho4_mean": 126.9453125,
+  "256f_mean": 126.75,
+  "cert4_A_mean": 11.9765625,
+  "cert4_B_mean": 14.0234375,
+  "rho3_frac_mean": 0.4961700439453125,
+  "rho2_frac_mean": 0.5011444091796875,
+  "rho1_frac_mean": 0.4997711181640625,
+  "dirt_frac": 0.891571044921875
+ },
+ "untrained/probe_L4": {
+  "soft_by_factor": {
+   "smooth4": 0.0013,
+   "prior4": 0.4827,
+   "smooth3": 0.0179,
+   "prior3": 0.3045,
+   "smooth2": 0.0417,
+   "prior2": 0.323,
+   "smooth1": 0.0942,
+   "prior1": 1.4721,
+   "smooth0": 0.0328
+  }
+ },
+ "untrained/probe_L3": {
+  "soft_by_factor": {
+   "smooth4": 0.0013,
+   "smooth3": 0.0014,
+   "prior3": 0.5167,
+   "smooth2": 0.0409,
+   "prior2": 0.3535,
+   "smooth1": 0.0946,
+   "prior1": 1.3952,
+   "smooth0": 0.0183
+  }
+ },
+ "trained/own": {
+  "soft_by_factor": {
+   "noise4": 0.03,
+   "prior4": 0.3602,
+   "smooth3": 0.0152,
+   "prior3": 0.2361,
+   "smooth2": 0.0061,
+   "prior2": 0.067,
+   "smooth1": 0.0305,
+   "prior1": 0.1816
+  },
+  "rho4_minus_256f_mean_abs": 18.68359375,
+  "rho4_mean": 136.00390625,
+  "256f_mean": 126.75,
+  "cert4_A_mean": 13.5,
+  "cert4_B_mean": 16.0,
+  "rho3_frac_mean": 0.656402587890625,
+  "rho2_frac_mean": 0.7879638671875,
+  "rho1_frac_mean": 0.844879150390625,
+  "dirt_frac": 1.0
+ },
+ "trained/probe_L4": {
+  "soft_by_factor": {
+   "smooth4": 0.0013,
+   "prior4": 0.5746,
+   "smooth3": 0.0152,
+   "prior3": 0.2361,
+   "smooth2": 0.0061,
+   "prior2": 0.067,
+   "smooth1": 0.0305,
+   "prior1": 1.2122,
+   "smooth0": 0.0062
+  }
+ },
+ "trained/probe_L3": {
+  "soft_by_factor": {
+   "smooth4": 0.0013,
+   "smooth3": 0.0014,
+   "prior3": 0.7956,
+   "smooth2": 0.024,
+   "prior2": 0.2018,
+   "smooth1": 0.0387,
+   "prior1": 1.3526,
+   "smooth0": 0.0045
+  }
+ }
+}

@@ -17,6 +17,37 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 00:45 · clamp · finished
+Approach: clamp diagnostic: levels >= L clamped to probe-lifted (fill-following) coarse states vs own coarse draw, same noise; cfast 150 s on ground (1357 updates, shared GPU) and toy_modes; untrained reference.
+Result: hypothesis confirmed, gap created by training. Ground: trained fine cost below L=4 is 1.97 nats/cell in fill contexts vs 0.72 own (+1.26); below L=3 2.23 vs 0.34; the probe's own soft energy is 0.014, so fine KL >= ~1.96/cell. Untrained: no gap (2.32 vs 2.47). Gap is count-prior soft energy; fine violations rise only to 0.3-0.5 %/level, forced fractions are unchanged. Trained rho3..rho1 draws are bit-identical whatever the parent (context-blind); the count prior is visible only to the last child. toy_modes: fine KL 0.36 nats/block in non-mode contexts (untrained 1.00), 0 in modes; the coarse level over-selects modes (0.70 vs p* 0.55). Report: reportables/2026-10-13_clamp/report.md.
+Next: give the fine learned parts the parent-count residual (parent rho minus known siblings, number unknown) and use this clamp test as the gate.
+
+## 2026-10-14 00:08 · clamp · started
+Approach: test the fill-avoidance hypothesis directly: cfast trained 150 s on ground (GPU, shared) and toy_modes; training pass with levels >= L clamped to probe-lifted (fill-following) coarse states vs the model's own coarse draw, same noise; per-level cost, violations, forced / no-option fractions, trained vs untrained. Diagnostic only, no variant changes.
+Result: pending.
+Next: report in reportables/2026-10-13_clamp/.
+
+## 2026-10-13 · cbig · started
+Approach: round-3 pass on cbig: compile time (shared cache, autotune_level=0), fix test, bench B=64/256 vs cfast B=8 on ground, toy_support B=256, SNR vs B if time.
+Result: running.
+Next: bench.
+
+
+## 2026-10-13 23:55 · exactopt · started
+Approach: ideas.md #10 round 3. Collect toy_support / tiny exact runs; representation study on the toy_support block (LN+SiLU, wider/deeper, lr) with exact gradients; information study (wider actor window, same-step independence) on toy_modes / tiny. CPU only, cores 40-47.
+Result: pending.
+Next: verdict per problem in reportables/2026-10-13_exactopt/report.md.
+
+## 2026-10-13 23:52 · creplay · started
+Approach: finish creplay's importance-weighted refactor (coupled coarse replays, ideas.md coupled-replay item): at branched levels keep t1 for every draw, drop every score term t2, add (N_c/R)·Σ_selected c_i (enumeration or LOO). Gradcheck on CPU, then time R and bench creplay vs cfast on the GPU (toy_support, ground).
+Result: pending.
+Next: GPU bench, coarse SNR before/after.
+
+## 2026-10-13 23:51 · baselines · started
+Approach: fresh GPU baseline board: greedy, cfast on all 5 problems; then cpass (toy_support, ground), ctrunc_full (ground). GPU shared.
+Result: pending.
+Next: report in reportables/2026-10-13_gpu_baselines/.
+
 ## 2026-10-13 · cconv · stopped early
 Approach: ideas.md #5 on cfast: per-level conv trunk (3x3 stem + residual pre-LN SiLU 3x3 blocks, fixed radius r), dense each step; per-channel linear + candidate-scoring head (s(t), nv, lookahead, value embedding); loss re-evaluates the trunk on (2r+1)^2 patches at subsampled sites; critic on stop-grad trunk features; cone and margin from the conv window. Files: castlegen/variants/cconv.py, _cconv_core.py, tests/variants/test_cconv.py, reportables/2026-10-13_cconv/.
 Result: implementation done; 15/15 tests pass on the box (dense == patch trunk, loss recomputes pass log q, scoring, changes-inside-cone on all 5 problems, open windows agree on toy_support and ground). No bench runs yet (session ended). Box note: pids.max 2304 and each jax process uses about 300-500 threads; run under `taskset -c <8 cpus>` (44 threads) or compiles die with pthread_create / ptxas errors.
