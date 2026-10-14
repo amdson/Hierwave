@@ -8,6 +8,12 @@ Goals: (1) ground's coarse levels trained by the kernel route; (2) own-draw line
 
 (waves are appended here as they finish)
 
+### Wave 2 (partial): wave2-bench, violation pressure on the upper-bound arm (probe-lift contexts, change request #1)
+- exp(-20V) weighting does nothing: probe-refined states have zero violations but nearly all own-refined states violate, so the weights drop them and the fit becomes probe-only ML. The 3.2e-3 is 13 support3 violations in 16 worlds: the coarse levels choose certificates the children cannot realise next to their neighbours; repair then creates L4 violations.
+- Mixing cfast's reverse-KL update (32 steps per iteration, lr 1e-3) brings violations to 5e-5..4.3e-4 at line_match 0.57-0.59; at cfast's lr 3e-3 it collapses the model (dirt 0.99).
+- Bench `ckernel_rkl32`, 2 seeds, 300 s: seed 1 within budget, seed 0 misses by 4 of 16384 instances at L2 (2.4e-4). F -0.012 vs cfast 0.774; line_match 0.56 / 0.58; v2 rho 0.33 / 0.80 / 0.47 / 0.75 / 0.47; starvation 0 / 4 / 10 / 24 / 42 % (the RKL mix re-introduces starvation at L3-4 against ML-only's 10 / 3.5 %). No accepted row yet. The bench compiled cold on seed 0 (254 of 300 s), so the row is also budget-starved.
+- Follow-up launched (wave2-bench2): reverse-KL on levels 2-4 only at low lr, ML on 0-2, infeasible-priced L4 kernels, fine sweep after every coarse move, warm compile before the bench.
+
 ### Wave 2 (partial): dimers-kernel
 - Generic k x k fine-block Gibbs for T = 0 problems (`castlegen/kernels/fine_block.py`, 7 tests exact on 4x8 periodic). On dimers, k = 2 blocks can only do square flips and never change the diagonal count; k = 3 blocks contain every rhombus and do: pure kernel chains take cfast's collapsed draws (.47/.53/0) to .38/.39/.23 in 600 cycles, though two different starts had not met yet (not equilibrated). k = 4 is too large for the GPU path on the bench region (2.9e6 completions).
 - So local block moves CAN move the orientation mix on dimers, which answers the open question from the kernel-route discussion, given a big enough block.
