@@ -8,6 +8,12 @@ Goals: (1) ground's coarse levels trained by the kernel route; (2) own-draw line
 
 (waves are appended here as they finish)
 
+### Wave 5: wave5-pop, the own-draws-only arm benched properly (not accepted)
+- Compile budget fixed: the 171 / 52 s setups were Python re-tracing per variant instance (340 compile requests), not cache misses; jitted functions are now reused across instances and every loop shape is warmed in setup (setup 1.2 s per seed; `scripts/bench_warm.py` wraps the bench's own run(), harness untouched). Updates per 300 s: 912 / 904 against 224 / 608.
+- `ckpop_hard_rkl` 2-seed bench, warm: NOT accepted. Worst violations 3.1e-4 (seed 0) and 9.8e-4 (seed 1, at L3); L4 now zero on both; F -0.090 / -0.094 (cfast 0.774); line_match 0.61 / 0.63; rho .37-.43 / .70-.82 / .60-.68 / .37-.59 / <0 by level; L3-4 starvation 19-34 %. Also fails across-seed roughness agreement (1.07 vs 1.89) and the probe check (seed 1 had 0 of 16 valid raw worlds).
+- L4 reverse-KL pressure is inert on this arm: the raw pass never violates at L4, so the adaptive lambda_4 decays to 0 and the step only raises L4 starvation (81 % / 34 %). The L4 bench failures are created by repair from L3 certificates the children cannot realise. Change request #3: price the violations that remain after repair at the coarsest level.
+- Wave 6 launched (last for this arm tonight): L1-L3 reverse-KL scale, more sweeps, 4-seed bench with pass rate.
+
 ### Wave 4 (partial): speed-3, the generation pass
 - Hoisted per-colour geometry and Gumbel noise, per-level encoded image in the scan carry: bit-identical worlds, but only about 1.1x on ground (B = 32: 8.0 -> 7.3 ms per 32 worlds; B = 128: 17.2 -> 15.7 ms), within the contention noise. The pass is launch-bound at small batches and bandwidth-bound at large ones; window gather + MLP is 75 % of it. Toys unchanged.
 - The real lead: the host-side `designed_values` costs about 0.6 ms per world on ground, as much as the device pass itself; it lives in the bench harness (frozen) and was not touched. Batching it, or moving it onto the context prefetch thread, is the next candidate. 50 tests pass (6 new); test files must run in separate processes on CPU (a CPU-JIT "Failed to materialize symbols" error appears when run together).
