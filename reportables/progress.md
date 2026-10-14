@@ -17,6 +17,11 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 02:36 · ccur · finished
+Approach: ideas #7 as an lr schedule on cfast: levels 3-4 frozen at init while 0-2 train, staged release (L3 35 %, L4 55 %), critic always on, tau as cfast. castlegen/variants/ccur.py (ccur, ccur_diag, ccur_off = cfast + same diagnostics).
+Result: order does not change the outcome. At release the fine levels were worse in fill contexts (fine cost/cell 2.80 vs untrained 2.32 at L=4; 2.64 vs 1.98 at L=3): the frozen coarse draws are 3 nats diverse but not fill-following (line_match 0.50, 88 % dirt). After the L4 release, dirt > 0.95 within 40 updates (cfast: 175 from init); line_match 0.500 throughout. Bench --train 300, 2 seeds, GPU shared: ground ccur 0 final viol, F 1.23, dirt 1.00 / 0.875 (s1 stripes), not accepted (probes, across-seeds); cfast 0 viol, F 0.60, dirt 1.00, not accepted (probes). Columns: ccur worst 3.2e-2, F -0.006, density 0.004 / 0.016; cfast 9.2e-3, F -0.022, density 0.003 / 0.019; both collapse to near-empty. Dimers not run (T = 0: nothing to freeze). Harness files changed during the session (hashes differ between paired runs). Report folder: reportables/2026-10-14_ccur/ (figures in images/; report.md write was blocked for this agent, content in the handoff).
+Next: visiting fill-following coarse contexts is the missing piece, not order: whole-logit tempered exploration (ideas #12).
+
 ## 2026-10-14 cdim · finished
 Approach: dimers (T = 0) entropy collapse vs lambda and tau, cfast cfg overrides only (5 `_variant`s appended to cfast.py), 60 s each, one seed.
 Result: diag < 0.05 at update 10 (defaults, lambda 20), 65 (lr 1e-3); survives at lambda 1, lambda 4, tau 2 + lambda 4, but those runs barely cut violations (4.4 %, 1.9 %, 3.6 % vs 4.0 % untrained). Entropy and violations trade along one curve; none meets 2e-4 except defaults (0). Lambda 1 is not stripes, it is no learning. See reportables/2026-10-14_cdim/report.md.
