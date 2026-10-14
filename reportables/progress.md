@@ -17,6 +17,11 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 11:00 · dimers-kernel (fine-block Gibbs on dimers, ideas #18) · finished
+Approach: exact k x k fine-block Gibbs (castlegen/kernels/fine_block.py) + footprint MTM from q, draw-wise ML on own draws, dimers; does the kernel route rebalance the three orientations?
+Result: kernel exact (7 tests pass). k=2 blocks conserve the diagonal count (cfast draws stay d=0.000 after 600 cycles); k=3 reaches d=0.23 but two opposite starts do not meet in 600 cycles. ML loop (4 arms, 300 s) lost validity (viol 0.02-0.1/cell), so its 1/3-each orientation numbers are not usable. Report: reportables/2026-10-14_dimers_kernel/report.md.
+Next: add a violation term (rkl mix) to the loop; k=4 via a faster enumeration; second seed.
+
 ## 2026-10-14 10:10 · speed-1 (fine-loop speed) · finished (started 09:00)
 Approach: profiled sweep2a arm B (Gibbs (1,1) 50 %, ML 35 %), then factored the block energy (fixed-field + one-hot matmul), split the teacher-forced pass into parameter-free context collection + batched MLP, fused cycles/updates in scans, prefetched contexts in a thread.
 Result: [report](2026-10-14_speed1/report.md). 1.5-1.6 s/iter -> 0.24-0.43 s (3.7-6x); Gibbs (1,1) sweep 13x, ML step 4.4x; identical samples for the same key. 300 s arm B: L3 fill -0.114, soft 0.129, line_match 0.743 (sweep2a -0.106/0.140/0.734). GPU shared.
