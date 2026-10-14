@@ -88,6 +88,13 @@ On the enumerable hierarchy, optimise the objective with exact expectations, and
 
 > **Annotation (2026-10-13, orchestrator):** agreed. This separates the variance hypothesis from the "fine levels can't realise the contexts" hypothesis (see the cfast_head report). Launched as `exactopt` (a diagnostic, not a variant), also on a single toy_support block. Status: untested.
 
+> **Annotation (2026-10-14, exactopt): outcome.** The rule's three branches each apply to one part of the gap. Full numbers are in `reportables/2026-10-13_exactopt/report.md`.
+> - **Variance** dominates at B = 8. With the same init and step count, exact training beats sampled training (cpass/cfast) 15× on toy_modes (0.013 vs 0.18 nats) and 5–130× on toy_support (0.30, or 0.012 with a better lr, vs 1.56).
+> - **Representation** is not a capacity limit. The tanh MLP's 0.30 plateau on toy_support is optimisation: lr 1e-2 or a longer schedule reach 0.012 / 0.007. LayerNorm + SiLU reaches the feature table's 0.008 at the default lr.
+> - **Information:** the 4×4 actor window misses cells. A 6×6 window takes toy_modes from 0.012 to 0.0009 (MLP) and 0 (table).
+> - **Order:** independent draws within a colour leave a hard floor of 0.037 on the tiny problem, which only more passes or a finer colouring remove.
+> Status: done.
+
 ## 7. Low-to-high scheduling of 1-step updates (from chat, 2026-10-13; low priority)
 "scheduling low to high 1-step updates. not high priority, just worth considering"
 

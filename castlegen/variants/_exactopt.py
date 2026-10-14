@@ -117,6 +117,58 @@ def make_variant(kind, problem, region, seed, **cfg):
     return cls(problem, seed, f"/tmp/exactopt_{kind}", **cfg)
 
 
+# ------------------------------------------------------- extra actor nets
+def net_spec(kind):
+    """'net-<act>-<width>x<depth>' -> (act, width, depth); act in tanh | ln (LayerNorm + SiLU)."""
+    _, act, wd = kind.split("-")
+    w, d = wd.split("x")
+    return act, int(w), int(d)
+
+
+def net_init(key, din, dout, act, width, depth):
+    """Same init convention as core.mlp_init (scaled normal hidden layers, zero
+    output layer, so b = 0 at step 0 for every actor)."""
+    ks = jax.random.split(key, depth)
+    p, d = {}, din
+    for i in range(depth):
+        p[f"W{i}"] = jax.random.normal(ks[i], (d, width)) / np.sqrt(d)
+        p[f"b{i}"] = jnp.zeros(width)
+        if act == "ln":
+            p[f"g{i}"] = jnp.ones(width)
+            p[f"c{i}"] = jnp.zeros(width)
+        d = width
+    p["Wo"] = jnp.zeros((d, dout))
+    p["bo"] = jnp.zeros(dout)
+    return p
+
+
+def net(p, x, act, depth):
+    h = x
+    for i in range(depth):
+        h = h @ p[f"W{i}"] + p[f"b{i}"]
+        if act == "ln":
+            mu = h.mean(-1, keepdims=True)
+            var = ((h - mu) ** 2).mean(-1, keepdims=True)
+            h = jax.nn.silu((h - mu) * jax.lax.rsqrt(var + 1e-5) * p[f"g{i}"] + p[f"c{i}"])
+        else:
+            h = jnp.tanh(h)
+    return h @ p["Wo"] + p["bo"]
+
+
+def set_actor_window(spec):
+    """'lo:hi' or 'lo:hi,plo:phi': widen the actor window (same-level offsets
+    lo..hi from the parent block corner, parent offsets plo..phi).  Must be
+    called before the variant and the Enum are built (it rebinds
+    core.ACTOR_WIN, which coloured_pass reads at trace time)."""
+    if not spec:
+        return
+    parts = spec.split(",")
+    lo, hi = map(int, parts[0].split(":"))
+    plo, phi = map(int, parts[1].split(":")) if len(parts) > 1 else (-1, 1)
+    core.ACTOR_WIN = core.Window(same=tuple((dy, dx) for dy in range(lo, hi + 1) for dx in range(lo, hi + 1)),
+                                 parent=tuple((dy, dx) for dy in range(plo, phi + 1) for dx in range(plo, phi + 1)))
+
+
 # ---------------------------------------------------------------- enumeration
 def _dedupe(rows, table):
     """rows (m, k) float32 -> global ids, extending table {bytes: id}."""
@@ -251,6 +303,35 @@ class Enum:
             self.hid[k][:, i] = self.nhist[k] + inv
             self.nhist[k] += nu
 
+    def _seq_ids(self):
+        """Per draw: id of every EARLIER draw in a total order (steps, then
+        site index within the step).  Unlike table_hist this lets a draw see
+        the same-step draws before it: the fully expressive chain rule, i.e. no
+        within-colour independence.  A diagnostic, not a valid sampler."""
+        if hasattr(self, "sid"):
+            return
+        lay = self.lay
+        cols, steps = [], []
+        for l in lay.levels:
+            for ci, c in enumerate(lay.chans[l]):
+                k = core.key_of(l, c.name)
+                for i, kk in enumerate(self.vidx[k][0]):
+                    cols.append((k, i))
+                    steps.append(lay.step(l, int(kk), ci))
+        order = np.argsort(np.array(steps), kind="stable")
+        A = np.stack([self.act[k][:, i] for k, i in cols], 1).astype(np.int16)[:, order]
+        self.sid = {k: np.zeros_like(self.ctx[k]) for k in self.keys}
+        self.nseq = {k: 0 for k in self.keys}
+        for pos, d in enumerate(order):
+            k, i = cols[d]
+            if pos == 0:
+                inv, nu = np.zeros(self.N, np.int64), 1
+            else:
+                u, inv = np.unique(A[:, :pos], axis=0, return_inverse=True)
+                inv, nu = inv.ravel(), len(u)
+            self.sid[k][:, i] = self.nseq[k] + inv
+            self.nseq[k] += nu
+
     def set_lam(self, lam):
         self.lam = np.asarray(lam, np.float64)
         self.E = self.S + self.H @ self.lam
@@ -260,9 +341,16 @@ class Enum:
         self._jits = {}
 
     # ------------------------------------------------------------ actors
-    def init_params(self, kind, mlp_params=None):
+    def init_params(self, kind, mlp_params=None, seed=0):
         if kind == "mlp":
             return mlp_params
+        if kind.startswith("net"):
+            act, w, d = net_spec(kind)
+            keys = jax.random.split(jax.random.PRNGKey(seed), len(self.keys))
+            return {k: net_init(kk, self.Ufeat[k].shape[1], self.D[k], act, w, d) for k, kk in zip(self.keys, keys)}
+        if kind == "table_seq":
+            self._seq_ids()
+            return {k: jnp.zeros((self.nseq[k], self.D[k]), jnp.float32) for k in self.keys}
         n = self.nfeat if kind == "table_feat" else self.nhist
         return {k: jnp.zeros((n[k], self.D[k]), jnp.float32) for k in self.keys}
 
@@ -270,7 +358,8 @@ class Enum:
         d = {k: dict(ctx=jnp.asarray(self.ctx[k]), act=jnp.asarray(self.act[k]),
                      feat=jnp.asarray(self.Ufeat[k]), soft=jnp.asarray(self.Usoft[k]),
                      mask=jnp.asarray(self.Umask[k]), fid=jnp.asarray(self.fid[k]),
-                     hid=jnp.asarray(self.hid[k])) for k in self.keys}
+                     hid=jnp.asarray(self.hid[k]),
+                     sid=jnp.asarray(self.sid[k]) if kind == "table_seq" else None) for k in self.keys}
 
         def logq(params, tau):
             tot = 0.0
@@ -278,8 +367,13 @@ class Enum:
                 e = d[k]
                 if kind == "mlp":
                     b = core.mlp(params[k], e["feat"])[e["ctx"]]
+                elif kind.startswith("net"):
+                    act, _, depth = net_spec(kind)
+                    b = net(params[k], e["feat"], act, depth)[e["ctx"]]
                 elif kind == "table_feat":
                     b = params[k][e["fid"]][e["ctx"]]
+                elif kind == "table_seq":
+                    b = params[k][e["sid"]]
                 else:
                     b = params[k][e["hid"]]
                 lg = jnp.where(e["mask"][e["ctx"]], -e["soft"][e["ctx"]] / tau - b, -jnp.inf)
@@ -357,7 +451,7 @@ def train_exact(enum, kind, params, steps, lr, lam, every, stat_fn, clip=10.0, t
     @jax.jit
     def update(params, opt, tau):
         _, g = jg(params, tau)
-        if kind == "mlp":
+        if kind == "mlp" or kind.startswith("net"):
             g = clip_by_level(g, levels, clip)
         return adam_step(params, g, opt, lr)
     curve = []
@@ -434,16 +528,19 @@ def main():
     ap.add_argument("--tau0", type=float, default=2.0)
     ap.add_argument("--out", default="reportables/2026-10-13_exactopt/runs")
     ap.add_argument("--tag", default="")
+    ap.add_argument("--win", default="", help="actor window 'lo:hi[,plo:phi]' (default -1:2,-1:1)")
     a = ap.parse_args()
+    set_actor_window(a.win)
     problem, region = get_problem(a.problem)
     lam = np.full(problem.T + 1, a.lam)
     base = make_variant("cpass", problem, region, a.seed)
     init = jax.tree_util.tree_map(lambda x: x, base.params)
-    enum = Enum(problem, region, init, lam, cache=f"/tmp/exactopt_enum_{a.problem}.pkl")
+    enum = Enum(problem, region, init, lam, cache=f"/tmp/exactopt_enum_{a.problem}{('_w' + a.win.replace(':', '_').replace(',', '_')) if a.win else ''}.pkl")
     stat_fn = stat_fn_for(a.problem)
     os.makedirs(a.out, exist_ok=True)
     meta = {"problem": a.problem, "N": enum.N, "logZ": enum.logZ, "lam": a.lam, "steps": a.steps,
             "nctx": {k: len(v) for k, v in enum.Usoft.items()}, "nfeat": enum.nfeat, "nhist": enum.nhist,
+            "win": a.win, "feat_dim": {k: int(v.shape[1]) for k, v in enum.Ufeat.items()},
             "target": ({k: float(enum.p_target @ v) for k, v in stat_fn(enum.X).items()} if stat_fn else {}),
             "target_p_viol": float(enum.p_target @ (enum.H.sum(1) > 0))}
     if a.problem != "tiny":
@@ -456,11 +553,13 @@ def main():
         if run.startswith("exact_"):
             kind = run[len("exact_"):]
             lr = a.lr if a.lr is not None else 3e-3
-            if kind != "mlp" and a.lr is None:
+            if kind.startswith("table") and a.lr is None:
                 lr = 3e-2
+            if "@" in kind:                                 # per-run lr: exact_mlp@0.01
+                kind, lr = kind.split("@")[0], float(kind.split("@")[1])
             params = enum.init_params(kind, init)
             _, curve = train_exact(enum, kind, params, a.steps, lr, lam, a.every, stat_fn, tau0=a.tau0)
-            info = {"lr": lr}
+            info = {"lr": lr, "win": a.win}
         else:
             var = make_variant(run, problem, region, a.seed, B=a.B)
             assert all(np.allclose(np.asarray(x), np.asarray(y)) for x, y in

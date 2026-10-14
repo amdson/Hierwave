@@ -17,6 +17,14 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 00:45 · exactopt · finished
+Approach: ideas.md #10 round 3, exact gradients on enumerable blocks (CPU): collected the toy_support / tiny runs, then a representation study (LN+SiLU, width/depth, lr, schedule) and an information study (actor window; same-colour independence).
+Result: variance dominates at B = 8 (sampled 0.18 vs exact 0.013 on modes; 1.56 vs 0.30 / 0.012 on support). The tanh MLP's support plateau (0.30) is optimisation, not capacity: lr 1e-2 gives 0.012 and LN+SiLU 64x2 gives 0.0084 (table 0.0074). The modes 0.012 floor is the 4x4 actor window: 6x6 gives table 0 and MLP 0.0009. On tiny, the history table floors at 0.037 from same-colour independence (the chain-rule diagnostic gives 0.002); the 8-wide window takes table_feat from 0.32 to 0.07. Report: reportables/2026-10-13_exactopt/report.md.
+Next: LN+SiLU with a 6x6 window as the actor default, then sampled training at large B to close the variance gap.
+
+## 2026-10-14 00:40 · cresid · started
+Approach: per declared count factor, a feature for the children: parent view minus known siblings' view sum, unknown siblings in the subset, parent-unknown flag (generic, from declarations; "more information to learned parts"). Variant cresid = cfast + these features. Gate: clamp eval at L=4/3.
+
 ## 2026-10-14 00:45 · clamp · finished
 Approach: clamp diagnostic: levels >= L clamped to probe-lifted (fill-following) coarse states vs own coarse draw, same noise; cfast 150 s on ground (1357 updates, shared GPU) and toy_modes; untrained reference.
 Result: hypothesis confirmed, gap created by training. Ground: trained fine cost below L=4 is 1.97 nats/cell in fill contexts vs 0.72 own (+1.26); below L=3 2.23 vs 0.34; the probe's own soft energy is 0.014, so fine KL >= ~1.96/cell. Untrained: no gap (2.32 vs 2.47). Gap is count-prior soft energy; fine violations rise only to 0.3-0.5 %/level, forced fractions are unchanged. Trained rho3..rho1 draws are bit-identical whatever the parent (context-blind); the count prior is visible only to the last child. toy_modes: fine KL 0.36 nats/block in non-mode contexts (untrained 1.00), 0 in modes; the coarse level over-selects modes (0.70 vs p* 0.55). Report: reportables/2026-10-13_clamp/report.md.
