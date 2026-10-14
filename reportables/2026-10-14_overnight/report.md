@@ -8,6 +8,11 @@ Goals: (1) ground's coarse levels trained by the kernel route; (2) own-draw line
 
 (waves are appended here as they finish)
 
+### Wave 4 (partial): wave3-bench, 4-seed pass rate on the upper-bound arm (change request #1)
+- A weaker separate L4 reverse-KL step (lr 3e-4, `ckernel_rkl4w3`) zeroes L3 and L4 violations on all 4 seeds with L3/L4 starvation <= 15 %. The 4-seed bench (warm, run alone): 1 of 4 seeds accepted (seed 2: worst 1.4e-4, F -0.123, line_match 0.665, rho .40/.80/.85/.85/.56, starved 0/2.0/6.6/12.2/12.4 %). The other three miss at L2 (2.4e-4..7.9e-4) and one at L1.
+- Evaluation noise quantified: 16 held-out worlds per seed; one violation is 6.1e-5 at L2, 2.4e-4 at L3, 2e-3 at L4; a model at half the budget everywhere passes a seed about 57 % of the time. Pooled over 4 seeds L2 is 3.7e-4 (95 % interval 2.4e-4..5.5e-4), a real miss; L1 1.9e-4, borderline; L3 consistent with passing. Fewer updates -> more violations (seed 0: fewest updates, most violations).
+- Wave 4 launched for this arm (wave4-bench): ML/context throughput in ckernel.py (fused multi-update, prefetch), more reverse-KL pressure at L1-2, 4-seed bench.
+
 ### Wave 4: wave4-pop, violation pressure on the own-draws-only arm (not accepted yet)
 - Hard final colour-Gibbs sweeps (lambda = inf) keep the chain population 100 % valid and own-draw line_match at 0.636, but own-draw violations stay at 2.8e-4..1.1e-3 per level: plain ML still leaks. Adding cfast's reverse-KL on levels 0-3 (lr 1e-3) cuts violations 2-5x at a cost of about 0.025 line_match.
 - Bench `ckpop_hard_rkl` (own draws only, inside the frozen rules), 2 seeds, 300 s: NOT accepted. Seed 0 lost 171 s to compiling despite the warm-up and ends with 5.9e-3 at L4; seed 1 (52 s setup, 608 ML + 2433 RKL updates) fails only at L2 (7.9e-4) with F -0.091, line_match 0.62. Mean F -0.047 vs cfast 0.774. L3-4 probe starvation 21-33 % (rho <= 0.31 there): L4 has no violation pressure and the coarse levels are still partly starved.
