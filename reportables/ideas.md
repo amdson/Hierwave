@@ -233,3 +233,35 @@ Keep the shared-weight actor soft until it has learned context-dependent structu
 > **Annotation (2026-10-14, wave5-pop, own draws only, inside the frozen constitution):** ckpop_hard_rkl with the compile fix (per-process jit memo + warmed shapes; setup 171 s -> 1.2 s, 4x the updates on seed 0) benched 2 x 300 s: not accepted, worst final 9.8e-4 (L3; seed 0 3.1e-4 at L2), L4 0, F -0.092, line_match 0.61/0.63, starved L3/L4 19-34 %; reverse-KL at L4 gives no violation pressure (lambda_4 -> 0, raw L4 never violates) and raises L4 starvation (34-81 %). Report: reportables/2026-10-14_wave5_pop/report.md.
 
 > **Annotation (2026-10-14, wave4-bench, UPPER BOUND: probe-lift contexts, change request #1):** fused ckernel loop (RKL scan, ML multi-update, prefetch; same objective) gives no net updates/300 s under GPU contention (RKL steps are GPU-latency bound); bench ckernel_rkl4w3f 4 seeds: 1/4 pass, misses only at L2 (pooled 2.9e-4 [1.75e-4, 4.5e-4]), L1 1.2e-4, L3/L4 0. Report: reportables/2026-10-14_wave4_bench/report.md.
+
+## 19. Revising (diffusion-style) generation trained by path KL (from chat, user, 2026-10-14) — AUTHORISED
+**Authorised by the user on 2026-10-14** as an objective change under the constitution; see "Amendment 2026-10-14 (b)" in `notes/coloured_pass_constitution.md`.
+
+**Motivation:**
+- Interacting certificates create long-range implied constraints. Support is monotone along an unbounded axis, so a one-step lookahead or any single parallel pass commits draws that later turn out inconsistent.
+- Symmetric choices (left/right column allocation) are 50/50 for any correct local predictor, so cells drawn at the same step can't coordinate.
+- Strict local refinability can't be achieved without pushing unbounded information to the top level.
+
+**Idea.** Generate with a fixed number of *revising* steps per level, like masked or uniform-noise discrete diffusion, where later steps can redraw earlier choices.
+- Symmetry breaks by propagation: early commits are followed by neighbours, and conflicts get re-noised and redone.
+- Coordination over distance d takes about d / r steps, which the hierarchy keeps short at every level.
+- Generation stays fixed-step, local and finite-support (radius ≈ steps × reach).
+
+**Training: path KL.** Minimise KL(Q ‖ P) over whole trajectories, where:
+- Q is the generator's chain from noise;
+- P is p\*(x_0) times a **fixed noising process** r (x_0 → … → x_K).
+
+Every factor is computable from step probabilities, r and the energy, so no samples from p\* are needed. It upper-bounds KL(q(x_0) ‖ p\*) and is tight when the generator is the exact reverse of the noising process.
+- With no revisions (today's coloured pass), r is deterministic given x_0 and the path KL **equals** the current reverse KL.
+- `cmulti` was the same idea with a *learned* r, which penalised revision. A fixed noising r makes revisions cheap.
+
+**Caveats:**
+- It is still a reverse-direction KL, so mode-seeking can return.
+- It is a new sampler family, so prototype it before committing.
+
+**Suggested first prototype:**
+- a hierarchical revising sampler with a few steps per level;
+- per-step costs, cone returns and the critic reused from cfast / cmulti;
+- dimers (pure symmetry breaking) and an 8 × 8 three-level ground compared with the brute-force MCMC reference (`reportables/2026-10-14_ground_mcmc/`), then the full bench.
+
+> **Annotation (2026-10-14, orchestrator):** recorded from chat; the user authorised the path-KL objective for revising samplers. Status: untested.
