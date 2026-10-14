@@ -1,0 +1,9 @@
+# Constitution change requests (overnight session, 2026-10-14)
+
+Append-only. The constitution is frozen; these are notes for the user.
+
+## 1. Coarse levels trained on probe-lift contexts (from sweep2b, ruled out-of-bounds by the orchestrator)
+**What:** `ckernel` reached own-draw line_match 0.62 (first variant above 0.50), v2 probe rho 0.82-0.86 at levels 1-3 and starvation <= 10 % by applying the kernels to a 50/50 mix of the sampler's own draws and probe lifts, and fitting ALL levels (including 3-4) by ML on the refined states. An own-draws-only run stays collapsed (dirt 0.90, line_match 0.50). So the gain at the coarse levels comes from imitating the probe lifts' coarse channels, refined by the kernels.
+**Why it is outside the frozen rules:** the amendment admits ML on states produced by p*-invariant kernels applied to the sampler's OWN draws; ideas #14 admits training the fine levels CONDITIONED on arbitrary parent states (probe lifts included), not training the coarse levels to reproduce the probes' coarse states. Probe lifts are designed, target-like states supplied by the problem, so this is training on a hand-made sample of the target's coarse marginal (constraint 1 in spirit).
+**Ruling for the session:** the probe-context arm is kept as a labelled diagnostic upper bound ("what the coarse levels do when given target-like coarse states"); the main line must get own draws out of the dirt state with kernels applied to own draws (coarse flips, annealed blocks). Both arms are reported.
+**If the user wants to admit it:** a sentence in the amendment allowing kernel-refined probe lifts as training contexts for all levels, on problems that declare probes; the bench's probe check then no longer tests generalisation to unseen target-like states and should use held-out probes (different jitter / seeds) from those used in training.
