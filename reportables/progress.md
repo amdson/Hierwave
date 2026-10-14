@@ -22,6 +22,16 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 10:40 · wave5-pop (ckpop_hard_rkl: compile budget, L4 pressure, bench) · started
+Approach: (#18; own draws only, inside the frozen constitution) find why bench seed 0 compiled for 171 s after a warm-up and fix it (fixed shapes, warm through the bench import path); add a scaled-down L4 reverse-KL step; 2-seed 300 s bench of the chosen arm.
+Result: pending, [report](2026-10-14_wave5_pop/report.md).
+Next: -
+
+## 2026-10-14 10:45 · wave3-bench (ckernel upper-bound arm) · finished
+Approach: (#18; UPPER BOUND, probe-lift contexts, change request #1) ckernel_rkl123 + weaker separate L4 reverse-KL step (lr 1e-4 / 3e-4); chosen by starvation rule; bench 4 seeds.
+Result: [report](2026-10-14_wave3_bench/report.md). Chosen ckernel_rkl4w3 (L4 RKL lr 3e-4; eval starved L3/L4 12.5/11.5 %). Bench ground 300 s x 4: NOT accepted, 1/4 seeds within budget at every level (seed 2, worst 1.4e-4); L3 and L4 final violations 0 on all 4 seeds, L3/L4 starvation <= 15 % on all; misses at L2 (pooled 24/65536 = 3.7e-4, above budget: signal) and L1 (1.9e-4, at budget); F -0.08 to -0.13, line_match 0.64-0.67. Eval noise: 16 worlds -> one violation = 2.4e-4 at L3, 2e-3 at L4 (zero allowed), 6.1e-5 at L2 (3 allowed).
+Next: more RKL pressure at L1-2 and more updates per 300 s (ML/context half of the iteration).
+
 ## 2026-10-14 10:32 · wave4-pop (ckernel_pop violation pressure + bench) · finished
 Approach: ckernel_pop (P3) own draws only, INSIDE the frozen constitution: (i) 2 hard colour-Gibbs sweeps per iteration (ML targets valid); (ii) + cfast's lambda-controlled reverse-KL on levels 0-3 (32 steps/iter, lr 1e-3). Variants ckpop_hard, ckpop_hard_rkl.
 Result: [report](2026-10-14_wave4_pop/report.md). (i) alone: own line_match 0.636, viol 3e-4..1e-3 per level (not < 2e-4). (i)+(ii) with 300 s of training: viol 7.6e-5/2.0e-4/5.2e-4/3.1e-4/0, line_match 0.611. Bench ckpop_hard_rkl ground 2 seeds 300 s: NOT accepted; worst final viol 5.9e-3 (s0 L4; setup 171 s, 224 updates) / 7.9e-4 (s1 L2; 608 updates); F -0.004 / -0.091 (cfast 0.774); line_match 0.554 / 0.622; rho 0.29-0.38 / 0.72-0.80 / 0.57-0.77 / 0.30 / <=0; starved probes L3-L4 21-33 %. GPU shared.

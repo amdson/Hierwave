@@ -52,7 +52,8 @@ CK = dict(net="ln", win=(-2, 3), init=S2A_INIT, nctx=32, own_frac=0.5, upi=8, ml
           rkl_lr=1e-3, rkl_lam0=None,   # rkl_lam0: restart lambda at cfast's lam0 (None: keep the init's lambda)
           diag_every=2,
           rkl_levels=None,    # levels whose parameters the RKL step may change (None: all); others are restored
-          coarse_lam=None)    # lam of the coarse kernels (flips L3/L4, coarse Gibbs); None: kernel_lam; inf = infeasible
+          coarse_lam=None,
+          rkl_level_scale=None)  # {level: s}: that level's RKL parameter step is scaled by s (Adam: lr x s)    # lam of the coarse kernels (flips L3/L4, coarse Gibbs); None: kernel_lam; inf = infeasible
 
 
 class CKernel(CFast):
@@ -167,6 +168,11 @@ class CKernel(CFast):
             if cfg.get("rkl_levels") is not None:
                 keep = set(cfg["rkl_levels"])
                 self.params = {k: (v if int(k[1:k.index("_")]) in keep else p_old[k]) for k, v in self.params.items()}
+            if cfg.get("rkl_level_scale"):
+                sc = {int(l): float(x) for l, x in cfg["rkl_level_scale"].items()}
+                lv = lambda k: int(k[1:k.index("_")])
+                self.params = {k: (jax.tree_util.tree_map(lambda a, b, s=sc[lv(k)]: b + s * (a - b), v, p_old[k])
+                                   if lv(k) in sc else v) for k, v in self.params.items()}
             viol = np.asarray(viol)
             hf = np.where(self.nhard > 0, viol / np.maximum(self.nhard, 1), 0.0)
             self.vbar = (1 - cfg["alpha"]) * self.vbar + cfg["alpha"] * hf
@@ -318,4 +324,7 @@ _variant("ckernel_split", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, level_on=[1.0, 
 _variant("ckernel_fine_rkl", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, rkl_levels=[0, 1, 2], coarse_lam=float("inf"))
 _variant("ckernel_rkl32inf", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, coarse_lam=float("inf"))
 _variant("ckernel_rkl123", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, rkl_levels=[0, 1, 2, 3], coarse_lam=float("inf"))
+# wave3-bench: RKL on L0-3 at lr 1e-3 plus a weaker L4 RKL step (scale s = lr_L4 / 1e-3)
+_variant("ckernel_rkl4w1", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, coarse_lam=float("inf"), rkl_level_scale={4: 0.1})
+_variant("ckernel_rkl4w3", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, coarse_lam=float("inf"), rkl_level_scale={4: 0.3})
 _variant("ckernel_inf", ml_wlam=20.0, kernel_lam=float("inf"))
