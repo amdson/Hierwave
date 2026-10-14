@@ -17,6 +17,16 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 10:10 · speed-1 (fine-loop speed) · finished (started 09:00)
+Approach: profiled sweep2a arm B (Gibbs (1,1) 50 %, ML 35 %), then factored the block energy (fixed-field + one-hot matmul), split the teacher-forced pass into parameter-free context collection + batched MLP, fused cycles/updates in scans, prefetched contexts in a thread.
+Result: [report](2026-10-14_speed1/report.md). 1.5-1.6 s/iter -> 0.24-0.43 s (3.7-6x); Gibbs (1,1) sweep 13x, ML step 4.4x; identical samples for the same key. 300 s arm B: L3 fill -0.114, soft 0.129, line_match 0.743 (sweep2a -0.106/0.140/0.734). GPU shared.
+Next: own-draw generation and ML are what is left.
+
+## 2026-10-14 08:47 · wave2-explore (own-draw coarse exploration) · started
+Approach: ckernel with OWN draws only (no probe contexts; ideas #18): A1 bottom-up curriculum (fine Gibbs + MTM L1-L2, ML levels 0-2 for 60 s) then coarse flips L3/L4 K=16 tempered (tau_c 2), tracked pure-dirt -> partial; A2 + annealed L4 subtree candidates (x0 ~ q full support, tau 8->1, lam 20, hard final; exact AIS weights, importance-resampled into the ML batch). Variant castlegen/variants/ckernel_own.py, kernels castlegen/kernels/explore.py.
+Result: pending.
+Next: pending.
+
 ## 2026-10-14 10:30 · speed-2 (part 2: valid annealed blocks) · finished
 Approach: lam-annealed AIS with hard final phase (castlegen/kernels/anneal.py, anneal_block_valid); valid starts (probe, q draw); optional kernel-a joint sweep at the end.
 Result: lam fixed at 20, tau 8->1 from valid starts: 98-100% valid blocks at level 3 (32 steps, 0.1 s/64 blocks), 89-92% at level 4 (128 steps); ESS 16-17/64 from probe starts. Lam ramp from 0 and random starts do not reach validity (0-17% / 0%). Joint kernel-a move adds ~nothing, 200x slower. Toy lam-ramp AIS log Z ratios match exact. Report: reportables/2026-10-14_speed2/report.md (Part 2).
@@ -36,11 +46,6 @@ Next: lambda-controlled reverse-KL term mixed in for violations; user ruling on 
 Approach: generic GPU-batched single-cell exact Gibbs (castlegen/kernels/colour_gibbs.py): class sweeps, level sweeps, masked sweeps, AIS annealed subtree blocks.
 Result: 22 tests pass (brute-force conditionals, toy invariance per level, mixing from random starts, AIS log Z ratios within 0.015 of exact at 64 steps). Ground W=64, 64 worlds: level-0 sweep 1.9 ms (1.4e8 cells/s), level-3 sweep 1.9 ms, annealed level-3 block (tau 8->1, 32 steps) 670 blocks/s. Annealed blocks from random starts still carry ~10 violations (single-cell Gibbs cannot cross hard counts). Report: reportables/2026-10-14_speed2/report.md
 Next: lam ramp / valid starts for annealing; use as ground training-data source.
-
-## 2026-10-14 09:00 · speed-1 (fine-loop speed) · started
-Approach: profile sweep2a arm B loop (generate / contexts / Gibbs cycles / teacher-forced log q / ML) on GPU, speed up the top items without changing semantics (batching, scan fusion, fewer host transfers).
-Result: pending.
-Next: pending.
 
 ## 2026-10-14 07:57 · sweep2b (Sweep 2, coarse half) · started
 Approach: kernel route on the coarse levels (ideas #18): acceptance table with kernel-a params; generic coarse-flip MH kernel (castlegen/kernels/coarse_flip.py) + exact single-cell coarse Gibbs; variant `ckernel` (probe + own contexts -> flips L3-4, Gibbs L4/L3, MTM L2 K=8, fine Gibbs -> weighted ML on all levels), 300 s instrumented run, gates, bench.

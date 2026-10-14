@@ -1,0 +1,4 @@
+setup 31.0
+iters 38 updates 152 wall 61.1
+{"probe_ctx": 0.093, "own_draw": 0.038, "stats": 0.023, "gibbs20": 0.098, "gibbs11": 0.811, "energy": 0.021, "ml": 0.521, "total": 1.607}
+states/s (refined) 19.9080502121692 updates/s 2.48850627652115

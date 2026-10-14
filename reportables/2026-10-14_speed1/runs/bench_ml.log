@@ -1,0 +1,6 @@
+B=8 all: step 9.8 ms  fwd 5.2 ms
+B=8 fine: step 8.7 ms  fwd 4.2 ms
+B=16 all: step 16.9 ms  fwd 9.5 ms
+B=16 fine: step 14.4 ms  fwd 6.4 ms
+score_levels None value -42201.44921875 -42201.44921875 max grad diff 0.00241851806640625 max |grad| 150.59234619140625
+score_levels (0, 1, 2) value -36826.46484375 -36826.46875 max grad diff 0.00241851806640625 max |grad| 150.59234619140625

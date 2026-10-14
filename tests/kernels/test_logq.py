@@ -39,7 +39,7 @@ def test_matches_generation(setup, tau):
     st, ref = _generate(lay, params, np.arange(40), tau)
     r = lq.logq_batch(lay, params, st, tau=tau)
     assert bool(r["feasible"].all())
-    assert np.abs(np.asarray(r["total"]) - np.asarray(ref)).max() < 1e-5
+    assert np.abs(np.asarray(r["total"]) - np.asarray(ref)).max() < 1e-4   # float32 summation order (batched MLP)
     # per-level breakdown adds up; per-draw too
     assert np.abs(np.asarray(r["per_level"]).sum(1) - np.asarray(r["total"])).max() < 1e-4
     pd = sum(np.asarray(v).sum((1, 2)) for v in r["per_draw"].values())

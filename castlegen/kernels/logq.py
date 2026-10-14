@@ -33,7 +33,8 @@ def get_layout(var_or_lay, region=None):
     return var_or_lay
 
 
-def _forced_pass(lay, params, state_in, tau, maskfree):
+def _forced_pass_ref(lay, params, state_in, tau, maskfree, score_levels=None):
+    """Reference implementation: the MLP is evaluated inside the colour scan."""
     """One state.  Returns (per-draw log q dict key -> (16, n) with 0 at invalid
     sites, feasible dict key -> (16, n) bool True at invalid sites)."""
     p = lay.p
@@ -43,6 +44,11 @@ def _forced_pass(lay, params, state_in, tau, maskfree):
     for l in lay.levels:
         chans = lay.chans[l]
         if not chans:
+            continue
+        if score_levels is not None and l not in score_levels:
+            # level not scored: its draws are the given values (the pass would end with exactly these),
+            # so finer levels see the same context without running the level's scan
+            state = {**state, **{c.name: state_in[c.name].astype(jnp.int32) for c in chans}}
             continue
 
         def body(state, k, l=l, chans=chans):
@@ -77,7 +83,68 @@ def _forced_pass(lay, params, state_in, tau, maskfree):
     return lq, ok
 
 
-def logq_of_state(var_or_lay, params, state, region=None, tau=1.0, maskfree=False):
+def _collect_inputs(lay, state_in, score_levels=None):
+    """Parameter-free half of the teacher-forced pass.  Scans the colour steps of every scored level
+    to read, for each draw, the context the pass would see: features, soft energies, validity,
+    least-violating mask and the forced value.  Returns {key: dict of (16, n, ...) arrays}."""
+    p = lay.p
+    state = {c.name: (state_in[c.name].astype(jnp.int32) if c.designed is not None
+                      else jnp.full(lay.hw[c.level], -1, jnp.int32)) for c in p.chans}
+    out = {}
+    for l in lay.levels:
+        chans = lay.chans[l]
+        if not chans:
+            continue
+        if score_levels is not None and l not in score_levels:
+            state = {**state, **{c.name: state_in[c.name].astype(jnp.int32) for c in chans}}
+            continue
+
+        def body(state, k, l=l, chans=chans):
+            Y, X, valid = lay.sites(l, k)
+            h, w = lay.hw[l]
+            outs = []
+            for c in chans:
+                soft, nv, look = lay.cond(state, c.name, Y, X)
+                v = nv + look
+                vmin = jnp.min(v, axis=1, keepdims=True)
+                mask = (v == vmin) | ~valid[:, None]
+                feat = lay.features(state, l, Y, X, lay.actor_win)
+                a = state_in[c.name][jnp.clip(Y, 0, h - 1), jnp.clip(X, 0, w - 1)].astype(jnp.int32)
+                outs.append(dict(feat=feat, soft=soft, mask=mask, a=a, valid=valid))
+                Ys = jnp.where(valid, Y, h)
+                state = {**state, c.name: state[c.name].at[Ys, X].set(a, mode="drop")}
+            return state, outs
+
+        state, ys = jax.lax.scan(body, state, jnp.arange(NCOL))
+        for ci, c in enumerate(chans):
+            out[key_of(l, c.name)] = jax.lax.stop_gradient(ys[ci])
+    return out
+
+
+def _forced_pass(lay, params, state_in, tau, maskfree, score_levels=None):
+    """Same outputs as _forced_pass_ref.  The contexts are collected once without parameters, then the
+    MLPs run over all 16 colour steps of a channel at once, so autodiff has no scan to unroll."""
+    ins = _collect_inputs(lay, state_in, score_levels)
+    lq, ok = {}, {}
+    for key, d in ins.items():
+        b = jax.vmap(lambda f: mlp(params[key], f))(d["feat"])                    # (16, n, D)
+        soft, mask, a, valid = d["soft"], d["mask"], d["a"], d["valid"]
+        n = a.shape[1]
+        idx = jnp.arange(n)[None, :]
+        pick = lambda x: jnp.take_along_axis(x, a[..., None], -1)[..., 0]
+        if maskfree:
+            logq = jax.nn.log_softmax(-soft / tau - b, axis=-1)
+            feas = jnp.ones(a.shape, bool)
+        else:
+            logq = jax.nn.log_softmax(jnp.where(mask, -soft / tau - b, -jnp.inf), axis=-1)
+            feas = pick(mask)
+        feas_all = pick(mask)
+        lq[key] = jnp.where(valid & feas, pick(logq), 0.0)
+        ok[key] = feas_all | ~valid
+    return lq, ok
+
+
+def logq_of_state(var_or_lay, params, state, region=None, tau=1.0, maskfree=False, score_levels=None):
     """Total log q of one full state {channel: (h, w) int}, by teacher forcing.
 
     Returns dict:
@@ -88,10 +155,13 @@ def logq_of_state(var_or_lay, params, state, region=None, tau=1.0, maskfree=Fals
       per_draw     {key: (16, n)} per-draw log q (0 at invalid / skipped sites)
       n_infeasible int, number of draws whose forced value is outside A
       feasible     bool
+    score_levels: optional set of levels whose draws are scored (the others are taken as given and
+      contribute nothing: gradients w.r.t. the scored levels' parameters are unchanged, since a
+      level's q depends only on coarser levels' values, not their parameters).
     Not batched; vmap over states (see logq_batch)."""
     lay = get_layout(var_or_lay, region)
     st = {k: jnp.asarray(v) for k, v in state.items()}
-    lq, ok = _forced_pass(lay, params, st, tau, maskfree)
+    lq, ok = _forced_pass(lay, params, st, tau, maskfree, score_levels)
     per_level = jnp.zeros(lay.T + 1)
     for key, v in lq.items():
         per_level = per_level.at[int(key[1:key.index("_")])].add(v.sum())

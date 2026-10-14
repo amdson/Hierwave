@@ -1,0 +1,12 @@
+2 0 fast True
+ sweep 0 frac differing entries 0.0 changed 7548 7548 soft 352.3671875 352.3671875
+ sweep 1 frac differing entries 0.0 changed 9432 9432 soft 348.66015625 348.66015625
+ sweep 2 frac differing entries 0.0 changed 9515 9515 soft 345.365234375 345.365234375
+   fast 8.0 ms/sweep
+   ref 40.3 ms/sweep
+1 1 fast True
+ sweep 0 frac differing entries 0.0 changed 11593 11593 soft 709.8828125 709.8828125
+ sweep 1 frac differing entries 0.0 changed 18122 18122 soft 714.703125 714.703125
+ sweep 2 frac differing entries 0.0 changed 18400 18400 soft 725.671875 725.671875
+   fast 47.4 ms/sweep
+   ref 623.6 ms/sweep

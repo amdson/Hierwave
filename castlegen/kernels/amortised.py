@@ -74,7 +74,7 @@ def internal_pruned(K: ExactBlockGibbs, max_out=2_000_000):
 
 
 class JaxBlockGibbs:
-    def __init__(self, problem, region, level, depth, lam=None, comps="full", chunk=None):
+    def __init__(self, problem, region, level, depth, lam=None, comps="full", chunk=None, fast=True):
         K = ExactBlockGibbs(problem, region, level=level, depth=depth, lam=lam, max_joint=10 ** 12 if comps == "full" else 0)
         self.K, self.lam, self.level, self.depth = K, lam, level, depth
         if isinstance(comps, str):
@@ -99,7 +99,108 @@ class JaxBlockGibbs:
                                slots=jnp.asarray(gr["slots"], jnp.int32), r=jnp.asarray(rowmap[gr["block"]], jnp.int32),
                                pos=None if gr["pos"] is None else jnp.asarray(gr["pos"], jnp.int32)))
             self.classes.append((jnp.asarray(K.BV[blocks], jnp.int32), blocks.size, gs))
-        self.sweep = jax.jit(self._sweep)
+        self.fast = bool(fast) and nchunk == 1 and self._build_fast()
+        self.sweep_ref = jax.jit(self._sweep)
+        self.sweep = jax.jit(self._sweep_fast) if self.fast else self.sweep_ref
+
+    # ---------------------------------------------------------------- fast path
+    def _build_fast(self):
+        """Factor each colour class's energy.  Every instance row has either all its
+        members inside the block (energy depends on the completion only: computed once,
+        here) or exactly one member inside (energy is a per-world field over that
+        variable's domain: computed per sweep over D values instead of over every
+        completion, then summed over the block's variables).  Anything else -> slow path."""
+        K, nv = self.K, self.K.nv
+        Dmax = int(max(K.D))
+        self.Dmax = Dmax
+        comps = jnp.asarray(self.comps, jnp.int32)
+        C = comps.shape[0]
+        # one-hot of (variable, value) per completion: (nv*Dmax, C)
+        oh = np.zeros((nv * Dmax, C), np.float32)
+        oh[(np.arange(nv)[:, None] * Dmax + self.comps.T), np.arange(C)[None, :]] = 1.0
+        self.onehot = jnp.asarray(oh)
+        fcls = []
+        for (BV, nbk, gs), (blocks, groups) in zip(self.classes, K.cls):
+            internal, single = [], []
+            for g, gr in zip(gs, groups):
+                nin = (gr["slots"] >= 0).sum(1)
+                nm = gr["slots"].shape[1]
+                if not np.all((nin == nm) | (nin == 1)):
+                    return False
+                if nm == 1:
+                    return False
+                ii, si = np.where(nin == nm)[0], np.where(nin == 1)[0]
+                if ii.size:
+                    internal.append({**g, **{k: (None if g[k] is None else g[k][jnp.asarray(ii)]) for k in ("G", "Cst", "slots", "r", "pos")}})
+                if si.size:
+                    sl = gr["slots"][si]
+                    star = np.argmax(sl >= 0, axis=1)
+                    j = sl[np.arange(si.size), star]
+                    rowmap = np.full(K.nb, -1, np.int64)
+                    rowmap[blocks] = np.arange(blocks.size)
+                    single.append(dict(kind=g["kind"], by_pos=g["by_pos"], table=g["table"], views=g["views"],
+                                       G=g["G"][jnp.asarray(si)], Cst=g["Cst"][jnp.asarray(si)], star=jnp.asarray(star, jnp.int32),
+                                       seg=jnp.asarray(rowmap[gr["block"][si]] * nv + j, jnp.int32),
+                                       pos=None if g["pos"] is None else g["pos"][jnp.asarray(si)]))
+            # world-independent part: all-internal rows over every completion
+            if internal:
+                isoft, inv = self._class_energy(jnp.zeros((1, K.flat.n), jnp.int32), internal, nbk, comps)
+                isoft, inv = isoft[0], inv[0]
+            else:
+                isoft = inv = jnp.zeros((nbk, C))
+            fcls.append((BV, nbk, single, isoft, inv))
+        self.fclasses = fcls
+        return True
+
+    def _class_field(self, v, single, nbk):
+        """Per-world fields (Wb, nbk*nv, Dmax) of soft and nviol from the one-member-inside rows."""
+        Wb, nv, Dmax = v.shape[0], self.K.nv, self.Dmax
+        d = jnp.arange(Dmax)
+        soft = jnp.zeros((nbk * nv, Wb, Dmax))
+        nviol = jnp.zeros((nbk * nv, Wb, Dmax))
+        for g in single:
+            vals = []
+            for m, view in enumerate(g["views"]):
+                Gm = g["G"][:, m]
+                fixed = jnp.where(Gm >= 0, view[v[:, jnp.maximum(Gm, 0)]], g["Cst"][:, m])          # (Wb, rows)
+                inside = view[jnp.minimum(d, view.shape[0] - 1)]                                       # (Dmax,)
+                vals.append(jnp.where((g["star"] == m)[None, :, None], inside[None, None], fixed[:, :, None]))
+            pos = None if g["pos"] is None else g["pos"][None, :, None]
+            e = _lookup_j(g["kind"], g["by_pos"], g["table"], vals, pos)                            # (Wb, rows, Dmax)
+            inf = jnp.isinf(e)
+            et = jnp.moveaxis(e, 1, 0)
+            it = jnp.moveaxis(inf, 1, 0)
+            soft = soft + jax.ops.segment_sum(jnp.where(it, 0.0, et), g["seg"], num_segments=nbk * nv)
+            nviol = nviol + jax.ops.segment_sum(it.astype(jnp.float32), g["seg"], num_segments=nbk * nv)
+        return jnp.moveaxis(soft, 1, 0), jnp.moveaxis(nviol, 1, 0)
+
+    def _sweep_fast(self, v, key):
+        Wb, nv, Dmax = v.shape[0], self.K.nv, self.Dmax
+        changed = jnp.zeros(Wb, jnp.int32)
+        comps = jnp.asarray(self.comps, jnp.int32)
+        C = comps.shape[0]
+        hp = jax.lax.Precision.HIGHEST
+        for BV, nbk, single, isoft, inv in self.fclasses:
+            key, sub = jax.random.split(key)
+            fs, fn = self._class_field(v, single, nbk)
+            mm = lambda f: jnp.matmul(f.reshape(Wb * nbk, nv * Dmax), self.onehot, precision=hp).reshape(Wb, nbk, C)
+            soft = isoft[None] + mm(fs)
+            nvl = inv[None] + mm(fn)
+            nvl = jnp.round(nvl)
+            if self.lam is None:
+                lg = jnp.where(nvl > 0, -jnp.inf, -soft)
+            else:
+                lg = -(soft + self.lam * nvl)
+            gmb = jax.random.gumbel(jax.random.fold_in(sub, 0), lg.shape)
+            sc = jnp.where(jnp.isfinite(lg), lg + gmb, -jnp.inf)
+            arg = jnp.argmax(sc, -1)
+            anyok = jnp.isfinite(lg).any(-1)
+            new = comps[arg]
+            old = v[:, BV]
+            newv = jnp.where(anyok[..., None], new, old)
+            changed = changed + (newv != old).any(-1).sum(-1).astype(jnp.int32)
+            v = v.at[:, BV].set(newv)
+        return v, changed
 
     def _class_energy(self, v, gs, nbk, comps):
         """v (Wb, n) ; comps (Cc, nv) -> soft, nv (Wb, nbk, Cc)."""
@@ -210,7 +311,7 @@ def refine(kernels, v, key, n_cycles, energy=None):
     return v, curve
 
 
-def make_ml_update_drawwise(lay, tau=1.0, clip=10.0):
+def make_ml_update_drawwise(lay, tau=1.0, clip=10.0, score_levels=None):
     """Weighted ML with infeasible draws dropped individually (instead of whole
     states): loss = -sum_i w_i sum_{feasible draws j} log q_j(x_ij) / sum_i w_i.
     Every kept term is the pass's own conditional at that draw given the state's
@@ -221,7 +322,7 @@ def make_ml_update_drawwise(lay, tau=1.0, clip=10.0):
     levels = list(range(lay.T + 1))
 
     def loss_fn(params, states, w):
-        r = jax.vmap(lambda s: logq_of_state(lay, params, s, tau=tau))(states)
+        r = jax.vmap(lambda s: logq_of_state(lay, params, s, tau=tau, score_levels=score_levels))(states)
         loss = -jnp.sum(w * r["total_finite"]) / jnp.maximum(w.sum(), 1e-30)
         return loss, (r["n_infeasible"].sum(), r["feasible"].sum())
 
@@ -239,3 +340,38 @@ def make_ml_update_drawwise(lay, tau=1.0, clip=10.0):
         nv = {k: sel(nopt["v"][k], opt["v"][k], k) for k in params}
         return new, {"m": nm, "v": nv, "t": nopt["t"]}, {"loss": loss, "n_infeasible": ninf, "n_feasible": nfeas}
     return step
+
+
+def make_refine_scan(kernels, n_cycles):
+    """jit fn (v, key) -> (v, changed_last) running n_cycles cycles of [K.sweep for K in kernels]
+    under one lax.scan (no per-cycle energy / host traffic).  Same sweeps as `refine` (keys differ:
+    one split per cycle).  changed_last: list over kernels of (Wb,) blocks changed in the last cycle."""
+    fns = [(K._sweep_fast if K.fast else K._sweep) for K in kernels]
+
+    @jax.jit
+    def run(v, key):
+        def body(v, k):
+            ks = jax.random.split(k, len(fns))
+            ch = []
+            for f, kk in zip(fns, ks):
+                v, n = f(v, kk)
+                ch.append(n)
+            return v, jnp.stack(ch)
+        v, ch = jax.lax.scan(body, v, jax.random.split(key, n_cycles))
+        return v, ch[-1]
+    return run
+
+
+def make_multi_update(step):
+    """Fuse several ML updates (same states pool, different minibatch indices) in one jit.
+    multi(params, opt, states, idx (U, B), w, lr, on) -> (params, opt, infos with leading axis U).
+    Each inner update is exactly `step` on states[idx[u]]."""
+    @jax.jit
+    def multi(params, opt, states, idx, w, lr, on):
+        def body(carry, ix):
+            p, o = carry
+            p, o, info = step(p, o, {k: x[ix] for k, x in states.items()}, w, lr, on)
+            return (p, o), info
+        (params, opt), infos = jax.lax.scan(body, (params, opt), idx)
+        return params, opt, infos
+    return multi
