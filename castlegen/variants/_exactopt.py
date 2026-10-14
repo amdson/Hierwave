@@ -498,14 +498,17 @@ class Enum:
         ctx = self.ctx[k]
         return np.bincount(ctx.ravel(), np.repeat(self.p_target, ctx.shape[1]), minlength=C)
 
-    def _logq(self, kind):
+    def _logq(self, kind, whole=False, cap=None):
+        """whole / cap (cbound): whole=True tempers the whole logit, (-s - b) / tau;
+        cap in {None, 'tanh', 'clip'} bounds b to [-c, c] (c the 3rd argument of logq);
+        cap = 'proj' bounds the last layer instead (train_cbound), no change here."""
         d = {k: dict(ctx=jnp.asarray(self.ctx[k]), act=jnp.asarray(self.act[k]),
                      feat=jnp.asarray(self.Ufeat[k]), soft=jnp.asarray(self.Usoft[k]),
                      mask=jnp.asarray(self.Umask[k]), fid=jnp.asarray(self.fid[k]),
                      hid=jnp.asarray(self.hid[k]),
                      sid=jnp.asarray(self.sid[k]) if kind == "table_seq" else None) for k in self.keys}
 
-        def logq(params, tau):
+        def logq(params, tau, c=None):
             tot = 0.0
             for k in self.keys:
                 e = d[k]
@@ -522,7 +525,14 @@ class Enum:
                     b = params[k][e["sid"]]
                 else:
                     b = params[k][e["hid"]]
-                lg = jnp.where(e["mask"][e["ctx"]], -e["soft"][e["ctx"]] / tau - b, -jnp.inf)
+                if cap == "tanh":
+                    b = c * jnp.tanh(b / c)
+                elif cap == "clip":
+                    b = jnp.clip(b, -c, c)
+                if whole:
+                    lg = jnp.where(e["mask"][e["ctx"]], (-e["soft"][e["ctx"]] - b) / tau, -jnp.inf)
+                else:
+                    lg = jnp.where(e["mask"][e["ctx"]], -e["soft"][e["ctx"]] / tau - b, -jnp.inf)
                 ls = jax.nn.log_softmax(lg, -1)
                 tot = tot + jnp.sum(jnp.take_along_axis(ls, e["act"][..., None], -1)[..., 0], -1)
             return tot
@@ -544,14 +554,38 @@ class Enum:
             self._jits[kind] = (jax.jit(logq), jax.jit(jg))
         return self._jits[kind]
 
+    def fns_sched(self, kind, whole=False, cap=None):
+        """cbound: (logq(params, tau, c), jg(params, tau, lam, c)) with lam (T + 1,) a
+        traced argument (lambda ramp), b bounded by c (cap) and optionally the whole
+        logit tempered.  The objective is unchanged: J = sum_x q (S + lam H + tau log q)."""
+        key = ("sched", kind, whole, cap)
+        if key not in self._jits:
+            logq = self._logq(kind, whole, cap)
+            S, Hm = jnp.asarray(self.S, jnp.float32), jnp.asarray(self.H, jnp.float32)
+
+            def surrogate(params, tau, lam, c):
+                lq = logq(params, tau, c)
+                w = jax.lax.stop_gradient(jnp.exp(lq) * (S + Hm @ lam + tau * lq))
+                return jnp.sum(w * lq), lq
+
+            def jg(params, tau, lam, c):
+                (_, lq), g = jax.value_and_grad(surrogate, has_aux=True)(params, tau, lam, c)
+                return lq, g
+            self._jits[key] = (jax.jit(logq), jax.jit(jg))
+        return self._jits[key]
+
     def J(self, lq, tau):
         lq = np.asarray(lq, np.float64)
         q = np.exp(lq)
         return float(np.sum(q * (self.E + tau * lq))), q
 
-    def evaluate(self, kind, params, stat_fn=None):
-        """Exact metrics at tau = 1."""
-        lq = np.asarray(self.fns(kind)[0](params, jnp.float32(1.0)), np.float64)
+    def evaluate(self, kind, params, stat_fn=None, sched=None):
+        """Exact metrics at tau = 1 (sched = (whole, cap, c): the cbound actor with bound c)."""
+        if sched is None:
+            lq = np.asarray(self.fns(kind)[0](params, jnp.float32(1.0)), np.float64)
+        else:
+            whole, cap, c = sched
+            lq = np.asarray(self.fns_sched(kind, whole, cap)[0](params, jnp.float32(1.0), jnp.float32(c)), np.float64)
         J, q = self.J(lq, 1.0)
         out = {"J": J, "kl": J + self.logZ, "sum_q": float(q.sum()), "p_viol": float(q @ (self.H.sum(1) > 0)),
                "entropy": float(-(q * lq).sum()), "kl_coarse": self.kl_coarse(q)}
@@ -676,6 +710,71 @@ def train_exact(enum, kind, params, steps, lr, lam, every, stat_fn, clip=10.0, t
     return params, curve
 
 
+def project_out(p, c):
+    """cap = 'proj' (cbound): rescale each output column of the actor's last layer so that
+    sum_j |W3[j, d]| + |b3[d]| <= c.  With tanh hidden units (|h| <= 1) this bounds |b_d| <= c
+    for every input while keeping the gradient through b linear (no saturating squash)."""
+    n = jnp.sum(jnp.abs(p["W3"]), 0) + jnp.abs(p["b3"])
+    s = jnp.minimum(1.0, c / jnp.maximum(n, 1e-12))
+    return {**p, "W3": p["W3"] * s, "b3": p["b3"] * s}
+
+
+def sched_at(i, sched_steps, lam, tau0=1.0, tau_frac=0.0, lam0=None, lam_frac=0.0,
+             c0=None, cmax=None, c_frac=0.0):
+    """cbound schedules at step i (fractions of sched_steps; past sched_steps every
+    schedule is at its end).  tau: linear tau0 -> 1; lam: linear lam0 -> lam;
+    c: geometric c0 -> cmax (then held at cmax, the generation bound)."""
+    def ramp(frac):
+        return 1.0 if frac <= 0 else min(1.0, i / max(frac * sched_steps, 1e-9))
+    tau = tau0 + (1.0 - tau0) * ramp(tau_frac)
+    lam = np.asarray(lam, np.float64)
+    lam_i = lam if lam0 is None else lam0 + (lam - lam0) * ramp(lam_frac)
+    c = 1e9 if c0 is None else float(c0 * (cmax / c0) ** ramp(c_frac))
+    return tau, lam_i, c
+
+
+def train_cbound(enum, kind, params, steps, post, lr, lam, every, stat_fn, clip=10.0, log=print,
+                 whole=False, cap=None, hook=None, **sk):
+    """cbound: train_exact with the schedules of sched_at over `steps`, then `post`
+    more steps at tau = 1, full lam and the final bound.  Metrics (tau = 1, final
+    bound cmax) are logged every `every` steps; m['c'] is the bound in use."""
+    _, jg = enum.fns_sched(kind, whole, cap)
+    opt = adam_init(params)
+    opt["t"] = jnp.int32(0)
+    levels = list(range(enum.p.T + 1))
+    cfin = sched_at(steps, steps, lam, **sk)[2]
+
+    @jax.jit
+    def update(params, opt, tau, lamj, c):
+        _, g = jg(params, tau, lamj, c)
+        if not kind.startswith("table"):
+            g = clip_by_level(g, levels, clip)
+        params, opt = adam_step(params, g, opt, lr)
+        if cap == "proj":
+            params = {k: project_out(v, c) for k, v in params.items()}
+        return params, opt
+    curve = []
+    t0 = time.time()
+    n = steps + post
+    for i in range(n + 1):
+        tau, lam_i, c = sched_at(i, steps, lam, **sk)
+        if i % every == 0 or i == n or i == steps:
+            m = {"step": i, "t": time.time() - t0, **enum.evaluate(kind, params, stat_fn, sched=(whole, cap, cfin))}
+            # also the policy actually in use at this step (bound c, tau = 1)
+            m["kl_cur"] = enum.evaluate(kind, params, None, sched=(whole, cap, c))["kl"] if cap else m["kl"]
+            m.update(tau=tau, lam=float(np.mean(lam_i)), c=min(c, 1e6))
+            curve.append(m)
+            log(f"[{kind}] {i} tau {tau:.2f} lam {m['lam']:.1f} c {m['c']:.2f} kl {m['kl']:.4f} H/cell "
+                f"{m['entropy'] / enum.region.W / enum.p.H:.3f} " +
+                " ".join(f"{k} {m[k]:.3f}" for k in m if k in ("p_viol", "horizontal", "vertical", "diagonal")))
+            if hook is not None:
+                hook(i, params, tau)
+        if i == n:
+            break
+        params, opt = update(params, opt, jnp.float32(tau), jnp.asarray(lam_i, jnp.float32), jnp.float32(c))
+    return params, curve
+
+
 def train_sampled(var, kind, enum, steps, lam, every, stat_fn, B, tau0=2.0, log=print):
     """cpass's / cfast's own update (critic, replays / returns, clipping, Adam)
     on the same layout, with tau annealed per step and lam fixed."""
@@ -741,6 +840,9 @@ def main():
     ap.add_argument("--warmup", type=int, default=0, help="linear lr warm-up steps, exact runs (cdim3)")
     ap.add_argument("--init", default="", help="pickle of params to start exact runs from (cdim3)")
     ap.add_argument("--save", default="", help="pickle the final params of exact runs here (cdim3)")
+    ap.add_argument("--cbound", default="", help="cbound schedules, comma list of key=val: tau0, tau_frac, "
+                    "lam0, lam_frac, c0, cmax, c_frac, cap (tanh|clip), whole (0|1), post (extra steps at the end "
+                    "state); fractions are of --steps")
     a = ap.parse_args()
     set_actor_window(a.win)
     problem, region = get_problem(a.problem)
@@ -775,13 +877,20 @@ def main():
                 import pickle
                 with open(a.init, "rb") as fh:
                     params = jax.tree_util.tree_map(jnp.asarray, pickle.load(fh))
-            params, curve = train_exact(enum, kind, params, a.steps, lr, lam, a.every, stat_fn, tau0=a.tau0,
-                                        anneal=a.anneal, warmup=a.warmup)
+            if a.cbound:
+                cb = dict(kv.split("=") for kv in a.cbound.split(","))
+                sk = {k: float(cb[k]) for k in ("tau0", "tau_frac", "lam0", "lam_frac", "c0", "cmax", "c_frac") if k in cb}
+                params, curve = train_cbound(enum, kind, params, a.steps, int(cb.get("post", 0)), lr, lam, a.every,
+                                             stat_fn, whole=bool(int(cb.get("whole", 0))), cap=cb.get("cap"), **sk)
+            else:
+                params, curve = train_exact(enum, kind, params, a.steps, lr, lam, a.every, stat_fn, tau0=a.tau0,
+                                            anneal=a.anneal, warmup=a.warmup)
             if a.save:
                 import pickle
                 with open(a.save, "wb") as fh:
                     pickle.dump(jax.device_get(params), fh)
-            info = {"lr": lr, "win": a.win, "anneal": a.anneal, "warmup": a.warmup, "init": a.init, "tau0": a.tau0}
+            info = {"lr": lr, "win": a.win, "anneal": a.anneal, "warmup": a.warmup, "init": a.init, "tau0": a.tau0,
+                    "cbound": a.cbound}
         else:
             var = make_variant(run, problem, region, a.seed, B=a.B)
             assert all(np.allclose(np.asarray(x), np.asarray(y)) for x, y in

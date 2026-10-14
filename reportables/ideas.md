@@ -195,3 +195,12 @@ cdim2's untested idea: initialise from, or regularise toward, the free-logit sol
 > - **Ground.** The same mechanism plausibly explains the context-blind fine levels.
 > - Status: tried. The neural class is sufficient; next, a curriculum that keeps contexts soft early (#12). Report: reportables/2026-10-14_cdim3/.
 
+
+## 17. Soft-policy curriculum while the penalty dominates: bounded bias, λ ramp, whole-logit τ (from chat / cdim3 agent, 2026-10-14)
+Keep the shared-weight actor soft until it has learned context-dependent structure. Candidates: (a) bound b by c(t), ramped from 1 nat upward; (b) ramp λ from 1 to its controlled value; (c) anneal τ on the whole logit, q ∝ exp((−s − b)/τ); (d) combinations. All are engineering freedoms.
+
+> **Annotation (2026-10-14, cbound): outcome.**
+> - **Exact gradients (dimers 4x4, λ 20).** λ ramp + whole-logit τ 8→1 reaches KL 4e-5 with h/v/d 0.505/0.248/0.248. Whole τ 8→1 alone reaches KL 0.031. Both stay diverse for 400 steps at τ = 1. The λ ramp alone stays diverse but stalls at KL 0.24. Bounding b (tanh cap or last-layer projection) and whole τ 4→1 go to stripes (3.25): the cap limits margins, not direction.
+> - **Sampled cfast (dimers, 60 s).** Every arm keeps three orientations while violations are about 1 %, then drops the diagonal when violations fall. The drop is to 2-5 % rather than cfast's 0 %. With the λ ramp alone the diagonal recovered to 0.23 at 6e-5 violations (entropy 0.272 vs cfast 0.224; one seed, late in the run). The exact winner collapsed to 0.
+> - **Ground (λ ramp).** All dirt by update 500 at λ ≈ 3. Gate 0.75/1.62 (L4), 0.56/2.08 (L3): no move.
+> - Status: tested. It works under exact gradients; it is partial and unconfirmed under sampled gradients; it is negative on ground with the λ ramp. Next: a second seed for cbound_lam on dimers, and whole-logit τ on ground. Report: reportables/2026-10-14_cbound/.

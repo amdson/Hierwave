@@ -17,6 +17,14 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 04:55 · cbound · finished
+Approach: soft-policy curriculum (ideas #17): bounded b (tanh cap / last-layer projection, c 1→30), λ ramp 1→λ0, τ on the whole logit (8→1), combinations; exact gradients on dimers 4x4 first, then the cfast variant `cbound`.
+Result: exact, λ 20: λ ramp + whole τ 8→1 KL 4e-5 (h/v/d 0.505/0.248/0.248, H 0.376); whole τ 8→1 0.031; λ ramp 0.24; caps and whole τ 4→1 3.25 (stripes); all hold for 400 post steps at τ 1. Sampled dimers 60 s: cfast diag 0.000 (3806 upd); cbound_lam 0.47/0.30/0.23, H 0.272, viol 6e-5 (recovered late, 1 seed); whole8 diag 0.047; wholelam 0.000. Ground cbound_lam: all dirt by update 500 (λ 3), gate 0.75 vs 1.62 / 0.56 vs 2.08, so no move and no bench. [Report](2026-10-14_cbound/report.md).
+Next: second seed and longer run for cbound_lam on dimers; cbound_wholelam_diag on ground (whole τ tempers b, which csat said was missing).
+
+## 2026-10-14 03:40 · cbound · started
+Approach: training-time curriculum that keeps the policy soft while the penalty gradient dominates (cdim3 mechanism): bounded bias b = c(t) tanh(b/c(t)) with c ramped 1 -> 30, λ ramp 1 -> 20, τ on the whole logit (4->1, 8->1), and combinations. Exact gradients on dimers 4x4 first (`_exactopt --cbound`), then the best into a cfast variant `cbound` (dimers 60 s, ground 120 s, clamp gate).
+
 ## 2026-10-14 03:32 · cdim3 · finished
 Approach: dimers 4x4 exact gradients (cdim2 setup). Distil table_feat into the tanh MLP; diagnose steps 0-200; try generic fixes with exact gradients (ideas #16).
 Result: optimisation, not representation. Distilled MLP KL 0.0255 (h/v/d 0.507/0.247/0.247). Exact training from it holds and reaches KL 0.0020. From init, P(viol | horizontal) < P(viol | v/d) at every draw under λ 20, so −∇J points at stripes (cos 0.90). Shared weights saturate all contexts by step 10-50 (93 % h at step 10, margins 8-9 nats by 50), where the gradient keeps pointing at stripes and vanishes. The table only overshoots to 78 % h and then turns. Fixes: candidate head 3.249, hashed window-pattern input 3.250, lr warm-up 3.251, lr 3e-4 3.280 (all stripes); τ 4→1 over the whole run 1.336 (h 0.65 / v 0 / d 0.35). [Report](2026-10-14_cdim3/report.md).
