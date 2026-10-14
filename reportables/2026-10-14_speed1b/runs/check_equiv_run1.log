@@ -1,0 +1,7 @@
+mtm_L2_K8 decisions agree 1.0 acc rate 0.6875 max|dlog_r| 0.0001239776611328125 max|dE| 0.0 max|dlogq| 0.00020313262939453125 states equal 1.0
+mh_L1_K1 decisions agree 1.0 acc rate 0.796875 max|dlog_r| 0.00037384033203125 max|dE| 0.0 max|dlogq| 0.0003750324249267578 states equal 1.0
+mtm_L3_K4 decisions agree 1.0 acc rate 0.515625 max|dlog_r| 0.00042724609375 max|dE| 0.0 max|dlogq| 0.00041961669921875 states equal 1.0
+flip uniform L 3 decisions agree 1.0 acc rate 0.59375 max|dlog_r| 0.001953125 max|dE| 0.0 max|dlogq| 0.0030269622802734375 states equal 1.0
+flip uniform L 4 decisions agree 1.0 acc rate 0.546875 max|dlog_r| 0.0050048828125 max|dE| 0.0 max|dlogq| 0.0050048828125 states equal 1.0
+flip q L 3 decisions agree 1.0 acc rate 0.671875 max|dlog_r| 0.00327301025390625 max|dE| 0.0 max|dlogq| 0.0032806396484375 states equal 1.0
+flip q L 4 decisions agree 1.0 acc rate 0.578125 max|dlog_r| 0.005462646484375 max|dE| 42.484375 max|dlogq| 46.888221740722656 states equal 0.1

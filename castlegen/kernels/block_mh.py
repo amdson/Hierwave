@@ -61,7 +61,130 @@ def block_masks(lay, L, Y, X):
     return out
 
 
-def block_pass(lay, params, key, state, inb, tau, lam, Lmax, forced=None, drop_mask=False):
+def _active_colours(lay, l, L, Y, X):
+    """The colours (in the pass's order) that have a site in the level-L block at (Y, X), at level l.
+    Returns (cy, cx per rank r (4*4,), count)."""
+    P = 4
+    sh = jnp.maximum(L - l, 0)
+    s = jnp.where(L >= l, jnp.left_shift(1, sh), 0)
+    Y0, X0 = jnp.left_shift(Y, sh), jnp.left_shift(X, sh)
+    ar = jnp.arange(P)
+    ry = jnp.sort(jnp.where(ar < s, jnp.mod(Y0 + ar, P), 99))
+    rx = jnp.sort(jnp.where(ar < s, jnp.mod(X0 + ar + (lay.x0 >> l), P), 99))   # colour column cx = (x residue + x0 >> l) mod P
+    nry, nrx = jnp.minimum(s, P), jnp.minimum(s, P)
+    r = jnp.arange(P * P)
+    cy = ry[jnp.minimum(r // jnp.maximum(nrx, 1), P - 1)]
+    cx = rx[jnp.minimum(r % jnp.maximum(nrx, 1), P - 1)]
+    return cy, cx, nry * nrx
+
+
+def block_sites(lay, l, cy, cx, L, Y, X, Lmax):
+    """Colour-(cy, cx) sites of level l that can lie in the level-L block at cell (Y, X) (all may be
+    traced except l, Lmax): a static number ceil(2^(Lmax-l) / 4)^2 of slots, slot (y, x) with
+    y = Y0 + ((cy - Y0) mod 4) + 4 i, x likewise; inside when it lies in the block (and l <= L).
+    Returns (Yc, Xc clipped to the grid, inside, row index of the slot in lay.sites(l, k))."""
+    P = 4
+    h, w = lay.hw[l]
+    ny, nx = lay.nyx[l]
+    ox = (cx - (lay.x0 >> l)) % P
+    sh = jnp.maximum(L - l, 0)
+    s = jnp.where(L >= l, jnp.left_shift(1, sh), 0)
+    Y0, X0 = jnp.left_shift(Y, sh), jnp.left_shift(X, sh)
+    ns = -(-(1 << max(Lmax - l, 0)) // P)
+    Ys = Y0 + jnp.mod(cy - Y0, P) + P * jnp.arange(ns)
+    Xs = X0 + jnp.mod(ox - X0, P) + P * jnp.arange(ns)
+    vy, vx = Ys < Y0 + s, Xs < X0 + s
+    Yg, Xg = jnp.meshgrid(Ys, Xs, indexing="ij")
+    inside = (vy[:, None] & vx[None, :]).ravel() & ((Yg < h) & (Xg < w)).ravel()
+    Yg, Xg = Yg.ravel(), Xg.ravel()
+    row = jnp.clip((Yg - cy) // P, 0, ny - 1) * nx + jnp.clip((Xg - ox) // P, 0, nx - 1)
+    return jnp.clip(Yg, 0, h - 1), jnp.clip(Xg, 0, w - 1), inside, row
+
+
+def compact_pass(lay, params, key, state, L, Y, X, tau, Lmax, forced=None, drop_mask=False, flip=None, use_forced=None):
+    """block_pass / flip_pass computed on the block's sites only, and only the colour steps that have a
+    site in the block (at most min(16, 2^(2 (Lmax - l))) per level instead of 16).  Same draws, same
+    log q, soft and violation sums as the full-image pass: the key sequence of the full pass is
+    reproduced, and each step's Gumbel noise is generated for the full site list and gathered, so equal
+    keys give equal candidates.  flip = None (plain block pass) or (tau_c, mode): the level-L proposal
+    is the flip distribution.  forced: state to score (teacher forcing); with use_forced (traced bool)
+    the pass scores `forced` when True and draws when False (so a batch can hold K candidates and the
+    reverse scoring together).  Returns (state, logq, E_soft, n_viol, logq_flip)."""
+    inb = block_masks(lay, L, Y, X)
+    st = {k: (jnp.where(inb[k], -1, v) if k in inb else v) for k, v in state.items()}
+    lq = jnp.zeros(())
+    lqf = jnp.zeros(())
+    es = jnp.zeros(())
+    nvs = jnp.zeros((), jnp.int32)
+    levels = [l for l in lay.levels if l <= Lmax and lay.chans[l]]
+    bases, n = {}, 0
+    for l in levels:
+        bases[l] = n
+        n += NCOL * len(lay.chans[l])
+    if forced is None or use_forced is not None:
+        _, k1s = jax.lax.scan(lambda kk, _: tuple(jax.random.split(kk)), key, None, length=n)    # the full pass's draw keys
+    for l in levels:
+        chans = lay.chans[l]
+        nch = len(chans)
+        nfull = lay.nsite(l)
+        nsteps = min(NCOL, 1 << (2 * max(Lmax - l, 0)))
+
+        def body(carry, r, l=l, chans=chans, nfull=nfull, nch=nch):
+            st, lq, lqf, es, nvs = carry
+            cys, cxs, cnt = _active_colours(lay, l, L, Y, X)
+            cy, cx = cys[r], cxs[r]
+            k = cy * 4 + cx
+            Yc, Xc, inside, row = block_sites(lay, l, cy, cx, L, Y, X, Lmax)
+            inside = inside & (r < cnt)
+            h, w = lay.hw[l]
+            top = jnp.asarray(l) == L
+            for ci, c in enumerate(chans):
+                soft, nv, look = lay.cond(st, c.name, Yc, Xc)
+                v = nv + look
+                mask = (v == jnp.min(v, axis=1, keepdims=True)) | ~inside[:, None]
+                feat = lay.features(st, l, Yc, Xc, lay.actor_win)
+                b = mlp(params[key_of(l, c.name)], feat)
+                if flip is None:
+                    raw = (-soft - b) / tau
+                    logits = raw if drop_mask else jnp.where(mask, raw, -jnp.inf)
+                else:
+                    tau_c, mode = flip
+                    raw = -soft - b
+                    flip_lg = jnp.zeros_like(raw) if mode == "uniform" else raw / tau_c
+                    logits = jnp.where(mask, jnp.where(top, flip_lg, raw / tau), -jnp.inf)
+                logq = jax.nn.log_softmax(logits, axis=1)
+                if forced is None or use_forced is not None:
+                    g = jax.random.gumbel(k1s[bases[l] + k * nch + ci], (nfull, logits.shape[1]))[row]
+                    a = jnp.argmax(logits + g, axis=1).astype(jnp.int32)
+                if forced is not None:
+                    af = forced[c.name][Yc, Xc]
+                    a = af if use_forced is None else jnp.where(use_forced, af, a)
+                cur = st[c.name][Yc, Xc]
+                a = jnp.where(inside, a, cur)
+                idx = jnp.arange(Yc.shape[0])
+                term = jnp.sum(jnp.where(inside, logq[idx, jnp.maximum(a, 0)], 0.0))
+                lq = lq + term
+                lqf = lqf + jnp.where(top, term, 0.0)
+                es = es + jnp.sum(jnp.where(inside, soft[idx, jnp.maximum(a, 0)], 0.0))
+                nvs = nvs + jnp.sum(jnp.where(inside, nv[idx, jnp.maximum(a, 0)], 0))
+                Ys = jnp.where(inside, Yc, h)
+                st = {**st, c.name: st[c.name].at[Ys, Xc].set(a, mode="drop")}
+            return (st, lq, lqf, es, nvs), None
+
+        (st, lq, lqf, es, nvs), _ = jax.lax.scan(body, (st, lq, lqf, es, nvs), jnp.arange(nsteps))
+    return st, lq, es, nvs, lqf
+
+
+def block_pass(lay, params, key, state, inb, tau, lam, Lmax, forced=None, drop_mask=False, blk=None):
+    """blk = (L, Y, X): compute on the block's sites only (compact_pass; identical results).
+    blk = None: the full-image reference pass (block_pass_ref)."""
+    if blk is not None:
+        st, lq, es, nvs, _ = compact_pass(lay, params, key, state, blk[0], blk[1], blk[2], tau, Lmax, forced, drop_mask)
+        return st, lq, es, nvs
+    return block_pass_ref(lay, params, key, state, inb, tau, lam, Lmax, forced, drop_mask)
+
+
+def block_pass_ref(lay, params, key, state, inb, tau, lam, Lmax, forced=None, drop_mask=False):
     """One world.  state: {name: int32 (h, w)} complete (all channels).  inb:
     block masks.  forced: None (draw) or {name: values} to score.  Levels
     > Lmax are skipped (static).  Returns (new_state, logq, E_soft, n_viol)
@@ -131,10 +254,14 @@ def mh_move(lay, params, key, state, L, Y, X, tau=1.0, lam=20.0, K=1, Lmax=None,
     inb = block_masks(lay, L, Y, X)
     keys = jax.random.split(key, K + 2)
     # candidates
-    cand = jax.vmap(lambda kk: block_pass(lay, params, kk, state, inb, tau, lam, Lmax))(keys[:K])
-    cst, clq, ces, cnv = cand
-    # reverse: q(x_B | x_out) and the old block energy
-    _, xlq, xes, xnv = block_pass(lay, params, keys[K], state, inb, tau, lam, Lmax, forced=state)
+    # K candidates and the reverse scoring of the old block values in ONE batched pass (the last row
+    # teacher-forces `state`); same keys as the separate calls
+    allk = keys[:K + 1]
+    isrev = jnp.arange(K + 1) == K
+    cstA, lqA, esA, nvA, _ = jax.vmap(lambda kk, f: compact_pass(lay, params, kk, state, L, Y, X, tau, Lmax, forced=state, use_forced=f))(allk, isrev)
+    cst = {k: v[:K] for k, v in cstA.items()}
+    clq, ces, cnv = lqA[:K], esA[:K], nvA[:K]
+    xlq, xes, xnv = lqA[K], esA[K], nvA[K]
     lp_c, lp_x = _logp(ces, cnv, lam), _logp(xes, xnv, lam)
     if drop_q is not False:                      # deliberately wrong ratio (test power only):
         sc = 0.0 if drop_q is True else float(drop_q)   # True drops q; a float scales log q

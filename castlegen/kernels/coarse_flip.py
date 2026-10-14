@@ -39,10 +39,18 @@ import jax.numpy as jnp
 import numpy as np
 
 from castlegen.variants._cpass_core import NCOL, key_of, mlp
-from .block_mh import block_masks, _logp, _lse
+from .block_mh import block_masks, compact_pass, _logp, _lse
 
 
-def flip_pass(lay, params, key, state, inb, Ltop, tau, tau_c, mode, Lmax, forced=None):
+def flip_pass(lay, params, key, state, inb, Ltop, tau, tau_c, mode, Lmax, forced=None, blk=None):
+    """blk = (Y, X): compute on the block's sites only (block_mh.compact_pass; identical results);
+    None: the full-image reference pass."""
+    if blk is not None:
+        return compact_pass(lay, params, key, state, Ltop, blk[0], blk[1], tau, Lmax, forced, flip=(tau_c, mode))
+    return flip_pass_ref(lay, params, key, state, inb, Ltop, tau, tau_c, mode, Lmax, forced)
+
+
+def flip_pass_ref(lay, params, key, state, inb, Ltop, tau, tau_c, mode, Lmax, forced=None):
     """block_mh.block_pass with the proposal at the block's top level Ltop
     (may be traced) replaced by the flip distribution.  Returns
     (new_state, logq_total, E_soft, n_viol, logq_flip)."""
@@ -105,8 +113,13 @@ def flip_move(lay, params, key, state, L, Y, X, tau=1.0, tau_c=1.0, mode="unifor
     Lmax = lay.T if Lmax is None else Lmax
     inb = block_masks(lay, L, Y, X)
     keys = jax.random.split(key, K + 2)
-    cst, clq, ces, cnv, _ = jax.vmap(lambda kk: flip_pass(lay, params, kk, state, inb, L, tau, tau_c, mode, Lmax))(keys[:K])
-    _, xlq, xes, xnv, _ = flip_pass(lay, params, keys[K], state, inb, L, tau, tau_c, mode, Lmax, forced=state)
+    allk = keys[:K + 1]
+    isrev = jnp.arange(K + 1) == K
+    cstA, lqA, esA, nvA, _ = jax.vmap(lambda kk, f: compact_pass(lay, params, kk, state, L, Y, X, tau, Lmax, forced=state,
+                                                                  flip=(tau_c, mode), use_forced=f))(allk, isrev)
+    cst = {k: v[:K] for k, v in cstA.items()}
+    clq, ces, cnv = lqA[:K], esA[:K], nvA[:K]
+    xlq, xes, xnv = lqA[K], esA[K], nvA[K]
     lp_c, lp_x = _logp(ces, cnv, lam), _logp(xes, xnv, lam)
     lw = lp_c - clq
     lwx = lp_x - xlq

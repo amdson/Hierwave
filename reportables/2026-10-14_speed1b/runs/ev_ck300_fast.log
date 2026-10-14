@@ -1,0 +1,110 @@
+layout resid False win (-2, 3) net ln
+CHG untrained/L4/rho3/j0_vs_j2 0.0085
+CHG untrained/L4/rho3/j0_vs_j1 0.0056
+CHG untrained/L4/rho3/own_vs_j0 0.0168
+CHG untrained/L4/cert3/j0_vs_j2 0.0598
+CHG untrained/L4/cert3/j0_vs_j1 0.041
+CHG untrained/L4/cert3/own_vs_j0 0.6199
+CHG untrained/L4/rho2/j0_vs_j2 0.0382
+CHG untrained/L4/rho2/j0_vs_j1 0.0237
+CHG untrained/L4/rho2/own_vs_j0 0.371
+CHG untrained/L4/cert2/j0_vs_j2 0.0452
+CHG untrained/L4/cert2/j0_vs_j1 0.0286
+CHG untrained/L4/cert2/own_vs_j0 0.5118
+CHG untrained/L4/rho1/j0_vs_j2 0.0359
+CHG untrained/L4/rho1/j0_vs_j1 0.0218
+CHG untrained/L4/rho1/own_vs_j0 0.3962
+CHG untrained/L4/cert1/j0_vs_j2 0.0322
+CHG untrained/L4/cert1/j0_vs_j1 0.02
+CHG untrained/L4/cert1/own_vs_j0 0.4269
+CHG untrained/L4/t/j0_vs_j2 0.021
+CHG untrained/L4/t/j0_vs_j1 0.0127
+CHG untrained/L4/t/own_vs_j0 0.3475
+CHG untrained/L4/t_eq_probe_j0 0.9045
+CHG untrained/L4/line_match_j0 0.5636
+CHG untrained/L3/rho2/j0_vs_j2 0.0285
+CHG untrained/L3/rho2/j0_vs_j1 0.0182
+CHG untrained/L3/rho2/own_vs_j0 0.7225
+CHG untrained/L3/cert2/j0_vs_j2 0.0414
+CHG untrained/L3/cert2/j0_vs_j1 0.0223
+CHG untrained/L3/cert2/own_vs_j0 0.533
+CHG untrained/L3/rho1/j0_vs_j2 0.0188
+CHG untrained/L3/rho1/j0_vs_j1 0.0114
+CHG untrained/L3/rho1/own_vs_j0 0.5785
+CHG untrained/L3/cert1/j0_vs_j2 0.0227
+CHG untrained/L3/cert1/j0_vs_j1 0.0127
+CHG untrained/L3/cert1/own_vs_j0 0.4627
+CHG untrained/L3/t/j0_vs_j2 0.0106
+CHG untrained/L3/t/j0_vs_j1 0.0059
+CHG untrained/L3/t/own_vs_j0 0.3906
+CHG untrained/L3/t_eq_probe_j0 0.9816
+CHG untrained/L3/line_match_j0 0.7341
+CHG untrained/own/line_match 0.5093
+CHG untrained/own/dirt 0.8503
+CHG trained/L4/rho3/j0_vs_j2 0.0557
+CHG trained/L4/rho3/j0_vs_j1 0.0344
+CHG trained/L4/rho3/own_vs_j0 0.127
+CHG trained/L4/cert3/j0_vs_j2 0.0537
+CHG trained/L4/cert3/j0_vs_j1 0.0352
+CHG trained/L4/cert3/own_vs_j0 0.0769
+CHG trained/L4/rho2/j0_vs_j2 0.0275
+CHG trained/L4/rho2/j0_vs_j1 0.0203
+CHG trained/L4/rho2/own_vs_j0 0.0524
+CHG trained/L4/cert2/j0_vs_j2 0.0296
+CHG trained/L4/cert2/j0_vs_j1 0.0203
+CHG trained/L4/cert2/own_vs_j0 0.0428
+CHG trained/L4/rho1/j0_vs_j2 0.0161
+CHG trained/L4/rho1/j0_vs_j1 0.0118
+CHG trained/L4/rho1/own_vs_j0 0.0259
+CHG trained/L4/cert1/j0_vs_j2 0.0174
+CHG trained/L4/cert1/j0_vs_j1 0.0119
+CHG trained/L4/cert1/own_vs_j0 0.0255
+CHG trained/L4/t/j0_vs_j2 0.0087
+CHG trained/L4/t/j0_vs_j1 0.0059
+CHG trained/L4/t/own_vs_j0 0.0129
+CHG trained/L4/t_eq_probe_j0 0.9773
+CHG trained/L4/line_match_j0 0.7112
+CHG trained/L3/rho2/j0_vs_j2 0.0315
+CHG trained/L3/rho2/j0_vs_j1 0.0197
+CHG trained/L3/rho2/own_vs_j0 0.1531
+CHG trained/L3/cert2/j0_vs_j2 0.0433
+CHG trained/L3/cert2/j0_vs_j1 0.0259
+CHG trained/L3/cert2/own_vs_j0 0.0728
+CHG trained/L3/rho1/j0_vs_j2 0.0191
+CHG trained/L3/rho1/j0_vs_j1 0.0122
+CHG trained/L3/rho1/own_vs_j0 0.0535
+CHG trained/L3/cert1/j0_vs_j2 0.0211
+CHG trained/L3/cert1/j0_vs_j1 0.0133
+CHG trained/L3/cert1/own_vs_j0 0.042
+CHG trained/L3/t/j0_vs_j2 0.0099
+CHG trained/L3/t/j0_vs_j1 0.0064
+CHG trained/L3/t/own_vs_j0 0.0208
+CHG trained/L3/t_eq_probe_j0 0.9848
+CHG trained/L3/line_match_j0 0.7498
+CHG trained/own/line_match 0.7029
+CHG trained/own/dirt 0.4989
+Traceback (most recent call last):
+  File "/workspace/hierwave_git/reportables/2026-10-14_speed1b/eval_ground.py", line 158, in <module>
+    plt.tight_layout(); plt.savefig(f"{D}/images/ground_clamped_examples.png", dpi=110)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/main/lib/python3.12/site-packages/matplotlib/pyplot.py", line 1346, in savefig
+    res = fig.savefig(fname, **kwargs)  # type: ignore[func-returns-value]
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/main/lib/python3.12/site-packages/matplotlib/figure.py", line 3515, in savefig
+    self.canvas.print_figure(fname, **kwargs)
+  File "/venv/main/lib/python3.12/site-packages/matplotlib/backend_bases.py", line 2289, in print_figure
+    result = print_method(
+             ^^^^^^^^^^^^^
+  File "/venv/main/lib/python3.12/site-packages/matplotlib/backend_bases.py", line 2146, in <lambda>
+    print_method = functools.wraps(meth)(lambda *args, **kwargs: meth(
+                                                                 ^^^^^
+  File "/venv/main/lib/python3.12/site-packages/matplotlib/backends/backend_agg.py", line 537, in print_png
+    self._print_pil(filename_or_obj, "png", pil_kwargs, metadata)
+  File "/venv/main/lib/python3.12/site-packages/matplotlib/backends/backend_agg.py", line 486, in _print_pil
+    mpl.image.imsave(
+  File "/venv/main/lib/python3.12/site-packages/matplotlib/image.py", line 1729, in imsave
+    image.save(fname, **pil_kwargs)
+  File "/venv/main/lib/python3.12/site-packages/PIL/Image.py", line 2706, in save
+    fp = builtins.open(filename, "w+b")
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'runs/ck300_fast/images/ground_clamped_examples.png'

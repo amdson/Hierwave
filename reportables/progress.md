@@ -8,6 +8,11 @@ and link them.
 Entry format:
 
 ```
+## 2026-10-14 11:20 · speed-1b (coarse kernel speed) · finished
+Approach: profiled one ckernel iteration; block_mh / coarse_flip passes ran all colour steps over the whole image twice per move. Now: block-site-only, active-colour-only passes, candidates + reverse scoring in one batch, factored fast path for chunked coarse Gibbs.
+Result: [report](2026-10-14_speed1b/report.md). Same decisions and log ratios as the old code (64-256 moves per config, same keys). MTM L2 chain 7029 -> 124 ms, flips 1239 -> 279 ms (in-process, contended); iteration 7.1 -> 0.50 s (back to back); 300 s ckernel run 2312 updates vs sweep2b's 440, gate L3 fill -0.113, own line_match 0.703 (0.626). GPU shared.
+Next: ML (50 % now) and contexts in ckernel.py (owner wave2-bench) can use make_multi_update / thread prefetch.
+
 ## YYYY-MM-DD HH:MM · <agent / variant name> · <started | finished | abandoned>
 Approach: what you are trying and why (cite ideas.md items by number).
 Result: bench numbers (variant, problem, accepted?, worst final violations,

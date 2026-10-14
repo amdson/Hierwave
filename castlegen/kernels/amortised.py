@@ -99,7 +99,8 @@ class JaxBlockGibbs:
                                slots=jnp.asarray(gr["slots"], jnp.int32), r=jnp.asarray(rowmap[gr["block"]], jnp.int32),
                                pos=None if gr["pos"] is None else jnp.asarray(gr["pos"], jnp.int32)))
             self.classes.append((jnp.asarray(K.BV[blocks], jnp.int32), blocks.size, gs))
-        self.fast = bool(fast) and nchunk == 1 and self._build_fast()
+        self.nchunk = nchunk
+        self.fast = bool(fast) and self._build_fast()
         self.sweep_ref = jax.jit(self._sweep)
         self.sweep = jax.jit(self._sweep_fast) if self.fast else self.sweep_ref
 
@@ -191,7 +192,8 @@ class JaxBlockGibbs:
                 lg = jnp.where(nvl > 0, -jnp.inf, -soft)
             else:
                 lg = -(soft + self.lam * nvl)
-            gmb = jax.random.gumbel(jax.random.fold_in(sub, 0), lg.shape)
+            # the reference path's noise (per chunk, padded shape), so equal keys give equal draws
+            gmb = jnp.concatenate([jax.random.gumbel(jax.random.fold_in(sub, ci), (Wb, nbk, self.chunk)) for ci in range(self.nchunk)], -1)[..., :C]
             sc = jnp.where(jnp.isfinite(lg), lg + gmb, -jnp.inf)
             arg = jnp.argmax(sc, -1)
             anyok = jnp.isfinite(lg).any(-1)

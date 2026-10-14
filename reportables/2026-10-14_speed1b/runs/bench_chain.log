@@ -1,0 +1,4 @@
+mtm_L2_K8_old ms per call (4 moves x 32 worlds) 7028.8 first call (compile) s 49.1
+mtm_L2_K8_new ms per call (4 moves x 32 worlds) 124.4 first call (compile) s 37.5
+flip_L34_K4_old ms per call (4 moves x 32 worlds) 1238.9 first call (compile) s 72.9
+flip_L34_K4_new ms per call (4 moves x 32 worlds) 278.9 first call (compile) s 61.9
