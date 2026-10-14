@@ -8,6 +8,10 @@ Goals: (1) ground's coarse levels trained by the kernel route; (2) own-draw line
 
 (waves are appended here as they finish)
 
+### Wave 5 (partial): wave4-bench, upper-bound arm, 1 of 4 again but closer
+- Fused reverse-KL / ML scans in ckernel.py (`fast=True`): equivalent (RKL params within 1.3e-5, ML bit-identical, 73 kernel tests pass) but no net gain under 3-4 GPU jobs: the reverse-KL half is GPU-bound (45-75 ms per B = 8 step), not host-bound.
+- `ckernel_rkl4w3f` 4-seed bench: 1 of 4 accepted. L1 is now within budget (pooled 1.2e-4), L3 and L4 are zero on every seed, mean F -0.109, line_match 0.60-0.67, L3/L4 starvation 13-16 / 5-16 %. The one remaining miss is L2: pooled 2.9e-4 [1.75, 4.5]e-4, 5-7 violations of 16384 per failing seed where 3 are allowed. Final follow-up launched (wave5-bench): a reverse-KL scale on L2 alone, 4 seeds, 60-minute cap.
+
 ### Wave 5: wave5-pop, the own-draws-only arm benched properly (not accepted)
 - Compile budget fixed: the 171 / 52 s setups were Python re-tracing per variant instance (340 compile requests), not cache misses; jitted functions are now reused across instances and every loop shape is warmed in setup (setup 1.2 s per seed; `scripts/bench_warm.py` wraps the bench's own run(), harness untouched). Updates per 300 s: 912 / 904 against 224 / 608.
 - `ckpop_hard_rkl` 2-seed bench, warm: NOT accepted. Worst violations 3.1e-4 (seed 0) and 9.8e-4 (seed 1, at L3); L4 now zero on both; F -0.090 / -0.094 (cfast 0.774); line_match 0.61 / 0.63; rho .37-.43 / .70-.82 / .60-.68 / .37-.59 / <0 by level; L3-4 starvation 19-34 %. Also fails across-seed roughness agreement (1.07 vs 1.89) and the probe check (seed 1 had 0 of 16 valid raw worlds).
