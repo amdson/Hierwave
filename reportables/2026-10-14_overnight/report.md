@@ -8,6 +8,11 @@ Goals: (1) ground's coarse levels trained by the kernel route; (2) own-draw line
 
 (waves are appended here as they finish)
 
+### Wave 2 (partial): speed-1, fine loop 3.7-6x faster
+- Factored block energy (internal part once + per-world field; bit-identical Gibbs states, 13x on the (1,1) sweep), teacher forcing over all 16 colour steps at once (4.4x on the ML step), level skipping for frozen levels, cycles and updates fused under lax.scan, context prefetch. Arm B: 0.24-0.43 s/iteration against 1.61; 134 states/s against 20; 16.8 updates/s against 2.5. Gradients within 2.4e-3 of the old code (float32 summation order; test_logq tolerance 1e-5 -> 1e-4).
+- 300 s gate unchanged within noise (L3 fill -0.114, soft 0.129, line_match 0.743, L4 fill 0.60). Own-draw line_match 0.508: the fine loop alone still does not move own draws. 26 tests pass.
+- Follow-up launched (speed-1b): the coarse kernel cycle (block_mh, coarse_flip), which is now the main cost (~0.7 s per ckernel update).
+
 ### Wave 2 (partial): speed-2 part 2, valid annealed blocks (commit after 2a88434; 27 colour-Gibbs tests pass)
 - `castlegen/kernels/anneal.py`: `anneal_block_valid`. Annealed L3 / L4 subtree blocks started from VALID states (probe lifts or q's own draws; tau 8 -> 1, lambda fixed at 20, hard final phase, 32 steps, 0.10 s per 64 blocks) are 98-100 % valid; 16-17 % (L3) and 25-34 % (L4) of all-dirt q-draw blocks become partially filled. Random starts stay 0-2 % valid; a lambda ramp destroys valid starts.
 - AIS weights from these non-equilibrium starts are heuristic (ESS 1.5-2 of 64 from q draws; 16-18 from probes). Passed to wave2-explore as the exploration move for own draws.
