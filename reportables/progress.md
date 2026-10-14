@@ -35,6 +35,11 @@ Approach: test the fill-avoidance hypothesis directly: cfast trained 150 s on gr
 Result: pending.
 Next: report in reportables/2026-10-13_clamp/.
 
+## 2026-10-14 · cbig · finished
+Approach: compile cache + autotune, test fix, large-B bench (reportables/2026-10-13_cbig/report.md).
+Result: test_cbig 5 passed. Warm cache cuts toy_support B=256 setup 196 s -> 11 s (autotune 0 only ~10 % cold). Ground (GPU shared): cfast B=8 1040/1543 upd F 0.92/0.74; cbig B=64 922/1094 upd F 0.55/0.54; B=256 184/230 upd F 0.65/0.79; all collapse to all dirt regardless of B. toy_support: cbig256 F -0.455/-0.467 vs cfast -0.424/-0.444 (F* -0.4688), none accepted. SNR at init ~0 for B=8..256.
+Next: SNR on a partly trained actor; large B only pays where step cost is flat.
+
 ## 2026-10-13 · cbig · started
 Approach: round-3 pass on cbig: compile time (shared cache, autotune_level=0), fix test, bench B=64/256 vs cfast B=8 on ground, toy_support B=256, SNR vs B if time.
 Result: running.
