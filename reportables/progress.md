@@ -17,6 +17,26 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 08:38 · sweep2b (Sweep 2, coarse half) · finished
+Approach: kernel route on all levels (ideas #18): acceptance with kernel-a params; generic coarse-flip MH + exact single-cell coarse Gibbs (castlegen/kernels/coarse_flip.py); variant `ckernel` = probe + own contexts -> flips L3-4, Gibbs L4/L3, MTM L2 K=8, fine Gibbs -> weighted ML on levels 0-4; start sweep2a arm B.
+Result: [report](2026-10-14_sweep2b/report.md). Probe-lift acceptance with kernel-a params: L2 0.79 (K8 0.92), L3 0.44 (K8 0.80), L4 0.03 (K8 0.16); cfast 0 at L>=2. Own-draw line_match 0.50 -> 0.62, dirt 0.83 -> 0.52 in 300 s (first variant above 0.5); clamp gate own ~ fill (L3 -0.084 vs -0.110, L4 -0.107 vs -0.125). Bench ckernel ground 300 s, 1 seed: NOT accepted, final viol worst 3.2e-3 (L3); F -0.112 (cfast 0.774); line_match 0.609; rho 0.38/0.82/0.86/0.86/0.58, starved 0/0.5/5/10/3.5 %. Ablation own-only: stays dirt 0.90 / line_match 0.50, so the gain comes from probe contexts at coarse levels (outside the amendment's q-started argument: proposal).
+Next: lambda-controlled reverse-KL term mixed in for violations; user ruling on probe contexts at coarse levels.
+
+## 2026-10-14 09:25 · speed-2 (colour_gibbs) · finished
+Approach: generic GPU-batched single-cell exact Gibbs (castlegen/kernels/colour_gibbs.py): class sweeps, level sweeps, masked sweeps, AIS annealed subtree blocks.
+Result: 22 tests pass (brute-force conditionals, toy invariance per level, mixing from random starts, AIS log Z ratios within 0.015 of exact at 64 steps). Ground W=64, 64 worlds: level-0 sweep 1.9 ms (1.4e8 cells/s), level-3 sweep 1.9 ms, annealed level-3 block (tau 8->1, 32 steps) 670 blocks/s. Annealed blocks from random starts still carry ~10 violations (single-cell Gibbs cannot cross hard counts). Report: reportables/2026-10-14_speed2/report.md
+Next: lam ramp / valid starts for annealing; use as ground training-data source.
+
+## 2026-10-14 09:00 · speed-1 (fine-loop speed) · started
+Approach: profile sweep2a arm B loop (generate / contexts / Gibbs cycles / teacher-forced log q / ML) on GPU, speed up the top items without changing semantics (batching, scan fusion, fewer host transfers).
+Result: pending.
+Next: pending.
+
+## 2026-10-14 07:57 · sweep2b (Sweep 2, coarse half) · started
+Approach: kernel route on the coarse levels (ideas #18): acceptance table with kernel-a params; generic coarse-flip MH kernel (castlegen/kernels/coarse_flip.py) + exact single-cell coarse Gibbs; variant `ckernel` (probe + own contexts -> flips L3-4, Gibbs L4/L3, MTM L2 K=8, fine Gibbs -> weighted ML on all levels), 300 s instrumented run, gates, bench.
+Result: pending.
+Next: pending.
+
 ## 2026-10-14 07:45 · sweep2a (Sweep 2, fine half) · finished
 Approach: iterated amortised loop on ground levels 0-2 (ideas #18, #14): 32 contexts/iter (A: probe lifts; B: + own draws 50/50) -> 6 exact block-Gibbs cycles [(2,0),(1,1)] on GPU (new JAX port, castlegen/kernels/amortised.py, lam=20) -> 8 weighted-ML updates; 300 s per arm; LN+SiLU 6x6.
 Result: [report](2026-10-14_sweep2a/report.md). The chains reach a plateau at 2 cycles in probe contexts (0.129/cell, flat to 30 cycles; surface and dirt are kept, and the rise is rho1/rho2 count slack). L3 fill: A -0.106, B -0.106 / -0.111 (2 seeds), kernel-a -0.107, i.e. saturated after about 100-300 updates. Own-context cost: B 0.35/0.33 vs A 0.86 (kernel-a 0.46); L4 fill 0.68/0.64 vs 0.98 (0.71). line_match 0.73 (kernel-a 0.77); rho2/rho1/t 0.029/0.019/0.011. Joint (2,2) block intractable (1.4e13, pruned enumeration > 150 s per block). GPU shared.

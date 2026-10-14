@@ -1,0 +1,40 @@
+[seed 0] train 302s  final viol {'0': 0.002254486083984375, '1': 0.0049285888671875, '2': 0.01239013671875, '3': 0.024169921875, '4': 0.025390625}  F 0.49656688421964645  support 0
+{
+ "final_violations": {
+  "worst_frac": 0.025390625,
+  "ok": false
+ },
+ "raw_violations_worst": 0.02783203125,
+ "exact_stats": {
+  "per_stat": {},
+  "ok": null
+ },
+ "raw_vs_final": {
+  "per_stat": {
+   "dirt_frac": true,
+   "dirt_excess": true,
+   "roughness": true,
+   "line_match": true,
+   "floating": true,
+   "fill_err": true
+  },
+  "ok": true
+ },
+ "across_seeds": {
+  "per_stat": {},
+  "ok": null
+ },
+ "probes": {
+  "flagged": [
+   null
+  ],
+  "ok": false
+ },
+ "finite_support": {
+  "worst_mismatch": 0.0,
+  "ok": true
+ },
+ "free_energy": 0.49656688421964645,
+ "within_budget": true,
+ "accepted": false
+}
