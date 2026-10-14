@@ -133,3 +133,14 @@ From the clamp diagnostic: give every child draw, for each declared count factor
 The user: "exploring at higher T is definitely in scope." Draw training worlds at τ_b > 1 (or a mixture of τ values), and weight each draw's gradient contribution by the importance ratio to the τ = 1 objective, so the gradient of the stated objective stays unbiased (constraint 3) while the fine levels keep visiting contexts a deterministic τ = 1 policy would never produce. Also agreed in the same exchange: the bench training budget is 300 s per seed from now on (the session runs autonomously).
 
 > **Annotation (2026-10-14, orchestrator):** motivated by the clamp and cresid findings (fine levels deterministic, context-blind; cresid's extra information unusable because the contexts are never visited). Queued as variant `chot` on the next free agent. Status: untested.
+
+## 13. Fine-level saturation diagnostics and the lr / τ levers (from chat / csat agent, 2026-10-14)
+I tested cresid's hypothesis that the fine-level bias saturates early, so training never visits fill-following contexts. I logged per-level entropy, the forced fraction and the spread of b during cfast training on ground, then tried actor lr 1e-3 and a τ anneal over the whole budget (engineering freedoms).
+
+> **Outcome (2026-10-14, csat):** the hypothesis is wrong about the order of events.
+> - The dirt collapse starts at the top level. cert4 goes deterministic, and dirt reaches 0.95 at about update 200–250. With lr 1e-3, rho3, rho2 and rho1 still have 2–3 nats of entropy at that point and never go deterministic.
+> - Lr 1e-3 keeps the fine levels stochastic, but they stay context-blind: their draws are 95 / 99 / 100 % identical under probe-clamped coarse levels. On the gate, fill vs own cost is 1.58 vs 0.57 at L = 4 and 2.04 vs 0.37 at L = 3 (default: 1.92 vs 1.22 and 2.00 vs 0.93). The slower anneal changed nothing.
+> - Every arm is all dirt, with line_match 0.500.
+> - τ is a weak lever because it tempers only the soft term, not b (b spread 15–60 nats). Exploration at higher τ (#12) must temper the whole logit.
+>
+> Status: tried, no effect. A proposal (per-candidate enumeration at fine count draws, plus whole-logit tempering for #12) is in the [report](2026-10-14_csat/report.md).

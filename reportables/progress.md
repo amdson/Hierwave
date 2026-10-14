@@ -43,6 +43,11 @@ Result: pending.
 Next: see reportables/2026-10-14_probes/report.md.
 
 
+## 2026-10-14 csat · finished
+Approach: cfast on ground with per-level saturation diagnostics (entropy over non-forced draws, forced fraction, b spread, dirt), then actor lr 1e-3 and a τ anneal over the whole budget (engineering freedoms), each gated by the clamp test. 150 s per arm, one seed, shared GPU.
+Result: the collapse starts at the top level. cert4 goes deterministic and dirt reaches 0.95 at about update 200 (lr 1e-3: 225, while rho3/2/1 are still at 2–3 nats). Lr 1e-3 keeps the fine levels stochastic (final H 0.37 / 1.37 / 0.70), but they stay context-blind (95–100 % identical draws under clamping). Gate, fill vs own: 1.58 vs 0.57 at L = 4 and 2.04 vs 0.37 at L = 3 (default 1.92 vs 1.22 and 2.00 vs 0.93; tauall 1.88 vs 0.71 and 2.11 vs 0.44). Every arm is all dirt, line_match 0.500. The bench was not run. [Report](2026-10-14_csat/report.md).
+Next: enumerated per-candidate replays at fine count draws (allowed freedom), plus ideas #12 with whole-logit tempering (τ does not temper b).
+
 ## 2026-10-14 csat · started
 Approach: test whether the fine-level learned bias saturates early (deterministic rho draws, never visiting fill contexts) on ground: per-level entropy / forced fraction / |b| logged over training for cfast, then two engineering levers (lr, tau schedule, clipping; allowed freedoms) with the clamp gate from cresid.
 Result: pending.
