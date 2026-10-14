@@ -414,3 +414,9 @@ _pop_variant("ckpop_rkl4w3", hard_sweeps=2, rkl_n=32, rkl_lr=1e-3, rkl_lam0=10.0
              rkl_level_scale={4: 0.3})
 _pop_variant("ckpop_rkl4w1", hard_sweeps=2, rkl_n=32, rkl_lr=1e-3, rkl_lam0=10.0, rkl_levels=[0, 1, 2, 3, 4],
              rkl_level_scale={4: 0.1})
+
+# wave6-pop: more reverse-KL pressure on L1-L3 (parameter step x2 at L1-L3, Adam lr 1e-3 -> effective 2e-3), own draws only
+_pop_variant("ckpop_rkl123x2", hard_sweeps=2, rkl_n=32, rkl_lr=1e-3, rkl_lam0=10.0, rkl_levels=[0, 1, 2, 3],
+             rkl_level_scale={1: 2.0, 2: 2.0, 3: 2.0})
+_pop_variant("ckpop_rkl123x2_cg40", hard_sweeps=2, rkl_n=32, rkl_lr=1e-3, rkl_lam0=10.0, rkl_levels=[0, 1, 2, 3],
+             rkl_level_scale={1: 2.0, 2: 2.0, 3: 2.0}, cg_sweeps=40)

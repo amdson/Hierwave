@@ -38,6 +38,11 @@ Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
 
+## 2026-10-14 12:05 · wave6-pop (ckpop: L1-L3 pressure, 4-seed bench) · finished
+Approach: (#18; own draws only, inside the frozen constitution) arms: reverse-KL step x2 at L1-L3 (C), plus 40 colour-Gibbs sweeps (D), 300 s each, back to back; 4-seed 300 s bench of the chosen arm through the warm wrapper.
+Result: [report](2026-10-14_wave6_pop/report.md). Neither arm qualified (line_match 0.571 / 0.562, L3 starvation 30 %; only 536 / 488 updates, GPU shared with wave4-bench's bench), so ckpop_hard_rkl was benched: 4 x 300 s NOT accepted, 0/4 seeds within budget (worst 6.7e-4; closest seed 1, 2.4e-4 = 4 L2 instances against 3 allowed); pooled L2 3.5e-4 [2.2e-4, 5.3e-4] over budget, L0/L1 under, L3 1.8e-4 and L4 0 compatible; F -0.090; line_match 0.60-0.63; roughness fails across seeds (seed 2 1.93 vs 1.13-1.23); probes fail (1-4 valid raw worlds of 16); setup 1.1-2.7 s, 696-904 updates.
+Next: L2 is the binding level (about 2x short); change requests #2 / #3.
+
 ## 2026-10-14 11:18 · wave6-pop (ckpop: L1-L3 pressure, 4-seed bench) · started
 Approach: (#18; own draws only, inside the frozen constitution) rkl_level_scale 2 at L1-L3, with 20 or 40 colour-Gibbs sweeps; two 300 s arms back to back; 4-seed 300 s bench of the chosen arm via the warm wrapper.
 Result: pending, [report](2026-10-14_wave6_pop/report.md).
