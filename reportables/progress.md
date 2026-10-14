@@ -17,6 +17,16 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 01:30 · cln · finished
+Approach: cfg options on cfast: net (tanh | ln = LayerNorm + SiLU 64x2) and win (4x4 | 6x6), with the cone and margin following the window; variants cln (ln, 4x4) and cln6 (ln, 6x6). Tests: test_cln.py 11 passed (cone, finite support, defaults unchanged); test_cfast_cone + test_cresid 17 passed.
+Result: GPU shared, 2 x 150 s, B = 8, none accepted (probes flagged everywhere). KL per block, s0 / s1: toy_support cln6 1.28 / 0.78, cln 0.45 / 0.90, cfast 0.70 / 0.58 (cfast misses the budget, 5.9e-3); toy_modes cln6 0.26 / 0.26, cln 0.16 / 0.22, cfast 0.15 / 0.16. Ground: all three collapse to all dirt (line ignored); cln6 s0 misses the budget (1.5e-3) after a 125 s compile. Microbenchmark: 5.1 / 6.1 / 6.0 ms per update (cfast / cln / cln6), but the bench gave cln* 2.5-4x fewer updates (contention). The exact-gradient gains do not transfer at B = 8: variance binds. Report: reportables/2026-10-13_cln/report.md.
+Next: fixed-update-count comparison; cln6 at large B (cbig).
+
+## 2026-10-14 baselines300 · started
+Approach: cfast at 300 s/seed (2 seeds) on toy_support, toy_modes, ground, columns, dimers; cbig256 at 300 s on the toys; compare with 150 s baselines. Cores 48-55, one run at a time, smoke warm-up first.
+Result: -
+Next: -
+
 ## 2026-10-14 01:20 · creplay2 · started
 Approach: make creplay cheap enough to compare with cfast at equal wall clock (engineering only): profile one update, cut replay count/cost, fix the compile-cache miss, then GPU bench vs cfast (ground, toy_support) and an equal-update (300) comparison on ground.
 Result: -

@@ -95,6 +95,8 @@ On the enumerable hierarchy, optimise the objective with exact expectations, and
 > - **Order:** independent draws within a colour leave a hard floor of 0.037 on the tiny problem, which only more passes or a finer colouring remove.
 > Status: done.
 
+> **Annotation (2026-10-14, cln): outcome of acting on it.** Selectable actor net (LN + SiLU) and window (6×6) on cfast as variants `cln` / `cln6`, with the cone and finite-support tests passing. In sampled training (B = 8, 150 s, shared GPU) neither beats cfast: toy_modes KL per block is 0.26 (cln6) and 0.16–0.22 (cln) against 0.15–0.16 (cfast); ground collapses to all dirt for all three. Consistent with variance binding at B = 8; the comparison is confounded by 2.5–4× fewer updates under contention (true per-update cost +20 %). See `reportables/2026-10-13_cln/report.md`. Status: done; retry at large B.
+
 > **Annotation (2026-10-14, creplay):** coupled coarse replays, the variance fix that exactopt's verdict points to.
 > - Setup: the importance-weighted creplay estimator, branching the top 2 levels with 8 replayed draws × 4 actions per world.
 > - Correctness: it passes the exact-gradient check.
