@@ -70,3 +70,6 @@ These are not all in the repo elsewhere.
 ## Box session, 2026-10-14 (orchestrated waves)
 
 Read `reportables/2026-10-14_box_waves/report.md` first: it summarises all four waves, the collapse mechanism as measured, what is solved (the toys under bench v2) and the recommended next steps. User decisions taken during the session (bench budget 300 s, ideas #12 and #14 in scope, bench v2 probe check, ground as the focus problem with the fast loop) are in `notes/box_rules_2026-10-14.md`.
+
+## Overnight box session, 2026-10-14 (kernel route)
+Read `reportables/2026-10-14_overnight/report.md` ("What the night established", then the wave log) and `notes/methodology.md` §7-9. Decisions pending in `notes/constitution_change_requests.md` (#1-#3). Main variants: `ckpop_hard_rkl` (own draws only, castlegen/variants/ckernel_own.py) and `ckernel_rkl4w3f` (upper bound, ckernel.py). Kernels in `castlegen/kernels/`.

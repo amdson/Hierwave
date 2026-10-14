@@ -4,6 +4,26 @@ Started 08:01 UTC. Budget: six hours, two Opus + up to four Sonnet agents. Const
 
 Goals: (1) ground's coarse levels trained by the kernel route; (2) own-draw line_match off 0.50 and the v2 bench; (3) speed-ups for the kernels, ML update and pass; (4) breadth once ground moves.
 
+## What the night established (read this first)
+
+**Headline.** Inside the frozen constitution, with the sampler's own draws as the only training contexts, ground's own draws left the all-dirt state for the first time: `ckpop_hard_rkl` (persistent chain populations + colour-Gibbs sweeps + hard final sweeps + reverse-KL on levels 0-3) reaches own-draw line_match 0.60-0.65 with the dirt per row tracking the fill, free energy about -0.09 per cell against cfast's 0.774, and probe starvation at the fine levels of 0-10 % against cfast's 76-100 %. It does NOT pass the bench: L2 violations sit at a pooled 3.5e-4 against the 2e-4 budget (0 of 4 seeds), and the coarse levels are still 18-38 % starved. The labelled upper-bound arm (probe-lift contexts, outside the frozen rules) gets to 1 of 4 seeds with only L2 failing (pooled 2.9e-4) and mean F -0.11.
+
+**The mechanism, now measured end to end.**
+- Fine levels fit fast and well by maximum likelihood on exact-Gibbs-refined states (kernel_a, sweep2a): clamped completions follow the hill instead of terraces, and the fine conditional's equilibrium energy is 0.13 per cell, not the probe's 0.014.
+- Once the fine levels are right, q's own subtree proposals get accepted bottom-up (sweep2b: 0 -> .79/.44/.03 at L2/L3/L4 from fill contexts).
+- The coarse levels are stuck on the B certificate (occupied columns), not on rho (wave2_explore). Freeing one column consistently is a 46-cell change across five levels. No single local move does it; accumulation of 1-2.5 % accepted moves over a persistent population does (wave3_explore).
+- Every ML-trained arm leaks mass onto violating states; every full reverse-KL mix brings the collapse pressure back (ground and dimers alike). The constrained objective that would separate the two is written up, not built (change requests #2, #3).
+
+**What was built and verified** (all generic, all tested; `castlegen/kernels/`): teacher-forced log q and weighted ML (kernel_c); exact fine-block Gibbs (kernel_a); MH subtree kernel with q as proposal and multiple-try (kernel_b); coarse flips and any-level single-cell Gibbs (sweep2b); GPU-batched colour Gibbs sweeps and annealed blocks with AIS weights (speed2); k x k fine blocks for T = 0 (dimers_kernel); persistent populations and lambda-ladder tempered transitions (wave3_explore); the amortised loop (sweep2a, speed1).
+
+**Speed.** Fine loop 3.7-6x (speed1); coarse kernel cycle 4-14x (speed1b); colour Gibbs 1.4e8 cells/s (speed2); per-seed compile setup 171 s -> 1.2 s by reusing jitted functions across variant instances (wave5_pop); the generation pass only 1.1x (speed3), with the host-side designed channels as the next lead.
+
+**Dimers.** k = 3 blocks can move the orientation mix where k = 2 cannot (local moves reach the symmetry); ML keeps three orientations at 5.6e-2 violations; the reverse-KL mix restores validity and collapses the mix back to two.
+
+**Decisions waiting on the user** (`notes/constitution_change_requests.md`): #1 probe-lift contexts for the coarse levels (the upper-bound arm); #2 ML plus a penalty-only violation term; #3 a violation price on the post-repair output at the coarsest level. My recommendation is #2 first: it is one sentence in the amendment, every piece it needs exists, and it is the direct fix for the one failing level on both arms.
+
+**Housekeeping.** Everything is committed and pushed on `coloured-pass`; no agent processes are running; the full test suite passes except one pre-existing exactopt tolerance test and two legacy data fixtures (regress). `notes/methodology.md` has the kernel-route sections with the final numbers.
+
 ## Wave log (newest first)
 
 (waves are appended here as they finish)
