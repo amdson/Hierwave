@@ -92,7 +92,7 @@ def classes(p, l):
                 yield Y.ravel(), X.ravel()
 
 
-def sweep(p, x, region, lam, rng):
+def sweep(p, x, region, lam, rng, tau=1.0):
     for l in range(T, -1, -1):
         for Y, X in classes(p, l):
             for c in p.level_chans(l):
@@ -100,12 +100,12 @@ def sweep(p, x, region, lam, rng):
                     continue
                 soft, nv = cond(p, x, region, c.name, Y, X)
                 if np.isinf(lam):
-                    logits = np.where(nv == 0, -soft, -np.inf)
+                    logits = np.where(nv == 0, -soft / tau, -np.inf)
                     # a site with no valid value keeps its current one (cannot happen from a valid state)
                     bad = ~np.isfinite(logits).any(1)
                     logits[bad, x[c.name][Y[bad], X[bad]]] = 0.0
                 else:
-                    logits = -soft - lam * nv
+                    logits = -soft / tau - lam * nv
                 g = rng.gumbel(size=logits.shape)
                 x[c.name][Y, X] = np.argmax(logits + g, 1)
 
@@ -118,6 +118,8 @@ def main():
     inf keeps only valid states.  Exact in expectation up to the burn-in at
     lam0 (approximate start)."""
     budget = float(sys.argv[1]) if len(sys.argv) > 1 else 300
+    tau = float(sys.argv[2]) if len(sys.argv) > 2 else 1.0
+    sfx = "" if tau == 1.0 else f"_tau{tau:g}"
     p = build()
     region = Region(W)
     rng = np.random.default_rng(0)
@@ -135,17 +137,17 @@ def main():
         for c in p.sampled():
             x[c.name] = rng.integers(0, c.D, p.shape(c.name, region))
         for _ in range(burn):
-            sweep(p, x, region, lam0, rng)
+            sweep(p, x, region, lam0, rng, tau)
         lw = 0.0
         for k in range(1, steps + 1):
             lw -= (lams[k] - lams[k - 1]) * H_of(x)
-            sweep(p, x, region, lams[k], rng)
+            sweep(p, x, region, lams[k], rng, tau)
         h_end = H_of(x)
         if h_end > 0:
             lw = -np.inf                                      # cannot reach the hard target
         else:
             for _ in range(5):
-                sweep(p, x, region, np.inf, rng)
+                sweep(p, x, region, np.inf, rng, tau)
         samples.append(x["t"].copy())
         logw.append(lw)
         trace.append({"run": run, "t": time.time() - t0, "logw": lw, "viol_end": int(h_end),
@@ -156,14 +158,14 @@ def main():
     ess = w.sum() ** 2 / max((w ** 2).sum(), 1e-300)
     print(f"{run} annealed runs in {time.time() - t0:.0f} s; valid at the end: {np.isfinite(logw).mean():.2f}; "
           f"ESS {ess:.1f}")
-    np.save(OUT / "samples.npy", np.array(samples))
-    np.save(OUT / "logw.npy", logw)
+    np.save(OUT / f"samples{sfx}.npy", np.array(samples))
+    np.save(OUT / f"logw{sfx}.npy", logw)
     json.dump({"lam0": lam0, "lam1": lam1, "steps": steps, "runs": run, "ess": ess, "trace": trace},
-              open(OUT / "trace.json", "w"))
-    report(np.array(samples), w)
+              open(OUT / f"trace{sfx}.json", "w"))
+    report(np.array(samples), w, sfx, tau)
 
 
-def report(S, w):
+def report(S, w, sfx="", tau=1.0):
     valid = w > 0
     keep, wk = S[valid], w[valid] / w[valid].sum()
     order = np.argsort(-wk)
@@ -177,10 +179,10 @@ def report(S, w):
         a.imshow(pal[keep[i]], interpolation="nearest")
         a.plot(np.arange(W + 1) - 0.5, np.r_[SURFACE, SURFACE[-1]] - 0.5, drawstyle="steps-post", color="k", lw=0.8)
         a.set_title(f"w {wk[i]:.2f}", fontsize=7)
-    fig.suptitle("ground, 8 × 8 patch: annealed samples of the exact target (black: designed line; w = importance weight)",
+    fig.suptitle(f"ground, 8 × 8 patch, τ = {tau:g}: annealed samples (black: designed line; w = importance weight)",
                  fontsize=9)
     fig.tight_layout()
-    fig.savefig(OUT / "samples.png", dpi=110)
+    fig.savefig(OUT / f"samples{sfx}.png", dpi=110)
     plt.close(fig)
     fig, ax = plt.subplots(1, 2, figsize=(8, 3.4))
     ax[0].imshow((wk[:, None, None] * keep).sum(0), cmap="copper_r", vmin=0, vmax=1)
@@ -189,7 +191,7 @@ def report(S, w):
     ax[1].hist(np.log(wk[wk > 0]), bins=30)
     ax[1].set(title="log normalised weights", xlabel="log w")
     fig.tight_layout()
-    fig.savefig(OUT / "traces.png", dpi=110)
+    fig.savefig(OUT / f"traces{sfx}.png", dpi=110)
     plt.close(fig)
     distinct = len({k.tobytes() for k in keep})
     print(f"valid samples {len(keep)}, distinct {distinct}, weighted dirt {(wk[:, None, None] * keep).sum(0).mean():.3f}, "
