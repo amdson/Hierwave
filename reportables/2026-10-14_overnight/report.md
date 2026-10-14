@@ -8,6 +8,10 @@ Goals: (1) ground's coarse levels trained by the kernel route; (2) own-draw line
 
 (waves are appended here as they finish)
 
+### Wave 5 (partial): regress, full test suite after tonight's shared-code edits
+- About 570 passed, 1 skipped, 10 xfailed. One persistent failure: `tests/variants/test_exactopt.py::test_full_history_table_reaches_target` (final KL 0.047 against a 0.01 threshold). The orchestrator reran it at this morning's starting commit 45088c2 and at the commit before speed-3: it fails identically there, so it is PRE-EXISTING (an exactopt convergence tolerance from the previous session), not a regression from tonight. Two legacy tests error on a missing `cache/exemplar-cliffs-*.npy` fixture (data, not code).
+- Transient XLA "Failed to materialize symbols" / compile aborts appear when several pytest processes share the JAX cache; reruns pass. Nothing in the kernel, explore, ckernel or core files failed. Slowest test: channels/test_sampler.py::test_adm_identity at 205 s.
+
 ### Wave 5 (partial): wave4-bench, upper-bound arm, 1 of 4 again but closer
 - Fused reverse-KL / ML scans in ckernel.py (`fast=True`): equivalent (RKL params within 1.3e-5, ML bit-identical, 73 kernel tests pass) but no net gain under 3-4 GPU jobs: the reverse-KL half is GPU-bound (45-75 ms per B = 8 step), not host-bound.
 - `ckernel_rkl4w3f` 4-seed bench: 1 of 4 accepted. L1 is now within budget (pooled 1.2e-4), L3 and L4 are zero on every seed, mean F -0.109, line_match 0.60-0.67, L3/L4 starvation 13-16 / 5-16 %. The one remaining miss is L2: pooled 2.9e-4 [1.75, 4.5]e-4, 5-7 violations of 16384 per failing seed where 3 are allowed. Final follow-up launched (wave5-bench): a reverse-KL scale on L2 alone, 4 seeds, 60-minute cap.
