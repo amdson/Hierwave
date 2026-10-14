@@ -79,6 +79,11 @@ Result:
 - Not accepted. Columns not run. [Report](2026-10-13_creplay/report.md)
 Next: cut replay cost (K = 2, top level only, larger B), fix the compile-cache miss, rerun ground and columns at equal updates, run the clamp diagnostic.
 
+## 2026-10-14 01:30 · fixes (round 2) · finished
+Approach: relaxed cpass.py:256 assert (rtol 1e-2, atol 1); CPU cpass tests 7 passed; GPU benches 2 x 150 s warmed, shared GPU.
+Result: cpass ground no crash: F 1.12/0.77, 280/506 updates, all dirt, line_match 0.5. ctrunc_full ground: F 0.715/0.595 (Mac 0.72), 338/470 updates, fine viol 1.4e-4, levels 3-4 about 1e-2, dirt 0.94-0.96, no fill line. cfast columns fair budget (5468/8333 updates): still almost all air (density 0.06/0.02), viol 1e-2. None accepted. Board regenerated.
+Next: see 2026-10-13_gpu_baselines/report.md round 2.
+
 ## 2026-10-14 01:10 · fixes (round 2) · started
 Approach: relax cpass.py:256 assert to rtol 1e-2/atol 1 (float32 GPU reduction order), then GPU bench (2 x 150 s, warmed) cpass ground, ctrunc_full ground, cfast columns rerun; regenerate board. Shared GPU, cores 56-63.
 Result: pending.

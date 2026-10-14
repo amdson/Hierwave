@@ -124,3 +124,27 @@ Where the GPU differs: update counts are bigger on ground and toy_support (cfast
 
 - Raw data: `results/bench.jsonl`, per-run logs `results/runs/<run>/train_s*.jsonl`. Driver logs: `/tmp/baselines_run*.log`.
 - `images/`: greedy and cfast images for ground, columns, dimers.
+
+
+## Round 2 (fixes agent)
+
+2026-10-14 · tag `fixes_r2` · 2 seeds x 150 s, B = 8, cores 56-63, warmed compile (40 s smoke run first). **The GPU was shared** with other agents' jobs throughout (about 70 % utilisation before launch), so updates, not seconds, measure training done.
+
+**Fix.** `castlegen/variants/cpass.py:256`: the replay assert is now `rtol=1e-2, atol=1.0` with a comment (float32, XLA reduction order differs between batch shapes on the GPU; seen about 3e-3 relative on costs about 1.7e4). `tests/variants/test_cpass_gradient.py` on CPU (JAX_PLATFORMS=cpu): 7 passed. cpass on ground no longer crashes on the GPU. The harness was not touched.
+
+| run (board id) | worst final viol (s0 / s1) | F per cell (s0 / s1) | updates (s0 / s1) | accepted | probes flagged | dirt_frac (s0 / s1) | line_match |
+|---|---|---|---|---|---|---|---|
+| cpass ground (`20261014-010020`) | 5.4e-3 (level 2) / 4.9e-4 (level 3) | 1.124 / 0.770 | 280 / 506 | no | s1 flagged | 0.977 / 0.999 | 0.50 / 0.50 |
+| ctrunc_full ground (`20261014-011045`) | 1.0e-2 (level 3) / 9.8e-3 (level 4) | 0.715 / 0.595 | 338 / 470 | no | none | 0.964 / 0.942 | 0.50 / 0.50 |
+| cfast columns (`20261014-011903`) | 1.2e-2 / 1.1e-2 (level 0 / 1) | -0.055 / -0.022 | 5468 / 8333 | no (stats FAIL, seeds disagree) | none | density 0.063 / 0.019 | - |
+
+Reference for ground: greedy F 1.29-1.31, viol 0.21; cfast (rerun) F 0.70 / 1.35, viol 1.0e-3; Mac ctrunc_full F 0.72, cpass F 1.92.
+
+Per-level final violations: cpass ground s0 {0: 6.9e-4, 1: 1.8e-3, 2: 5.4e-3, 3: 1.7e-3, 4: 0}, s1 {1e-5, 0, 6e-5, 4.9e-4, 0}. ctrunc_full s0 {1.5e-4, 5.0e-4, 2.8e-3, 1.0e-2, 7.8e-3}, s1 {1.3e-4, 3.5e-4, 3.0e-3, 9.3e-3, 9.8e-3}.
+
+**Reading.**
+- **cpass ground**: no crash, F 1.12 / 0.77 (Mac F 1.92 with 60 updates; here 280-506). Seed 1 has the lowest fine violations (1e-5) because it is nearly flat dirt (dirt 0.999, roughness 0.045); seed 0 is 97.7 % dirt. Both ignore the fill line (line_match 0.50 = chance). `r2_cpass_ground_s0/s1.png`: all dirt with at most one air sliver.
+- **ctrunc_full ground**: F 0.715 / 0.595 vs Mac 0.72, matching it. Fine (level 0) violations are 1.4e-4 / 1.3e-4, versus cpass s0 6.9e-4 (5x lower; vs cpass s1 12x higher, but that seed is flat dirt), and coarse levels 3-4 are worse (about 1e-2). Not the Mac's "4-15x lower than cpass" cleanly: it holds against cpass seed 0 only. Draws (`r2_ctrunc_full_ground_s1.png`): 94-96 % dirt, brown with narrow vertical air slits along the top and a few longer slits; still no fill line (line_match 0.50). Not all-air or empty, but the same dirt-heavy collapse as cfast; the sub-1e-3 level 0 does not translate to the designed structure. Only 338 / 470 updates (conditional on the shared GPU), about 8x fewer than cfast.
+- **cfast columns, fair budget**: both seeds now trained (5468 / 8333 updates vs 283 / 2653 earlier), and **the almost-all-air collapse persists**: density 0.063 / 0.019 (empty x-columns 74 % / 77 %), regularly spaced isolated tiny blocks in the picture (`r2_cfast_columns_s0/s1.png`). Violations 1.2e-2 / 1.1e-2 (level 0/1), worse than the earlier 7.3e-2 worst only in that the earlier seed 0 was starved. Seeds disagree on stats (gap_len 4.0 vs -2.0). So the collapse is not a budget artefact.
+
+Nothing here is accepted. Logs: `/tmp/fixes_chain.log`; images `images/r2_*.png`. Smoke runs are in `results/bench.jsonl` with tag `fixes_smoke`; the board was regenerated (`results/board.md`).
