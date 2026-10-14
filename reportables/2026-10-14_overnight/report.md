@@ -8,6 +8,10 @@ Goals: (1) ground's coarse levels trained by the kernel route; (2) own-draw line
 
 (waves are appended here as they finish)
 
+### Wave 6: wave6-pop, own-draws-only arm, 4-seed pass rate (not accepted)
+- `ckpop_hard_rkl`, 4 seeds, warm (setup 1-3 s, 700-900 ML + 2800-3600 RKL updates per seed): 0 of 4 accepted. Pooled final rates: L0 5.5e-5 and L1 1.1e-4 under budget; L2 3.5e-4 [2.2e-4, 5.3e-4] over, the binding level (each seed needs about half its L2 violations); L3 1.8e-4 and L4 0 straddle. Closest seed is over by one L2 instance. Mean F -0.090 (cfast 0.774), line_match 0.60-0.63, rho .33-.39 / .73-.82 / .57-.73 / .25-.57 / <0, L3/L4 starvation 18-38 %. Also fails across-seed roughness (one seed) and the old probe flag.
+- Doubling the reverse-KL step at L1-L3 (with or without 40 sweeps) lowers line_match to 0.56-0.57 and raises L3 starvation to 30 % without clearing L2, under GPU contention.
+
 ### Wave 5 (partial): regress, full test suite after tonight's shared-code edits
 - About 570 passed, 1 skipped, 10 xfailed. One persistent failure: `tests/variants/test_exactopt.py::test_full_history_table_reaches_target` (final KL 0.047 against a 0.01 threshold). The orchestrator reran it at this morning's starting commit 45088c2 and at the commit before speed-3: it fails identically there, so it is PRE-EXISTING (an exactopt convergence tolerance from the previous session), not a regression from tonight. Two legacy tests error on a missing `cache/exemplar-cliffs-*.npy` fixture (data, not code).
 - Transient XLA "Failed to materialize symbols" / compile aborts appear when several pytest processes share the JAX cache; reruns pass. Nothing in the kernel, explore, ckernel or core files failed. Slowest test: channels/test_sampler.py::test_adm_identity at 205 s.
