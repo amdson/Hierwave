@@ -17,6 +17,15 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 02:58 · ccoarse · finished
+Approach: ideas #14 source: generic restricted-energy Gibbs (all factors with participants at levels >= L, hard included; single-site least-violating Gibbs over derived colour classes + exact chain moves over count-factor runs). castlegen/variants/_coarse_prior.py, tests/variants/test_coarse_prior.py (25 pass).
+Result: 0 hard violations on ground/columns/toys; deterministic per seed. Ground rho is target-like (L=3 line_match_L 0.83 vs own draws 0.58, count residual 6 vs 67) but cert is uniform over feasible and independent of rho: rho-cert consistent 10-18 % (probes 100 %, own 0-15 %); cert mixes slowly at L=3. Clamp gate with prior contexts: fine line_match 0.51, viol 4-12x probe contexts; clamping rho only -> model's cert all full -> all dirt. Columns/toys: counts uniform (density 0.50 vs 0.82 / 0.71): not target-like. Cost 0.019 s/world (L=4), 0.066 (L=3), 8 sweeps, 1 core. Deeper restriction (down to tiles) does not fix cert (consistency <= 0.26, frozen). Report: reportables/2026-10-14_ccoarse/report.md.
+Next: start point inside a level: clamp informative channels (rho4) from the prior, train cert4 and below in those contexts (still ideas #14).
+
+## 2026-10-14 03:00 · ccol · started
+Approach: columns collapse timeline for cfast (csat-style per-level entropy, forced, |b|, density, empty-column fraction), bench v2 block check, clamp analogue at L=4..1 (T=4). Diagnostics only.
+Next: reportables/2026-10-14_ccol/report.md.
+
 ## 2026-10-14 02:36 · cfine · finished
 Approach: csat proposal 1 (ideas #15): creplay's coupled enumeration extended to all levels, with non-forced selection (inverse-inclusion weighted) and a windowed (cone-only) replay for fine draws.
 Result: gate 1 passes (windowed replay bit-identical 2/2, gradcheck 7/7). The window is x12 cheaper at level 0, x1.6 at level 1, no cheaper at level 2. Fine-level SNR rises x400-10000 (means agree). Gate 2 fails: dimers loses vertical instead of diagonal (entropy 0.22, same as cfast). On ground at 300 updates, lr 1e-3 for both, the fill-context cost is 1.85/2.03 vs the cfast estimator's 1.87/1.74; the probe clamp changes 1-6 % of fine draws (cfast 3-6 %); line_match 0.50. At lr 3e-3 cfine is more stochastic but unstable (violations 4-6 %). 1.1-1.2 s/update vs 0.17 s. No bench. [Report](2026-10-14_cfine/report.md).

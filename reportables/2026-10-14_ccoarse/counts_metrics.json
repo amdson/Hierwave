@@ -1,0 +1,122 @@
+{
+ "columns L=4 n4": {
+  "prior mean": 0.5105228424072266,
+  "probe mean": 0.8173141479492188,
+  "prior sd": 0.2848698868962261,
+  "probe sd": 0.032308689684524224,
+  "prior P(0)": 0.00244140625,
+  "probe P(0)": 0.0,
+  "hard viol (all worlds)": 0,
+  "s/world": 0.000994812697172165
+ },
+ "columns L=3 n4": {
+  "prior mean": 0.5018386840820312,
+  "probe mean": 0.8173141479492188,
+  "prior sd": 0.14663988739654055,
+  "probe sd": 0.032308689684524224,
+  "prior P(0)": 0.0,
+  "probe P(0)": 0.0,
+  "hard viol (all worlds)": 0,
+  "s/world": 0.05037020519375801
+ },
+ "columns L=3 n3": {
+  "prior mean": 0.5018386840820312,
+  "probe mean": 0.8173141479492188,
+  "prior sd": 0.29279304629829256,
+  "probe sd": 0.07965466099379381,
+  "prior P(0)": 0.01318359375,
+  "probe P(0)": 0.0,
+  "hard viol (all worlds)": 0,
+  "s/world": 0.05037020519375801
+ },
+ "columns L=2 n4": {
+  "prior mean": 0.5003204345703125,
+  "probe mean": 0.8173141479492188,
+  "prior sd": 0.07507454320509087,
+  "probe sd": 0.032308689684524224,
+  "prior P(0)": 0.0,
+  "probe P(0)": 0.0,
+  "hard viol (all worlds)": 0,
+  "s/world": 0.06662721186876297
+ },
+ "columns L=2 n3": {
+  "prior mean": 0.5003204345703125,
+  "probe mean": 0.8173141479492188,
+  "prior sd": 0.15238722691281686,
+  "probe sd": 0.07965466099379381,
+  "prior P(0)": 0.0,
+  "probe P(0)": 0.0,
+  "hard viol (all worlds)": 0,
+  "s/world": 0.06662721186876297
+ },
+ "columns L=2 n2": {
+  "prior mean": 0.5003204345703125,
+  "probe mean": 0.8173141479492188,
+  "prior sd": 0.3071372780773244,
+  "probe sd": 0.17959578634820436,
+  "prior P(0)": 0.05841064453125,
+  "probe P(0)": 0.000152587890625,
+  "hard viol (all worlds)": 0,
+  "s/world": 0.06662721186876297
+ },
+ "toy_support L=2 rho2": {
+  "prior mean": 0.504119873046875,
+  "probe mean": 0.714111328125,
+  "prior sd": 0.3077709222563225,
+  "probe sd": 0.1886698468022294,
+  "prior P(0)": 0.05908203125,
+  "probe P(0)": 0.0,
+  "hard viol (all worlds)": 0,
+  "s/world": 7.661804556846619e-05
+ },
+ "toy_support L=1 rho2": {
+  "prior mean": 0.50347900390625,
+  "probe mean": 0.714111328125,
+  "prior sd": 0.17618039696290788,
+  "probe sd": 0.1886698468022294,
+  "prior P(0)": 0.00048828125,
+  "probe P(0)": 0.0,
+  "hard viol (all worlds)": 0,
+  "s/world": 0.0006156526505947113
+ },
+ "toy_support L=1 rho1": {
+  "prior mean": 0.50347900390625,
+  "probe mean": 0.714111328125,
+  "prior sd": 0.35349311019268154,
+  "probe sd": 0.34251798582535936,
+  "prior P(0)": 0.194580078125,
+  "probe P(0)": 0.096923828125,
+  "hard viol (all worlds)": 0,
+  "s/world": 0.0006156526505947113
+ },
+ "toy_modes L=2 rho2": {
+  "prior mean": 0.5,
+  "probe mean": 0.5,
+  "prior sd": 0.0,
+  "probe sd": 0.0,
+  "prior P(0)": 0.0,
+  "probe P(0)": 0.0,
+  "hard viol (all worlds)": 0,
+  "s/world": 8.246675133705139e-05
+ },
+ "toy_modes L=1 rho2": {
+  "prior mean": 0.5,
+  "probe mean": 0.5,
+  "prior sd": 0.0,
+  "probe sd": 0.0,
+  "prior P(0)": 0.0,
+  "probe P(0)": 0.0,
+  "hard viol (all worlds)": 0,
+  "s/world": 0.0006078146398067474
+ },
+ "toy_modes L=1 rho1": {
+  "prior mean": 0.5,
+  "probe mean": 0.5,
+  "prior sd": 0.3400681730251855,
+  "probe sd": 0.4420107862442386,
+  "prior P(0)": 0.175537109375,
+  "probe P(0)": 0.3704833984375,
+  "hard viol (all worlds)": 0,
+  "s/world": 0.0006078146398067474
+ }
+}

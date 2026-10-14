@@ -1,0 +1,114 @@
+{
+ "L4 | untrained | probe lift": {
+  "fine cost/cell": 2.3178343772888184,
+  "fine viol/cell": 0.019107818603515625,
+  "dirt_frac": 0.5653476715087891,
+  "line_match": 0.541015625,
+  "rho-cert consistent at L": 1.0
+ },
+ "L4 | untrained | prior (all)": {
+  "fine cost/cell": 2.821624755859375,
+  "fine viol/cell": 0.08461761474609375,
+  "dirt_frac": 0.6632728576660156,
+  "line_match": 0.51580810546875,
+  "rho-cert consistent at L": 0.1806640625
+ },
+ "L4 | untrained | prior (informative: rho4)": {
+  "fine cost/cell": 2.487673759460449,
+  "fine viol/cell": 0.040485382080078125,
+  "dirt_frac": 0.8837699890136719,
+  "line_match": 0.50335693359375,
+  "rho-cert consistent at L": 0.12646484375
+ },
+ "L4 | untrained | own": {
+  "fine cost/cell": 2.4852967262268066,
+  "fine viol/cell": 0.040485382080078125,
+  "dirt_frac": 0.8837699890136719,
+  "line_match": 0.50335693359375,
+  "rho-cert consistent at L": 0.123046875
+ },
+ "L4 | trained | probe lift": {
+  "fine cost/cell": 1.9622503519058228,
+  "fine viol/cell": 0.0019855499267578125,
+  "dirt_frac": 0.6188926696777344,
+  "line_match": 0.53076171875,
+  "rho-cert consistent at L": 1.0
+ },
+ "L4 | trained | prior (all)": {
+  "fine cost/cell": 1.6905122995376587,
+  "fine viol/cell": 0.02506256103515625,
+  "dirt_frac": 0.762054443359375,
+  "line_match": 0.50799560546875,
+  "rho-cert consistent at L": 0.1806640625
+ },
+ "L4 | trained | prior (informative: rho4)": {
+  "fine cost/cell": 0.8947968482971191,
+  "fine viol/cell": 0.0,
+  "dirt_frac": 0.9999542236328125,
+  "line_match": 0.5,
+  "rho-cert consistent at L": 0.05517578125
+ },
+ "L4 | trained | own": {
+  "fine cost/cell": 0.7105068564414978,
+  "fine viol/cell": 0.0,
+  "dirt_frac": 0.9999542236328125,
+  "line_match": 0.5,
+  "rho-cert consistent at L": 0.0
+ },
+ "L3 | untrained | probe lift": {
+  "fine cost/cell": 1.9708385467529297,
+  "fine viol/cell": 0.0074977874755859375,
+  "dirt_frac": 0.5270576477050781,
+  "line_match": 0.581817626953125,
+  "rho-cert consistent at L": 1.0
+ },
+ "L3 | untrained | prior (all)": {
+  "fine cost/cell": 2.140794277191162,
+  "fine viol/cell": 0.034088134765625,
+  "dirt_frac": 0.5403118133544922,
+  "line_match": 0.505401611328125,
+  "rho-cert consistent at L": 0.104736328125
+ },
+ "L3 | untrained | prior (informative: rho4,rho3)": {
+  "fine cost/cell": 2.2108726501464844,
+  "fine viol/cell": 0.03891181945800781,
+  "dirt_frac": 0.8836822509765625,
+  "line_match": 0.503326416015625,
+  "rho-cert consistent at L": 0.1094970703125
+ },
+ "L3 | untrained | own": {
+  "fine cost/cell": 2.088141441345215,
+  "fine viol/cell": 0.03891181945800781,
+  "dirt_frac": 0.8837699890136719,
+  "line_match": 0.50335693359375,
+  "rho-cert consistent at L": 0.14892578125
+ },
+ "L3 | trained | probe lift": {
+  "fine cost/cell": 2.211225986480713,
+  "fine viol/cell": 0.000518798828125,
+  "dirt_frac": 0.5534439086914062,
+  "line_match": 0.56396484375,
+  "rho-cert consistent at L": 1.0
+ },
+ "L3 | trained | prior (all)": {
+  "fine cost/cell": 2.1804423332214355,
+  "fine viol/cell": 0.008619308471679688,
+  "dirt_frac": 0.5434513092041016,
+  "line_match": 0.506561279296875,
+  "rho-cert consistent at L": 0.104736328125
+ },
+ "L3 | trained | prior (informative: rho4,rho3)": {
+  "fine cost/cell": 0.995924174785614,
+  "fine viol/cell": 0.0,
+  "dirt_frac": 0.9999542236328125,
+  "line_match": 0.5,
+  "rho-cert consistent at L": 0.0733642578125
+ },
+ "L3 | trained | own": {
+  "fine cost/cell": 0.342684805393219,
+  "fine viol/cell": 0.0,
+  "dirt_frac": 0.9999542236328125,
+  "line_match": 0.5,
+  "rho-cert consistent at L": 0.1019287109375
+ }
+}
