@@ -38,6 +38,25 @@ log_q_step is the sum of log q of the redrawn values (the step's proposal
 density under q, teacher-forced context); cells_changed counts redrawn cells
 whose value changed.  `seed` is the world seed (int32 scalar), as everywhere
 in castlegen.bench.noise; fold a PRNG key down to one int before calling.
+
+Hand-off notes for the revising sampler (crevise, #19):
+  * `state` must be complete: every channel of the problem, designed ones
+    included, int32 (h_l, w_l), values >= 0 (a pass output plus the designed
+    dict).  `lay` is the _cpass_core.Layout the state was drawn on (periodic
+    or an open window with its margin); `params` are the actor params keyed
+    by _cpass_core.key_of(level, channel).
+  * `field` is any {level: (h_l, w_l)} non-negative array; only its zero set
+    drives the selection (select_cells), its values enter only through
+    field_feats (variant B).  Pass castlegen.graded distances instead of the
+    binary count when they are available in JAX.
+  * `step_index` only keys the noise (tag "guided{step_index}:{channel}"), so
+    steps of one world never share Gumbels; use 1, 2, ... per step.
+  * Everything is jit-able and vmap-able over worlds (state, field, seed).
+  * Measured with frozen cfast/ckernel models (reportables/2026-10-14_guided_step):
+    variant A (plain redraw from q) does NOT converge to zero violations: each
+    step redraws the selection from q's own conditional and re-creates
+    violations at q's own rate, so the count fluctuates instead of falling;
+    the field as an actor input (variant B) needs training to mean anything.
 """
 from __future__ import annotations
 

@@ -16,16 +16,18 @@ plt.rcParams.update({"font.size": 8, "axes.spines.top": False, "axes.spines.righ
 
 
 def dimers():
-    runs = [(n, json.load(open(f"{D}/runs/dimers_{n}.json"))) for n in ("crevise", "cfast")
-            if os.path.exists(f"{D}/runs/dimers_{n}.json")]
-    fig, ax = plt.subplots(3, len(runs), figsize=(4.2 * len(runs), 6.4), sharex="col", squeeze=False)
+    runs = [(n, json.load(open(f"{D}/runs/dimers_{n}.json"))) for n in
+            ("crevise", "crevise_guided", "crevise_guided_fixed", "cfast") if os.path.exists(f"{D}/runs/dimers_{n}.json")]
+    fig, ax = plt.subplots(3, len(runs), figsize=(3.6 * len(runs), 6.4), sharex="col", squeeze=False)
     for j, (n, r) in enumerate(runs):
         rows = r["rows"]
         u = np.array([x["update"] for x in rows])
         hvd = np.array([x["raw"] for x in rows])
         for i, (lab, col) in enumerate((("horizontal", C["h"]), ("vertical", C["v"]), ("diagonal", C["d"]))):
             ax[0, j].plot(u, hvd[:, i], color=col, lw=1.6, label=lab)
-        ax[0, j].set(ylim=(-0.02, 1.02), title=f"dimers, {n} ({r['final']['update']} updates)")
+        lab = {"crevise": "crevise, unguided (biased term)", "crevise_guided": "guided (biased term)",
+               "crevise_guided_fixed": "guided, fixed estimator", "cfast": "cfast control"}[n]
+        ax[0, j].set(ylim=(-0.02, 1.02), title=f"dimers, {lab}\n({r['final']['update']} updates)")
         ax[0, j].legend(frameon=False, loc="upper right")
         ax[1, j].plot(u, np.maximum([x["raw_viol"] for x in rows], 1e-6), color=C["viol"], lw=1.6)
         ax[1, j].axhline(2e-4, color="#777", lw=0.8, ls="--")
@@ -46,11 +48,10 @@ def dimers():
 
 def ground():
     ref = json.load(open(f"{D}/runs/ground_patch_mcmc.json"))
-    runs = [(n, json.load(open(f"{D}/runs/ground_patch_{n}.json"))) for n in ("crevise", "cfast")
+    runs = [(n, json.load(open(f"{D}/runs/ground_patch_{n}.json"))) for n in ("crevise", "crevise_guided", "cfast")
             if os.path.exists(f"{D}/runs/ground_patch_{n}.json")]
     panels = [("MCMC reference (weighted)", np.array(ref["p_dirt"]))]
     for n, r in runs:
-        panels.append((f"{n} raw", np.array(r["raw"]["p_dirt"])))
         panels.append((f"{n} final", np.array(r["final"]["p_dirt"])))
     fig, ax = plt.subplots(1, len(panels), figsize=(3.0 * len(panels), 2.4))
     surf = np.array([3, 3, 3, 3, 2, 2, 2, 2] * 2)

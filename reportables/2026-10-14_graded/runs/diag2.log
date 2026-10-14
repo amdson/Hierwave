@@ -1,0 +1,14 @@
+states 44614 valid 1667 D>H frac 0.045
+moves {
+ "valid": {
+  "n": 40008,
+  "H_flat_D_slope": 0.0,
+  "both_flat": 0.2519496100779844
+ },
+ "invalid": {
+  "n": 1030728,
+  "H_flat_D_slope": 0.011785844568111083,
+  "both_flat": 0.30428396240327227
+ }
+}
+sign hist {'dH-1 dD-1': 119216, 'dH-1 dD0': 3326, 'dH0 dD-1': 3098, 'dH0 dD0': 323714, 'dH0 dD1': 9050, 'dH1 dD0': 5362, 'dH1 dD1': 606970}
