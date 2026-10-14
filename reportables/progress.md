@@ -17,6 +17,15 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 01:00 · cbig2 · started
+Approach: does B=256/1024 alone close the toy_modes variance gap (exactopt: sampled B=8 KL 0.19/block vs exact 0.013)? Bench cfast, cbig64, cbig256, cbig1024 on toy_modes and cfast, cbig256 on toy_support, 2 seeds x 150 s, shared GPU, tag r4. Added `cbig1024` variant line to cbig.py.
+Next: report in 2026-10-13_cbig/report.md.
+
+## 2026-10-14 01:00 · cln · started
+Approach: acting on exactopt (ideas.md #10, #5): per-variant cfg options for the actor network (LayerNorm + SiLU 64x2; default tanh) and the actor window (6x6, offsets -2..3; default 4x4), with the cone and margin following the window. Variants cln (LN+SiLU, 4x4) and cln6 (LN+SiLU, 6x6) on cfast.
+Result: pending.
+Next: bench cln6 / cln / cfast back to back on toy_support, toy_modes, ground.
+
 ## 2026-10-14 00:45 · exactopt · finished
 Approach: ideas.md #10 round 3, exact gradients on enumerable blocks (CPU): collected the toy_support / tiny runs, then a representation study (LN+SiLU, width/depth, lr, schedule) and an information study (actor window; same-colour independence).
 Result: variance dominates at B = 8 (sampled 0.18 vs exact 0.013 on modes; 1.56 vs 0.30 / 0.012 on support). The tanh MLP's support plateau (0.30) is optimisation, not capacity: lr 1e-2 gives 0.012 and LN+SiLU 64x2 gives 0.0084 (table 0.0074). The modes 0.012 floor is the 4x4 actor window: 6x6 gives table 0 and MLP 0.0009. On tiny, the history table floors at 0.037 from same-colour independence (the chain-rule diagnostic gives 0.002); the 8-wide window takes table_feat from 0.32 to 0.07. Report: reportables/2026-10-13_exactopt/report.md.
@@ -55,6 +64,11 @@ Next: verdict per problem in reportables/2026-10-13_exactopt/report.md.
 Approach: finish creplay's importance-weighted refactor (coupled coarse replays, ideas.md coupled-replay item): at branched levels keep t1 for every draw, drop every score term t2, add (N_c/R)·Σ_selected c_i (enumeration or LOO). Gradcheck on CPU, then time R and bench creplay vs cfast on the GPU (toy_support, ground).
 Result: pending.
 Next: GPU bench, coarse SNR before/after.
+
+## 2026-10-14 00:55 · baselines · finished
+Approach: fresh GPU baselines (shared GPU, 2 seeds x 150 s): greedy and cfast on all five problems, cpass on toy_support and ground.
+Result: nothing accepted. cfast final viol: toy_support 0, toy_modes 0, ground 1.0e-3 (rerun; first run seed 0 got 0 updates), dimers 2.0e-4, columns 7.3e-2. cpass toy_support 2.3e-3; cpass ground crashes on GPU (assertion in cpass.py:256, float32 branch-replay mismatch). ctrunc_full not run. Draws: ground all/mostly dirt, columns all air, dimers lose diagonal. Report: reportables/2026-10-13_gpu_baselines/report.md.
+Next: look at the cpass float32 assertion; rerun starved seeds (cfast columns seed 0, 283 updates) when the GPU is quieter.
 
 ## 2026-10-13 23:51 · baselines · started
 Approach: fresh GPU baseline board: greedy, cfast on all 5 problems; then cpass (toy_support, ground), ctrunc_full (ground). GPU shared.
