@@ -8,6 +8,10 @@ Goals: (1) ground's coarse levels trained by the kernel route; (2) own-draw line
 
 (waves are appended here as they finish)
 
+### Wave 3 (partial): dimers-kernel part 2
+- Adding cfast's reverse-KL steps to the dimers kernel loop (N = 32 per iteration, lr 1e-3) restores validity (3.4e-4 per cell, near budget) but the own-draw mix collapses back to cfast's two orientations (diagonal 0.000-0.011); refined states still carry 0.07-0.09 diagonal. ML only keeps three orientations (.36/.32/.32) at 5.6e-2 violations.
+- Ground and dimers now show the same trade-off: ML gives diversity but leaks mass onto violating states; the full reverse-KL mix fixes violations and brings collapse back. Written up as constitution change request #2: ML plus a penalty-only violation term (the λ·E_q[violations] part of reverse KL without the energy and entropy terms). Not built (frozen).
+
 ### Wave 3 (partial): speed-1b, coarse kernels batched
 - Block-only passes, K + 1 candidates scored in one batch, factored coarse Gibbs: ckernel iteration 7.1 s -> 0.50 s (the 7.1 was contended; a fair range is 4-14x). Flips 63 -> 2180 moves/s, L2 multiple-try 32 -> 3630, updates 1.1 -> 16.1 per s. Acceptance decisions identical to the old code on the same keys; log ratios within 5e-3.
 - A 300 s ckernel run (upper-bound arm) now gets 2312 updates against 440, own-draw line_match 0.70 against 0.63, L4 fill -0.146 against -0.125. Remaining cost is the ML step and context generation inside ckernel.py.
