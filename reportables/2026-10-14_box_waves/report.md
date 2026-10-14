@@ -39,6 +39,41 @@ Orchestrator's summary of the multi-agent waves on the GPU box. Each agent's own
 - **bench v2 probe check** (landed), so starvation is now measured per level instead of by a miscalibrated world-level flag.
 Open structural question (cdim2, running): whether a diverse valid policy is representable at all in this sampler class on dimers, which would point at goal-4 freedoms (more passes, colouring, lookahead) rather than training.
 
+
+## Wave 4 (results) and closing summary (04:10 UTC)
+
+| agent | folder | verdict |
+| --- | --- | --- |
+| baselines300 | 2026-10-14_baselines300 | 300 s board: cbig256 within 0.003 of F* on both toys with exact stats and seed agreement; ground/columns/dimers collapses unchanged at double budget. |
+| v2board | 2026-10-14_v2board | Bench v2 rows for the leaders; **proposed gate** (starved ≤ max(3 %, null + 2 pp) at every level; probe ρ at level 0 ≥ 0.8 × ideal) passes cbig256 on both toys and cfast toy_modes, fails every ground/columns/dimers run. For the user. |
+| ccoarse | 2026-10-14_ccoarse | Generic coarse-state sampler from the designed energy (tests 25/25): fill-following counts on ground (line_match 0.83) but uniform certificates; uninformative on columns/toys. |
+| ccol | 2026-10-14_ccol | Columns collapse has ground's shape (top level deterministic at update 125); fine level cannot realise valid columns even under probe counts (no positions in the count channels). |
+| cstart | 2026-10-14_cstart | Probe-lifted contexts at mixed depth, 50/50: no gate pass; collapse delayed (dirt 0.95 at ~450 vs 150), not prevented. Most of its gap was the mixture (see cstart2). |
+| cdim2 | 2026-10-14_cdim2 | **Exact gradients on 4×4 dimers: tables reach the diverse zero-violation target (KL 0.018); every MLP collapses to stripes.** The sampler class is not the limit. |
+| cdim3 | 2026-10-14_cdim3 | **It is optimisation, not representation**: the distilled MLP fits (KL 0.026, then trains to 0.002). Under λ 20 the early gradient points at the locally safe action and shared weights saturate every context within 50 steps. |
+| cbound | 2026-10-14_cbound | **λ ramp 1→20 + whole-logit τ 8→1: KL 4e-5 with exact gradients.** Sampled dimers: `cbound_lam` ends with three orientations (0.47/0.30/0.23) inside the violation budget, one seed. Ground: still all dirt at λ ≈ 3 (soft terms, not the penalty). |
+| cstart2 | 2026-10-14_cstart2 | Fine levels shown only fill contexts (f = 1, L = 3): all actors 8× better than cfast's fine levels; LN+SiLU 6×6 best (soft 0.194 vs probe 0.014) but all stall at block terraces; parent-awareness still weak. |
+| cbound2 | 2026-10-14_cbound | Confirmation of the dimers result on two more seeds (see the appended section). |
+
+### What the session established (numbers in the folders)
+
+1. **The toys are solved** under the new probe check: cbig256 at F* on toy_support and within 0.002 on toy_modes, 0-1.5 % starved blocks (null up to 1.7 %). Variance (batch size) was their only problem.
+2. **Every estimator-side fix is built, unbiased and does not move ground**: coarse coupled replays (creplay, ×10⁴ SNR, 0.18 s/update), fine enumeration (cfine), big batches, LN+SiLU / 6×6 / conv actors, count-residual features, schedules, unbiased exploration (chot: provably the same expected update). The old probe flag was miscalibrated; bench v2 measures starvation per level.
+3. **The collapse mechanism, measured end to end:** at init the top level is near a tie; within 50 updates the fine levels get better at dirt than at fill contexts; the top level, with exact local cost and few draws, locks into full certificates; from then on fill contexts are never visited; the fine MLP saturates into one parent-independent safe action through its shared weights. Columns and dimers follow the same script.
+4. **The network's failure is optimisation, not capacity** (cdim2/cdim3): with exact gradients a table solves dimers and the MLP does not, yet the MLP fits the table's solution when distilled and then trains below it. Keeping the policy soft while the penalty dominates (λ ramp + whole-logit τ) solves dimers exactly, and on sampled dimers `cbound_lam` is the first run to end diverse and in budget.
+5. **On ground, context plus the soft early phase are both needed and neither is sufficient yet**: fine levels shown only fill contexts learn them 8× better but stall at terraces (cstart2); the soft schedule alone still collapses the top level because ground's driver is the soft energy, not λ (cbound, ctop).
+
+### Recommended next steps
+1. **Combine on ground:** `cstart` at f = 1, L = 3 for an early phase, with the LN+SiLU 6×6 actor and cbound's whole-logit τ schedule, decaying to full-depth training; gate = clamp test + v2 starvation per level. (This is ideas #14 + #17 + the cln options; all built, not yet combined.)
+2. **Confirm `cbound_lam` on dimers** at 300 s with 2 seeds through the v2 bench (cbound2's confirmation is appended to the cbound report).
+3. **Adopt the v2 gate** (user decision) and drop the old probe flag.
+4. **Parent-awareness on ground** is still weak even in fill contexts: test a tabular-like or per-candidate head keyed on parent count and neighbour heights with exact gradients on a small ground block (exactopt has the machinery).
+5. Generic target-like certificates remain open (ccoarse): a certificate-aware coarse prior, or training the coarse levels on repaired own draws.
+
+### Housekeeping
+- Everything is committed and pushed on `coloured-pass` (HEAD listed in progress.md). No agent processes are left running. The rsync copy at `/workspace/hierwave` is stale; the clone at `/workspace/hierwave_git` is the box's working tree.
+- Box rules and all user decisions of the session: `/workspace/BOX_RULES.md` (outside the repo; copied to `notes/box_rules_2026-10-14.md`).
+
 ## Decisions taken by the user during the session
 Exploration at higher τ in scope (ideas #12); bench budget 300 s; ground is the focus problem with the fast loop (dimers pre-check → ground 120 s with entropy/dirt/line_match → clamp gate → bench); ideas #14 in scope; bench v2 probe check approved.
 

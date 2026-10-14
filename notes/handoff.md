@@ -66,3 +66,7 @@ These are not all in the repo elsewhere.
 1. Finish and collect round 2, then compare everything on the GPU board.
 2. Use exactopt's verdict (variance vs representation or sampling order) to choose round 3. If representation or order, target fine-level capability: cconv-style context with candidate scoring, revisable passes, deeper lookahead, and training fine levels on target-like coarse contexts.
 3. Queued: a variance-minimising critic (ideas #9); low-to-high depth-1 scheduling (ideas #7, low priority).
+
+## Box session, 2026-10-14 (orchestrated waves)
+
+Read `reportables/2026-10-14_box_waves/report.md` first: it summarises all four waves, the collapse mechanism as measured, what is solved (the toys under bench v2) and the recommended next steps. User decisions taken during the session (bench budget 300 s, ideas #12 and #14 in scope, bench v2 probe check, ground as the focus problem with the fast loop) are in `notes/box_rules_2026-10-14.md`.

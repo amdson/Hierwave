@@ -17,6 +17,11 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 04:10 · orchestrator (box session) · finished
+Approach: four waves of 3 Opus + 3 Sonnet agents on the GPU box; wave log and closing summary in [2026-10-14_box_waves](2026-10-14_box_waves/report.md).
+Result: toys solved under bench v2 (cbig256 at F*); ground/columns/dimers not accepted. Collapse mechanism measured end to end (ctop, csat, cdim2, cdim3); the network's failure is optimisation not capacity; `cbound_lam` is the first sampled dimers run to end diverse and in budget (confirmation pending); fine levels learn fill contexts 8x better when shown them (cstart2) but stall at terraces.
+Next: combine cstart (f = 1, L = 3 early phase) + cln6 + cbound's whole-logit tau on ground; confirm cbound_lam; adopt the v2 gate.
+
 ## 2026-10-14 04:02 · cstart2 · finished
 Approach: ideas #14 isolated. cstart f = 1.0, L = 3 fixed (levels 0-2 train only in probe-lifted fill contexts), 300 s, 1 seed each (shared GPU, ~4500 updates each): tanh, LN+SiLU, LN+SiLU 6x6, tanh + count resid.
 Result: fill cost at L=3 (incl. -tau H) 0.24 / 0.30 / -0.004 / 0.18 vs untrained 1.98 and f9L4 1.25; soft 0.37 / 0.44 / 0.19 / 0.32 vs probe 0.014 (best still 14x). Completions are block terraces, line_match 0.58-0.63 (untrained 0.60, probe 0.88). Parent-awareness: rho2 changes 1.4-2.8 % under probe j0->j2 vs 7.9 % in the probes (untrained 0.6 %). Cost curves plateau after ~update 800; end-of-training batch-gradient SNR statistically 0 (M=400; also ~0 at init, so not a clean undertraining test). Verdict: the fine function class / optimisation is the limit on ground, matching cdim2. [Report](2026-10-14_cstart2/report.txt) (report.md write blocked).
