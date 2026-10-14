@@ -119,3 +119,5 @@ On the enumerable hierarchy, optimise the objective with exact expectations, and
 > **Annotation (2026-10-13, orchestrator):** queued as variant `cconv`. Plan: a conv trunk of residual 3×3 blocks with LayerNorm and SiLU at a fixed depth (a bounded radius keeps finite support); parent features injected by upsampling; a candidate-scoring head over the site features plus an embedding of each candidate, its closed energy, violations and lookahead slack; a deeper conv critic. A/B against the cpass MLP, gated on toy_support KL. Status: untested.
 
 ---
+
+> cconv outcome (2026-10-14, [report](2026-10-13_cconv/report.md)): first GPU bench, 2 x 150 s on a shared GPU. Worse than cfast on all four problems (toy_support F -0.395 vs -0.416; toy_modes 0.29-0.33 vs 0.268; ground violations 0.7-7.6% with no fill line; columns 18% violations), with 5-10x fewer updates (cold compile 130-240 s, 0.6 s/update at B=64). Probably undertrained, not shown to be a worse representation.

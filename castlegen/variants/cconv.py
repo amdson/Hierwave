@@ -39,7 +39,6 @@ from ._cfast_cone import Cone
 from .cfast import CFast
 from .cpass import CPass, adam_init, adam_step, clip_by_level
 
-jax.config.update("jax_compilation_cache_dir", os.path.expanduser("~/.cache/jax_cconv"))
 
 _LAYS = {}
 CFG = dict(B=64, K=0, width=64, lr=1e-3, lr_critic=1e-3, lam0=10.0, lam_max=20.0, eta=0.01,
@@ -277,3 +276,12 @@ class CConv(CFast):
 
     def info(self):
         return {**super().info(), "margin": self.margin()}
+
+
+@register
+class CConvB16(CConv):
+    """cconv at B = 16: B = 64 needs 7+ GB on ground (OOM on the shared GPU)."""
+    name = "cconv_b16"
+
+    def __init__(self, problem, seed, workdir, **cfg):
+        super().__init__(problem, seed, workdir, **{"B": 16, **cfg})

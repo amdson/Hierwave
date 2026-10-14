@@ -17,6 +17,17 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 01:05 · cconv · finished
+Approach: first GPU bench of cconv (ideas #5) vs cfast, 2 seeds x 150 s, shared GPU.
+Result: cconv worse than cfast everywhere and 5-10x fewer updates. toy_support F -0.395 vs -0.416 (F* -0.4688), worst final viol 1.8e-2 vs 2e-3; toy_modes F 0.29-0.33 vs 0.268 (F* 0.2513); ground (B=16 after B=64 OOM) viol 7.6e-2, streaky dirt, no fill line, one seed 0 updates (cold compile 240 s); columns viol 0.18 vs 3e-2. None accepted. [Report](2026-10-13_cconv/report.md).
+Next: r=2/width 16 (3x faster) with a longer run to test whether the gap is throughput.
+
+## 2026-10-14 00:20 · cconv · started
+Approach: bench cconv vs cfast on toy_support, toy_modes, ground, columns.
+Result: -
+Next: -
+
+
 ## 2026-10-14 01:00 · creplay · finished
 Approach: finished the importance-weighted coupled-replay estimator (t1 everywhere, t2 dropped at branched levels, (N_c/R)·Σ_selected c_i). Tests: replay faithfulness 4/4, gradcheck 4/4 (CPU). GPU shared with other agents.
 Result:
