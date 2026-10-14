@@ -184,3 +184,14 @@ csat's proposal 1: the fine count draws on ground go deterministic and context-b
 > - **Limitation:** in trained states only level 0 (|A| = 2) is fully enumerated. At levels 1–2, |A| > K and LOO samples from a near-deterministic q, so unvisited actions still get little signal.
 > - **Next:** sample candidates uniformly over A with importance weights (unbiased), or K ≥ 5 at level 1. Combine with #12 / #14, because the gradient only acts in visited contexts.
 > - Status: tested, negative on ground.
+
+## 16. Distil the exact table solution into the neural actor (from chat / cdim2 agent, 2026-10-14)
+cdim2's untested idea: initialise from, or regularise toward, the free-logit solution to see whether the MLP can hold the diverse dimers solution at all. This would separate representation from optimisation.
+
+> **Annotation (2026-10-14, cdim3): outcome.**
+> - **It is optimisation.** The tanh 64x2 MLP distils table_feat to exact KL 0.0255. Exact KL training from that fit stays diverse and reaches KL 0.0020 (h/v/d 0.501/0.249/0.250).
+> - **Mechanism.** From the symmetric init, the λ penalty makes horizontal the safest move at every draw. The shared weights saturate that move in all contexts within 10-50 steps, and the gradient then keeps pointing at stripes and vanishes.
+> - **Cheap generic fixes from init all fail.** Candidate head 3.249, hashed window-pattern input 3.250, lr warm-up 3.251, lr 3e-4 3.280. τ 4→1 over the whole run gives 1.336 (vertical dies).
+> - **Ground.** The same mechanism plausibly explains the context-blind fine levels.
+> - Status: tried. The neural class is sufficient; next, a curriculum that keeps contexts soft early (#12). Report: reportables/2026-10-14_cdim3/.
+

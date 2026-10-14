@@ -17,6 +17,14 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 03:32 · cdim3 · finished
+Approach: dimers 4x4 exact gradients (cdim2 setup). Distil table_feat into the tanh MLP; diagnose steps 0-200; try generic fixes with exact gradients (ideas #16).
+Result: optimisation, not representation. Distilled MLP KL 0.0255 (h/v/d 0.507/0.247/0.247). Exact training from it holds and reaches KL 0.0020. From init, P(viol | horizontal) < P(viol | v/d) at every draw under λ 20, so −∇J points at stripes (cos 0.90). Shared weights saturate all contexts by step 10-50 (93 % h at step 10, margins 8-9 nats by 50), where the gradient keeps pointing at stripes and vanishes. The table only overshoots to 78 % h and then turns. Fixes: candidate head 3.249, hashed window-pattern input 3.250, lr warm-up 3.251, lr 3e-4 3.280 (all stripes); τ 4→1 over the whole run 1.336 (h 0.65 / v 0 / d 0.35). [Report](2026-10-14_cdim3/report.md).
+Next: a curriculum that keeps contexts soft while the penalty gradient dominates (long high-τ phase importance-weighted to τ = 1, ideas #12) and a test of whether it reaches the target basin; check on ground whether fine draws saturate before parent dependence is learned.
+
+## 2026-10-14 02:45 · cdim3 · started
+Approach: why the exactly-optimised MLP goes to stripes on dimers 4x4 while table_feat reaches the target (cdim2). Distil table_feat into the MLP (representation vs optimisation), diagnose steps 0-200, try generic fixes (warm start, candidate head, hashed window embedding input, lr warm-up / slower tau) with exact gradients.
+
 ## 2026-10-14 03:20 · v2board · finished
 Approach: bench v2 block check at 300 s, 2 seeds, for cbig256 (toy_modes, toy_support), cfast (ground, toy_modes), creplay (ground); other v2 300 s rows reused. Gate proposal.
 Result: toy_modes cbig256/cfast gap +0.002/+0.011-0.014, rho L0 0.86-0.87 (ideal 0.87), starved 0-0.3 %. toy_support cbig256 starved 0-1.5 %, cfast/chot 5-9 % (F gap +0.02). Ground cfast/creplay/cstart: probe blocks 100 % starved at L2-L4 (L1 53-100 %), rho_probe L0 0.78 even when collapsed. Proposed gate: starved <= max(3 %, null+2pp) at every level (subtree weight) plus rho_probe thresholds; separates all passing from failing rows. [Report](2026-10-14_v2board/report.md).

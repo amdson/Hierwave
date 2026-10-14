@@ -183,6 +183,10 @@ def net_init(key, din, dout, act, width, depth):
 
 
 def net(p, x, act, depth):
+    return net_hidden(p, x, act, depth) @ p["Wo"] + p["bo"]
+
+
+def net_hidden(p, x, act, depth):
     h = x
     for i in range(depth):
         h = h @ p[f"W{i}"] + p[f"b{i}"]
@@ -192,7 +196,38 @@ def net(p, x, act, depth):
             h = jax.nn.silu((h - mu) * jax.lax.rsqrt(var + 1e-5) * p[f"g{i}"] + p[f"c{i}"])
         else:
             h = jnp.tanh(h)
-    return h @ p["Wo"] + p["bo"]
+    return h
+
+
+# ---- cdim3 extra actors (all full-domain per-channel outputs; constraint 5) ----
+# cnet-<act>-<W>x<D>  candidate-scoring head (cconv-style): b(t) = h Wo + bo + sum_j w_j
+#                     SiLU(h A + e(t) E + c)_j, e(t) = (channel embedding of t, s(t)), h the net's
+#                     last hidden layer; Wo and w start at zero (b = 0 at step 0).
+# hnet-<act>-<W>x<D>  learned embeddings of the discrete window pattern as extra INPUTS: the whole
+#                     actor input vector and the 3 x 3 same-level cells around the site (with the
+#                     in-block position) are each hashed (crc32) to a table of HASH_ROWS rows of
+#                     HASH_DIM; [feat, emb_full, emb_local] feeds the net.  Generic and local (a
+#                     function of the actor window only); an input table, not an output table.
+HASH_ROWS, HASH_DIM, CAND_HC = 4096, 16, 32
+
+
+def window_hash_ids(lay, l, U, rows=HASH_ROWS):
+    """U (C, F) actor inputs at level l -> (full ids, local 3 x 3 ids), each (C,) in [0, rows)."""
+    import zlib
+    win = lay.actor_win
+    fcell = sum(int(lay.emb[c.name].shape[1]) + 2 for c in lay.all_chans[l])
+    lo = min(d[0] for d in win.same)
+    n = int(round(np.sqrt(len(win.same))))
+    assert len(win.same) == n * n and not lay.resid
+    pos = U[:, -5:-1].argmax(1)                 # in-block position one-hot (features() layout)
+    cells = U[:, :n * n * fcell].reshape(len(U), n, n, fcell)
+    full = np.array([zlib.crc32(r.tobytes()) % rows for r in np.ascontiguousarray(U, np.float32)])
+    loc = np.empty(len(U), np.int64)
+    for i in range(len(U)):
+        oy, ox = (pos[i] >> 1) - lo, (pos[i] & 1) - lo
+        blk = np.ascontiguousarray(cells[i, oy - 1:oy + 2, ox - 1:ox + 2], np.float32)
+        loc[i] = zlib.crc32(blk.tobytes() + bytes([int(pos[i])])) % rows
+    return full, loc
 
 
 def set_actor_window(spec):
@@ -390,11 +425,78 @@ class Enum:
             act, w, d = net_spec(kind)
             keys = jax.random.split(jax.random.PRNGKey(seed), len(self.keys))
             return {k: net_init(kk, self.Ufeat[k].shape[1], self.D[k], act, w, d) for k, kk in zip(self.keys, keys)}
+        if kind.startswith(("cnet", "hnet")):
+            act, w, d = net_spec(kind)
+            keys = jax.random.split(jax.random.PRNGKey(seed), len(self.keys))
+            out = {}
+            for k, kk in zip(self.keys, keys):
+                k1, k2, k3, k4 = jax.random.split(kk, 4)
+                din = self.Ufeat[k].shape[1] + (2 * HASH_DIM if kind.startswith("hnet") else 0)
+                q = net_init(k1, din, self.D[k], act, w, d)
+                if kind.startswith("hnet"):
+                    q["Hf"] = jax.random.normal(k2, (HASH_ROWS, HASH_DIM))
+                    q["Hl"] = jax.random.normal(k3, (HASH_ROWS, HASH_DIM))
+                else:
+                    ke = self._cand_emb(k).shape[1] + 1
+                    q["A"] = jax.random.normal(k2, (w, CAND_HC)) / np.sqrt(w)
+                    q["E"] = jax.random.normal(k3, (ke, CAND_HC)) / np.sqrt(ke)
+                    q["c"] = jnp.zeros(CAND_HC)
+                    q["w"] = jnp.zeros(CAND_HC)
+                out[k] = q
+            return out
         if kind == "table_seq":
             self._seq_ids()
             return {k: jnp.zeros((self.nseq[k], self.D[k]), jnp.float32) for k in self.keys}
         n = self.nfeat if kind == "table_feat" else self.nhist
         return {k: jnp.zeros((n[k], self.D[k]), jnp.float32) for k in self.keys}
+
+    def _cand_emb(self, k):
+        l = self.level[k]
+        c = next(c for c in self.lay.chans[l] if core.key_of(l, c.name) == k)
+        return np.asarray(self.lay.emb[c.name])
+
+    def hash_ids(self, k):
+        if not hasattr(self, "_hids"):
+            self._hids = {}
+        if k not in self._hids:
+            self._hids[k] = window_hash_ids(self.lay, self.level[k], self.Ufeat[k])
+        return self._hids[k]
+
+    def actor_b(self, kind, q, k, feat, soft, tau):
+        """b over the unique contexts of network k (cnet / hnet kinds)."""
+        act, _, depth = net_spec(kind)
+        if kind.startswith("hnet"):
+            hf, hl = (jnp.asarray(a) for a in self.hash_ids(k))
+            x = jnp.concatenate([feat, q["Hf"][hf], q["Hl"][hl]], -1)
+            return net(q, x, act, depth)
+        h = net_hidden(q, feat, act, depth)
+        emb = jnp.asarray(self._cand_emb(k))                                    # (D, ke - 1)
+        e = jnp.concatenate([jnp.broadcast_to(emb[None], soft.shape + emb.shape[1:]), soft[..., None] / tau], -1)
+        z = (h @ q["A"])[:, None, :] + e @ q["E"] + q["c"]
+        return h @ q["Wo"] + q["bo"] + jax.nn.silu(z) @ q["w"]
+
+    def b_unique(self, kind, params, k, tau=1.0):
+        """b over the unique (feature, soft, mask) contexts of network k: (C, D)."""
+        feat, soft = jnp.asarray(self.Ufeat[k]), jnp.asarray(self.Usoft[k])
+        if kind == "mlp":
+            return core.mlp(params[k], feat)
+        if kind.startswith(("cnet", "hnet")):
+            return self.actor_b(kind, params[k], k, feat, soft, tau)
+        if kind.startswith("net"):
+            act, _, depth = net_spec(kind)
+            return net(params[k], feat, act, depth)
+        if kind == "table_feat":
+            return params[k][jnp.asarray(self.fid[k])]
+        raise ValueError(kind)
+
+    def ctx_weights(self, k, how="target"):
+        """Per unique context of network k: expected number of visits under the
+        target ('target'), or 1 for every reachable context ('all')."""
+        C = len(self.Usoft[k])
+        if how == "all":
+            return np.ones(C)
+        ctx = self.ctx[k]
+        return np.bincount(ctx.ravel(), np.repeat(self.p_target, ctx.shape[1]), minlength=C)
 
     def _logq(self, kind):
         d = {k: dict(ctx=jnp.asarray(self.ctx[k]), act=jnp.asarray(self.act[k]),
@@ -409,6 +511,8 @@ class Enum:
                 e = d[k]
                 if kind == "mlp":
                     b = core.mlp(params[k], e["feat"])[e["ctx"]]
+                elif kind.startswith(("cnet", "hnet")):
+                    b = self.actor_b(kind, params[k], k, e["feat"], e["soft"], tau)[e["ctx"]]
                 elif kind.startswith("net"):
                     act, _, depth = net_spec(kind)
                     b = net(params[k], e["feat"], act, depth)[e["ctx"]]
@@ -489,34 +593,86 @@ def stat_fn_for(name):
     return None
 
 
+# ------------------------------------------------------------- distillation
+def distill(enum, src_kind, src_params, kind, params, steps=3000, lr=3e-3, how="target", every=500, log=print):
+    """cdim3: supervised fit of actor `kind` to the per-context policies of
+    `src_kind` (tau = 1, masks applied): minimise sum_c w_c KL(pi_src(.|c) || pi(.|c)) / sum_c w_c,
+    w from Enum.ctx_weights(how).  Full batch Adam.  Returns (params, curve)."""
+    tgt, wts, msk = {}, {}, {}
+    for k in enum.keys:
+        m = jnp.asarray(enum.Umask[k])
+        lg = jnp.where(m, -jnp.asarray(enum.Usoft[k]) - enum.b_unique(src_kind, src_params, k), -jnp.inf)
+        tgt[k] = jax.nn.softmax(lg, -1)
+        w = enum.ctx_weights(k, how)
+        wts[k] = jnp.asarray(w / w.sum(), jnp.float32)
+        msk[k] = m
+
+    def loss(params):
+        tot = 0.0
+        for k in enum.keys:
+            lg = jnp.where(msk[k], -jnp.asarray(enum.Usoft[k]) - enum.b_unique(kind, params, k), -jnp.inf)
+            ls = jax.nn.log_softmax(lg, -1)
+            kl = jnp.sum(jnp.where(tgt[k] > 0, tgt[k] * (jnp.log(jnp.maximum(tgt[k], 1e-30)) - ls), 0.0), -1)
+            tot = tot + jnp.sum(wts[k] * kl)
+        return tot
+    opt = adam_init(params)
+    opt["t"] = jnp.int32(0)
+
+    @jax.jit
+    def step(params, opt):
+        v, g = jax.value_and_grad(loss)(params)
+        p2, o2 = adam_step(params, g, opt, lr)
+        return p2, o2, v
+    curve = []
+    for i in range(steps + 1):
+        if i % every == 0 or i == steps:
+            v = float(loss(params))
+            m = {"step": i, "distill_loss": v, **enum.evaluate(kind, params, stat_fn_for("dimers"))}
+            curve.append(m)
+            log(f"[distill {kind}<-{src_kind} {how}] {i} loss {v:.4f} kl {m['kl']:.4f} "
+                f"h/v/d {m.get('horizontal', 0):.3f}/{m.get('vertical', 0):.3f}/{m.get('diagonal', 0):.3f}")
+        if i == steps:
+            break
+        params, opt, _ = step(params, opt)
+    return params, curve
+
+
 # ------------------------------------------------------------------ training
 def tau_at(i, steps, tau0=2.0, anneal=0.2):
     return 1.0 + (tau0 - 1.0) * max(0.0, 1 - i / max(anneal * steps, 1e-9))
 
 
-def train_exact(enum, kind, params, steps, lr, lam, every, stat_fn, clip=10.0, tau0=2.0, log=print):
+def train_exact(enum, kind, params, steps, lr, lam, every, stat_fn, clip=10.0, tau0=2.0, log=print,
+                anneal=0.2, warmup=0, hook=None):
+    """anneal: fraction of the steps over which tau goes tau0 -> 1; warmup: linear
+    lr warm-up steps (cdim3; defaults reproduce cdim2).  hook(i, params, tau) is
+    called at every logged step (diagnostics)."""
     _, jg = enum.fns(kind)
     opt = adam_init(params)
     opt["t"] = jnp.int32(0)
     levels = list(range(enum.p.T + 1))
 
     @jax.jit
-    def update(params, opt, tau):
+    def update(params, opt, tau, lr_i):
         _, g = jg(params, tau)
-        if kind == "mlp" or kind.startswith("net"):
+        if not kind.startswith("table"):
             g = clip_by_level(g, levels, clip)
-        return adam_step(params, g, opt, lr)
+        return adam_step(params, g, opt, lr_i)
     curve = []
     t0 = time.time()
     for i in range(steps + 1):
         if i % every == 0 or i == steps:
             m = {"step": i, "t": time.time() - t0, **enum.evaluate(kind, params, stat_fn)}
+            m["tau"] = tau_at(i, steps, tau0, anneal)
             curve.append(m)
-            log(f"[{kind}] {i} kl {m['kl']:.4f} coarse {m['kl_coarse']:.4f} " +
+            log(f"[{kind}] {i} kl {m['kl']:.4f} H/cell {m['entropy'] / enum.region.W / enum.p.H:.3f} " +
                 " ".join(f"{k} {m[k]:.3f}" for k in m if k in ("flat_block_frac", "mode_other", "p_viol", "horizontal", "vertical", "diagonal")))
+            if hook is not None:
+                hook(i, params, m["tau"])
         if i == steps:
             break
-        params, opt = update(params, opt, jnp.float32(tau_at(i, steps, tau0)))
+        lr_i = lr * min(1.0, (i + 1) / warmup) if warmup else lr
+        params, opt = update(params, opt, jnp.float32(tau_at(i, steps, tau0, anneal)), jnp.float32(lr_i))
     return params, curve
 
 
@@ -581,6 +737,10 @@ def main():
     ap.add_argument("--out", default="reportables/2026-10-13_exactopt/runs")
     ap.add_argument("--tag", default="")
     ap.add_argument("--win", default="", help="actor window 'lo:hi[,plo:phi]' (default -1:2,-1:1)")
+    ap.add_argument("--anneal", type=float, default=0.2, help="fraction of steps for tau0 -> 1 (cdim3)")
+    ap.add_argument("--warmup", type=int, default=0, help="linear lr warm-up steps, exact runs (cdim3)")
+    ap.add_argument("--init", default="", help="pickle of params to start exact runs from (cdim3)")
+    ap.add_argument("--save", default="", help="pickle the final params of exact runs here (cdim3)")
     a = ap.parse_args()
     set_actor_window(a.win)
     problem, region = get_problem(a.problem)
@@ -611,8 +771,17 @@ def main():
             if "@" in kind:                                 # per-run lr: exact_mlp@0.01
                 kind, lr = kind.split("@")[0], float(kind.split("@")[1])
             params = enum.init_params(kind, init)
-            _, curve = train_exact(enum, kind, params, a.steps, lr, lam, a.every, stat_fn, tau0=a.tau0)
-            info = {"lr": lr, "win": a.win}
+            if a.init:
+                import pickle
+                with open(a.init, "rb") as fh:
+                    params = jax.tree_util.tree_map(jnp.asarray, pickle.load(fh))
+            params, curve = train_exact(enum, kind, params, a.steps, lr, lam, a.every, stat_fn, tau0=a.tau0,
+                                        anneal=a.anneal, warmup=a.warmup)
+            if a.save:
+                import pickle
+                with open(a.save, "wb") as fh:
+                    pickle.dump(jax.device_get(params), fh)
+            info = {"lr": lr, "win": a.win, "anneal": a.anneal, "warmup": a.warmup, "init": a.init, "tau0": a.tau0}
         else:
             var = make_variant(run, problem, region, a.seed, B=a.B)
             assert all(np.allclose(np.asarray(x), np.asarray(y)) for x, y in
