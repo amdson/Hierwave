@@ -2,6 +2,8 @@
 usage: timing.py problem 'B=8,R=(None,64),Kr=4' ..."""
 import sys, time, json
 import jax, jax.numpy as jnp, numpy as np
+from castlegen.bench.variant import load_variants
+load_variants()     # the bench's import order: same compile-cache dir as the bench (round 3 cache-miss cause)
 from castlegen.bench import problems
 from castlegen.bench.problem import Region
 from castlegen.variants.creplay import CReplay
@@ -33,7 +35,7 @@ for spec in sys.argv[2:]:
         out = go(u)
     dt = (time.time() - t1) / n
     d = jax.device_get(out[9])
-    print(json.dumps({"spec": spec, "compile_s": round(tc, 1), "s_per_update": round(dt, 3),
+    print(json.dumps({"spec": spec, "compile_s": round(tc, 1), "s_per_update": round(dt, 3), "replays": B * v.cfg["Kr"] * sum(b["R"] for b in v.fn["btab"].values()),
                       "branch": {str(l): {"R": b["R"], "Nc": b["Nc"]} for l, b in v.fn["btab"].items()},
                       "diag": {l: {k: round(float(x), 3) for k, x in dd.items()} for l, dd in d.items()}}),
           flush=True)

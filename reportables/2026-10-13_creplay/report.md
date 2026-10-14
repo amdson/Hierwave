@@ -2,7 +2,97 @@
 
 2026-10-13 · `castlegen/variants/creplay.py`, `_creplay_core.py`, `_creplay_clamp.py`, `tests/variants/test_creplay.py`, `scripts/timing.py`.
 
+**Status (round 3b, creplay2, 2026-10-14 01:50):** replays are now cheap enough to compare at equal wall clock: **0.18 s/update** on ground (R = (2, 2), K = 4; was 1.43 s at R = (8, 8)), 1106–1151 updates in 150 s against cfast's 1399–1545, and warm compiles now hit the cache (setup 31 s ground, 13 s toy_support; was 140–350 s). Coarse SNR at the new default is still ×1200 (l3) / ×3400 (l4) over cfast. **It changes nothing that matters on ground:** both variants collapse to dirt with 1-cell air stripes and line_match 0.5 (no fill following), and at equal updates (300) creplay's F is equal or worse (1.43 / 1.29 vs 1.10 / 1.27). On toy_support creplay is worse (KL 0.057 vs 0.026–0.042). Round-3b section first, then the earlier round-3 and round-2 notes.
+
 **Status (round 3, 2026-10-14 01:00):** the importance-weighted refactor is finished and passes all tests (4/4 replay faithfulness, 4/4 gradcheck). First GPU benches against cfast are below: **creplay is not better than cfast on either problem**, mostly because it is 25–30× slower per update on ground and its compile (140–350 s) eats the 150 s budget of the first seed. Ground still collapses to all dirt. The round-2 notes follow the new section.
+
+## Round 3b (creplay2, 2026-10-14): cheap replays, compile cache, benches
+
+GPU shared with 3–5 other agents' jobs throughout (other benches, cbig, cresid); every timing is contended and moved by ±50 % between runs. Scripts: `scripts/profile.py`, `scripts/profile2.py` (interleaved replay timings), `scripts/timing.py` (now imports the bench's variant registry first), `scripts/snr.py` (optional output tag), `scripts/table.py`, `scripts/eqplot.py`.
+
+### 1. Where an update's time goes (ground, B = 8)
+| part | time | note |
+| --- | --- | --- |
+| original pass, 8 worlds (`run_pass`) | 15 ms | |
+| fused update without branches (blev = 0, = cfast's estimator) | 56 ms | |
+| replay pass, N worlds (`replay_costs`, min of 4 interleaved rounds) | N=32: 34 ms · 64: 48 · 128: 95 · 256: 226 · 512: 508 | ~30 ms latency floor, then **~0.75–1.0 ms per replay**, linear |
+| one replay split by level (N = 256, level-restricted passes) | l4 1.4 ms · l3 2.4 · l2 6.6 · l1 28 · l0 37 | **levels 3–4 are 5 % of a replay** |
+| cone integral of the replay costs | 0.2–3 ms | negligible |
+| losses and both Adam steps | fused − batch ≈ 0 | negligible |
+
+- **The "0.8 s fixed cost" of round 3 was not real.** It was a two-point line fit under heavy contention. An update is the base update (~0.06 s) plus the replay pass, which costs ~30 ms of step latency (144 sequential steps) plus ~0.8 ms per replayed world, all of it compute in levels 0–2.
+- **Starting replays from the stored state at the branched step would save ≤ 5 %.** Branched draws are at levels 3–4, the first 64 of 144 steps, and those steps are cheap; the fine levels below must be recomputed because the cones cover 94–99.9 % of them. Not built.
+- **lax.map chunking:** not the cost. With one chunk the loop is now skipped (`nch == 1` path); no measurable change, kept.
+- **Designed inputs (host):** not measured separately; cfast pays the same.
+
+### 2. Cutting the cost (engineering only, estimator unchanged)
+`fused` timing per configuration (`scripts/timing.py`, same process, contended GPU; compile is cold, in the bench's cache dir):
+
+| config | replays/update (B·ΣR·K) | s/update | compile |
+| --- | --- | --- | --- |
+| blev = 0 (cfast estimator) | 0 | 0.056 | 54 s |
+| R = (8, 8), K = 4 (round-3 default) | 512 | 0.43 (1.43 in round 3, heavier contention) | 27 s* |
+| R = (1, 1), K = 2 | 32 | 0.165 | 120 s |
+| R = (2, 2), K = 2 | 64 | 0.20 | 128 s |
+| **R = (2, 2), K = 4 (new default)** | 128 | **0.18** | 91 s |
+| R = (1, 1), K = 2, B = 32 | 128 | 0.265 | 130 s |
+
+\* partly cached. (Round 3's table counted half the replays.) Below ~128 replays the cost sits at the latency floor, so (2, 2) with K = 4 costs the same as (1, 1) with K = 2 and carries more signal. Larger B amortises nothing extra: B = 32 at the same 128 replays is slower (0.265 s).
+
+Coarse per-world SNR at init (24 worlds, critic zeroed, `snr_ground_r11k2.json`, `snr_ground_r22k4.json`):
+
+| level | cfast | R=(1,1), K=2 | R=(2,2), K=4 | R=(8,8), K=4 (round 3) |
+| --- | --- | --- | --- | --- |
+| 4 | 0.010 | 11 (×1100) | **35 (×3400)** | 142 |
+| 3 | 0.014 | 1.3 (×95) | **17 (×1200)** | 93 |
+| 0–2 | 0.02–0.06 | unchanged | unchanged | unchanged |
+
+Means agree with cfast at every level (diff²/se² 0.2–1.3). Tests after the change (CPU, cores 16–23): replay faithfulness toy_support + ground, gradcheck enum_both + loo_subset: **4/4 pass** (6 min; columns, dimers, loo_top and wrong_critic not rerun: the change only touches the one-chunk path and the default R).
+
+### 3. Compile cache: found and fixed
+- **Cause:** different cache directories, not different shapes. `cpass.py`/`cfast.py` set `~/.cache/jax_cpass` then `~/.cache/jax_cfast` at import; `cbig.py` resets it to `$JAX_COMPILATION_CACHE_DIR` at import. The bench imports every variant (`load_variants`), so it reads and writes `/workspace/jax_cache`; round 3's timing script imported only creplay, so it warmed `~/.cache/jax_cfast`. Verified by printing `jax.config.jax_compilation_cache_dir` both ways.
+- **Fix:** `scripts/timing.py` (and `profile2.py`) call `load_variants()` first. Not changed in cfast/cpass (not mine). Agents warming a compile should use a bench smoke run or import the registry first.
+- **Effect:** creplay bench setup 31 s on ground (cold smoke: 83 s) and 13 s on toy_support (cold: 73 s), against 140–350 s in round 3. The second seed reuses the in-process compile (0.3 s).
+
+### 4. Bench (2 seeds × 150 s, tag `creplay2`, run back to back, shared GPU)
+| problem | variant | updates s0 / s1 | worst final viol s0 / s1 | F s0 / s1 | stats | accepted |
+| --- | --- | --- | --- | --- | --- | --- |
+| ground | cfast | 1399 / 1545 | 0 / 7.6e-6 | 0.716 / 0.970 | dirt 1.00 / 0.97, line 0.5, fill_err 0.06 / 0.07 | no |
+| ground | creplay | 1106 / 1151 | 9.8e-4 (l3) / **3.1e-2 (l3)** | 0.763 / **1.824** | dirt 0.95 / 0.89, line 0.5 / 0.51, fill_err 0.08 / 0.09 | no |
+| toy_support | cfast | 7144 / 6870 | 1.2e-4 / 1.2e-4 | −0.443 / −0.427 (KL 0.026 / 0.042) | | no |
+| toy_support | creplay | 4569 / 4271 | 1.2e-4 / 0 | −0.412 / −0.412 (KL 0.057 / 0.057) | | no |
+
+- creplay now gets 75–80 % of cfast's updates on ground and 60–65 % on toy_support.
+- **Ground seed 1 of creplay never settled:** level-3 raw violations swung between 0 and 0.13 for the whole run, λ hit the cap (20), and the cost per world rose from 11k to 15.7k. Seed 0 settled (cost 6.4k, raw violations 0 at the end).
+- **Images:** both creplay seeds are dirt with narrow air columns hanging from the top (`images/r3_creplay_ground_s0.png`, `_s1.png`), the same collapse as cfast (`images/r3_cfast_ground_s0.png`, `_s1.png`). No fill line.
+
+### 5. Equal updates on ground (300 each, tag `creplay2_eq300`)
+`creplay_cap300` (default config) against `creplay_b0_cap300` (blev = 0: cfast's estimator in the same code). Both stop at 300 updates and anneal τ by update count.
+
+| | creplay s0 / s1 | cfast estimator s0 / s1 |
+| --- | --- | --- |
+| F | 1.427 / 1.292 | 1.095 / 1.272 |
+| worst final viol | 2.2e-3 (l3) / **0.28 (l4)** | 3.7e-3 (l2) / 2.6e-3 (l2) |
+| dirt_frac | 0.95 / 0.87 | 0.96 / 0.97 |
+| line_match | 0.50 / 0.50 | 0.50 / 0.50 |
+| fill_err | 0.016 / 0.048 | 0.058 / 0.043 |
+| roughness | 5.8 / 5.8 | 1.9 / 2.1 |
+
+![equal-update curves](images/r3_eq300_curves.png)
+
+- **More coarse signal does not change ground's outcome.** At 300 updates neither variant follows the fill (line_match 0.5 everywhere). creplay is slightly less dirty and rougher, its F is equal or worse, and seed 1 ends with level-3 raw violations rising and 28 % violations at level 4 after repair (repair pushes them to the top).
+- **The coarse levels move, but toward avoidance.** Precise level-3/4 gradients follow the downstream costs, and those costs come from the fine levels: they cost +1.3–1.9 nats/cell in fill-following contexts (clamp's finding). Exact credit for that cost only teaches the coarse levels to avoid partial fills more reliably, as the round-2 hypothesis predicted. The levels that now limit ground are 0–2: low SNR (0.02–0.05) and limited capability in ragged contexts.
+- The level-3 violation swings (seed 1 in both the 150 s and the 300-update runs) suggest the coarse step size is now too large for the cleaner gradient. A lower coarse learning rate is an allowed freedom; it was not tried.
+
+### What I'd do next
+1. Don't spend more on coarse variance for ground until the fine levels can build fill-following contexts (cresid's work). Then rerun the equal-update comparison: creplay should matter only once the downstream costs reward following the fill.
+2. Further engineering, both unbiased and not built:
+   - Reuse the drawn action's return G0 for replay slot 0 (saves 1/K of replays).
+   - Select branch draws only among non-forced ones (|A| ≥ 2, 16–23 % are forced), weight N_nf/R. A forced draw's c_i is identically zero, so this stays unbiased; it needs a gradcheck.
+   - Fold the replays into the original pass's batch to pay the ~30 ms step latency once.
+3. Try a smaller coarse learning rate with creplay (the level-3 oscillation).
+4. Columns and dimers are still not benched with creplay.
+
 
 
 ## Round 3 (2026-10-14): importance-weighted estimator, tests, first GPU benches

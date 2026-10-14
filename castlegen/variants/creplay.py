@@ -26,7 +26,7 @@ from castlegen.bench.variant import register
 from . import _creplay_core as rcore
 from .cfast import CFast
 
-CFG = dict(K=0, Kr=4, blev=2, R=(8, 8), chunk=1024)   # R=(8,8): ~1.4 s/update on ground (shared 3090)
+CFG = dict(K=0, Kr=4, blev=2, R=(2, 2), chunk=1024)   # round 3: R=(2,2) ~0.18 s/update on ground (shared 3090), coarse SNR ~x100-1000 over cfast
 
 
 @register
@@ -58,9 +58,13 @@ class CReplay(CFast):
         B = cfg["B"]
         while True:
             frac = (time.time() - t0) / max(budget_s, 1e-9)
-            if frac >= 1.0:
+            cap = cfg.get("max_updates")
+            if frac >= 1.0 or (cap and self.updates >= cap):
                 break
-            ftr = (time.time() - t0 - t_setup) / max(budget_s - t_setup, 1e-9)
+            if cap:                                   # equal-update comparisons: anneal by update count
+                ftr = self.updates / cap
+            else:
+                ftr = (time.time() - t0 - t_setup) / max(budget_s - t_setup, 1e-9)
             self.tau = cfg["tau1"] + (cfg["tau0"] - cfg["tau1"]) * max(0.0, 1 - ftr / cfg["anneal"])
             tau, lam = jnp.float32(self.tau), jnp.asarray(self.lam, jnp.float32)
             seeds = np.arange(self.train_seed, self.train_seed + B)
@@ -96,3 +100,9 @@ def _variant(name, **over):
         orig(self, problem, seed, workdir, **{**over, **cfg})
     cls.__init__ = init
     return register(cls)
+
+
+# Round 3 (creplay2): equal-update comparisons on ground.  blev=0 is the
+# cfast estimator inside the same code (no branches); both stop at 300 updates.
+_variant("creplay_cap300", max_updates=300)
+_variant("creplay_b0_cap300", blev=0, max_updates=300)

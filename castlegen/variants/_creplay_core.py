@@ -192,7 +192,10 @@ def build(var, lay):
             v = jnp.take_along_axis(ii, f["ix"].reshape(C, -1), -1).reshape(f["ix"].shape)
             return jnp.sum(v[..., 0] - v[..., 1] - v[..., 2] + v[..., 3], -1)
 
-        Gk = jax.lax.map(one_chunk, flat).reshape(-1)[:N]
+        if nch == 1:                      # one chunk: no lax.map loop around the replay pass
+            Gk = one_chunk(jax.tree_util.tree_map(lambda x: x[0], flat)).reshape(-1)[:N]
+        else:
+            Gk = jax.lax.map(one_chunk, flat).reshape(-1)[:N]
         out, o = {}, 0
         for l in ls:
             n = Bn * btab[l]["R"] * Kr

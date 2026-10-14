@@ -17,6 +17,33 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 01:55 · creplay2 · finished
+Approach: engineering-only speed-up of creplay (default now R=(2,2), K=4), compile-cache fix, GPU bench vs cfast, equal-update (300) comparison on ground.
+Result: 0.18 s/update on ground (was 1.43; replays cost ~0.8 ms each + ~30 ms latency, 95 % in levels 0-2, so starting from the stored state would save <=5 %). Cache miss cause: the bench imports cbig, which resets the cache dir to /workspace/jax_cache, while timing scripts used ~/.cache/jax_cfast; warm setup now 31 s ground / 13 s toy_support. Coarse SNR x1200 (l3) / x3400 (l4) over cfast. Bench (shared GPU): ground creplay 1106/1151 updates, F 0.76/1.82, worst final 9.8e-4/3.1e-2 vs cfast 1399/1545, F 0.72/0.97, viol ~0; toy_support KL 0.057/0.057 vs 0.026/0.042. Equal updates (300): F 1.43/1.29 vs 1.10/1.27; line_match 0.5 for all; both collapse to dirt. None accepted. More coarse signal changes nothing on ground. [Report](2026-10-13_creplay/report.md).
+Next: fine-level capability first (cresid); then rerun equal-update. Unbuilt engineering: reuse G0 for slot 0, branch only non-forced draws, smaller coarse lr.
+
+## 2026-10-14 · chot · started
+Approach: ideas #12. cfast trained on eps-hot behaviour draws (each draw hot w.p. eps, keyed by coordinate noise; hot draws sample the whole-logit tempered q^(1/tau_b)), every world's actor terms weighted by the product of bounded mixture ratios q/((1-eps)q+eps q_b) over its hot levels (superset of every term's ancestral closure: unbiased, constraint 3). Gate 1 gradcheck, Gate 2 clamp eval at 300 s, Gate 3 bench vs cfast at 300 s. Cores 40-47.
+Result: -
+Next: -
+
+## 2026-10-14 01:32 · ccur · started
+Approach: ideas #7 as an lr schedule on cfast (engineering only): actor lr 0 for levels 3-4 (frozen at init) while levels 0-2 train, then staged release fine to coarse (L3 at 35 %, L4 at 55 % of post-setup time); critic trains at all levels; tau anneals as cfast. csat diagnostics plus line_match per update. Gate: ground 300 s + clamp eval (L = 4, 3), at release and at the end; bench ccur vs cfast at --train 300, 2 seeds. Cores 24-31.
+Result: -
+Next: -
+
+## 2026-10-14 ctop · started
+Approach: at the top level of ground (cfast at init, 50, 200 updates) compare the cone return (downstream cost) of the actual draw, a fill-following probe value and the all-dirt value, by coupled replays under the same noise; split by term (soft, lambda*viol, tau*log q) and level.
+Result: -
+Next: -
+
+
+## 2026-10-14 01:28 · cconv3 · started
+Approach: cconv_r2 vs cfast at 300 s/seed x 2 seeds on ground and columns (cores 32-39), smoke warm-up first. Report: reportables/2026-10-13_cconv/report.md (round 3).
+Result: -
+Next: -
+
+
 ## 2026-10-14 01:30 · cln · finished
 Approach: cfg options on cfast: net (tanh | ln = LayerNorm + SiLU 64x2) and win (4x4 | 6x6), with the cone and margin following the window; variants cln (ln, 4x4) and cln6 (ln, 6x6). Tests: test_cln.py 11 passed (cone, finite support, defaults unchanged); test_cfast_cone + test_cresid 17 passed.
 Result: GPU shared, 2 x 150 s, B = 8, none accepted (probes flagged everywhere). KL per block, s0 / s1: toy_support cln6 1.28 / 0.78, cln 0.45 / 0.90, cfast 0.70 / 0.58 (cfast misses the budget, 5.9e-3); toy_modes cln6 0.26 / 0.26, cln 0.16 / 0.22, cfast 0.15 / 0.16. Ground: all three collapse to all dirt (line ignored); cln6 s0 misses the budget (1.5e-3) after a 125 s compile. Microbenchmark: 5.1 / 6.1 / 6.0 ms per update (cfast / cln / cln6), but the bench gave cln* 2.5-4x fewer updates (contention). The exact-gradient gains do not transfer at B = 8: variance binds. Report: reportables/2026-10-13_cln/report.md.

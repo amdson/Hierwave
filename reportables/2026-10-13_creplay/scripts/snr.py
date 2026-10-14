@@ -56,4 +56,4 @@ for l in levels:
               "mean_sq": float((m ** 2).sum()), "snr_cfast": float((m ** 2).sum() / va),
               "snr_creplay": float((m ** 2).sum() / vb), "diff_sq_over_se2": float((md ** 2).sum() / max(se2, 1e-30))}
     print(l, json.dumps(out[l]), flush=True)
-json.dump(out, open(f"reportables/2026-10-13_creplay/snr_{sys.argv[1]}.json", "w"), indent=1)
+json.dump(out, open(f"reportables/2026-10-13_creplay/snr_{sys.argv[1]}" + (f"_{sys.argv[4]}" if len(sys.argv) > 4 else "") + ".json", "w"), indent=1)
