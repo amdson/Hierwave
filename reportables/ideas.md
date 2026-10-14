@@ -265,3 +265,15 @@ Every factor is computable from step probabilities, r and the energy, so no samp
 - dimers (pure symmetry breaking) and an 8 × 8 three-level ground compared with the brute-force MCMC reference (`reportables/2026-10-14_ground_mcmc/`), then the full bench.
 
 > **Annotation (2026-10-14, orchestrator):** recorded from chat; the user authorised the path-KL objective for revising samplers. Status: untested.
+
+## 20. Brute-force refinement by random jittering (from chat, user, 2026-10-14)
+"one-step lookahead is fine, but I suspect that random jittering would produce valid solutions for most cases."
+
+The observed dead ends (sandwiches, single violations per world) are rare and local, so a fixed budget of randomised local retries should clear most of them. Three placements:
+- **(a) Stronger repair: in the rules now.** Run R fixed rounds after the pass. Each round picks violated factors and randomly redraws the cells or small blocks around them (WalkSAT-style), including small coarse-cell-plus-children blocks so it can fix things across levels, and accepts moves that don't increase violations. The objective is unchanged: repair is outside the trained density, as today, and the bench's raw-vs-final stats check guards against distortion.
+- **(b) Multiple tries per block, keeping a valid one.** log q then needs P(valid), which is intractable, so it would need an approximation or approval.
+- **(c) Jitter as revision steps under path KL:** this is #19.
+
+**First test:** replace ckpop_hard_rkl's single least-violation repair with (a), and rerun its 4-seed bench. It fails only on L2 (pooled 3.5e-4 vs 2e-4), so it could become the first accepted own-draws ground row. Watch raw-vs-final agreement: if repair has to touch many cells, the sampler is the problem, not the repair.
+
+> **Annotation (2026-10-14, orchestrator):** recorded from chat. Variant (a) is within the constitution (fixed repair budget). Status: untested.
