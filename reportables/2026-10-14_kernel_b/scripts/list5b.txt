@@ -1,0 +1,2 @@
+toy_support bad 2 20 8 2 exact 30 200
+toy_modes bad 2 20 1 2 exact 50 200

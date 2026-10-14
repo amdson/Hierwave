@@ -1,0 +1,2 @@
+toy_modes bad 2 20 8 1 exact 30 200
+toy_modes mild 2 20 1 1 exact 50 200

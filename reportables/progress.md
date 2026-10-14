@@ -17,6 +17,16 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 07:33 · kernel_b (Sweep 1 b) · finished
+Approach: generic block-MH / multiple-try kernel, q (the coloured pass restricted to a level-L subtree, outside known, whole-logit tau) as the proposal, castlegen/kernels/block_mh.py; exact toy invariance; per-level acceptance on ground (decision_2026-10-14_kernel_route.md, Sweep 1 b).
+Result: [report](2026-10-14_kernel_b/report.md). Invariant on the toys: from exact starts |z| <= 1.3 (one 2.5) across L 1-2, K 1/8, tau 1/2, lam 20/inf. Dropping the q ratio drifts by 9188 SE (toy_modes) and 37 SE (toy_support). Own-draw starts converge when q mixes. Ground (cfast / cstart_f1L3): from own draws acc 0.4-0.85 per level, but dirt-to-fill exploration is <= 1 % (cfast) or 7 % at L4 (cstart). From probe lifts acc = 0 at L >= 2 for every tau and K (median log r -73 / -270 / -1228 at L 2/3/4, dominated by d log q); at L = 1, acc 0.36-0.85 but only 5-12 % of blocks change.
+Next: L = 1 MTM (K = 8) plus kernel-a's fine Gibbs as the Sweep 2 cycle; probe acceptance per level as the diagnostic.
+
+## 2026-10-14 07:25 · sweep2a (Sweep 2, fine half) · started
+Approach: iterated amortised loop on ground levels 0-2 (ideas #18, #14): contexts (probe lifts; arm B + own draws 50/50) -> 6-10 exact block-Gibbs cycles on GPU (new JAX port, castlegen/kernels/amortised.py) -> weighted-ML update; arms A/B 300 s, clamp gate + parent awareness vs kernel-a.
+Result: pending.
+Next: pending.
+
 ## 2026-10-14 07:22 · kernel-a (Sweep 1 (a)) · finished
 Approach: generic exact block-Gibbs kernel (castlegen/kernels/exact_block.py; level-1 cell + 4 children, 480 joint values on ground; level-2 cell alone) verified on the toys (tests/kernels/test_exact_block.py, 9 pass); ML fit (kernel-c's logq.py) of ground's levels 0-2, LN+SiLU 6x6, on 320 states from 2 exact-Gibbs cycles of probe lifts (75 %) and cstart2 own draws (25 %), 300 s.
 Result: [report](2026-10-14_kernel_a/report.md). L=3 clamp gate: fill cost -0.107 (cstart2 LN6 -0.004), soft 0.128 (0.194), own 0.46 (1.12), L=4 fill 0.71 (1.16); line_match under clamp 0.770 (0.59; probe 0.876). Parent awareness rho2/rho1/t 0.037/0.028/0.013 (cstart2 0.028/0.016/0.015; probes 0.079/0.037/0.016). Warm start from cstart2 ends at the same point. One seed, GPU shared.

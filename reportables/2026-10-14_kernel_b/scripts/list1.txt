@@ -1,0 +1,5 @@
+toy_modes bad 2 20 1 1 own 30 100
+toy_modes bad 2 20 1 1 own 30 100 drop_q
+toy_modes bad 1,2 20 1 1 own 30 100
+toy_modes bad 1 inf 1 1 exact 20 100
+toy_modes trained 1,2 20 1 1 own 20 100

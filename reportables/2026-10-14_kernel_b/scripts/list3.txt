@@ -1,0 +1,7 @@
+toy_modes bad 2 20 1 1 exact 100 200
+toy_modes bad 2 20 1 1 exact 100 200 drop_q
+toy_modes untrained 2 20 1 1 own 100 200
+toy_modes untrained 1,2 20 1 1 own 100 200
+toy_modes mild 2 20 1 1 own 100 200
+toy_modes untrained 2 20 8 1 own 50 200
+toy_modes untrained 2 20 1 2 own 100 200
