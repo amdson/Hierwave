@@ -17,6 +17,17 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 02:20 · chot · finished
+Approach: ideas #12. Training draws are eps-hot (keyed coins; whole-logit tempered q^(1/tau_b), tau_b = 3; eps = 1.28 expected hot draws per world at the top level). Each world is weighted by the product of bounded mixture ratios q/((1-eps)q+eps q_b), which is unbiased (constraint 3). tests/variants/test_chot.py: 11 passed. Gradcheck at eps 0.3, tau_b 3, zero and wrong critics, hot at all levels or top only: passes; the unweighted negative control is rejected (z -10).
+Result: gate 2 fails. Ground at 300 s, fill vs own fine cost: chot 2.20 vs 0.79 (L4), 2.46 vs 0.30 (L3); chot_off (= cfast) 1.76 vs 0.63, 2.25 vs 0.44. Level 4 is deterministic by update ~300 in both, all dirt, line_match 0.500. Batch ESS 7.1/8. Bench at 300 s x 2 seeds vs cfast (shared GPU): ground 0 viol both, F 0.741 vs 0.806, all dirt, probes flagged. Dimers: chot 1.9e-4 (in budget) vs cfast 2.2e-4, diagonal 0.000 in both. toy_support: chot 0 viol vs 3.7e-4, F -0.447 vs -0.449. None accepted. Expected in hindsight: unbiased IS leaves the expected update unchanged, so states q never reaches get ~0 weight. Report: reportables/2026-10-14_chot/report.md.
+Next: exploration that changes the expected update (weighting only coarse terms, a tempered objective) needs the user's approval (constraints 3 and 4); chot's tests can measure that bias.
+
+## 2026-10-14 02:15 · v2board · started
+Approach: populate bench v2 block-check columns at 300 s for leading variants (cbig256 toy_modes/toy_support, creplay ground, cfast ground/toy_modes if no v2 row), propose a gate rule. Cores 56-63, shared GPU.
+Result: -
+Next: -
+
+
 ## 2026-10-14 02:20 · probe2 · finished
 Approach: bench v2 block check (per-level Spearman rho of block log q share vs target log-weight share, starvation count) beside the old probe flag; not a gate. score_sites added for the cpass family and greedy; shares.py; board columns; notes/bench.md version 2.
 Result: toy_modes level 0 rho exact 0.87, cbig256 (60 s) 0.87, greedy 0.37; level 1 (subtree weight) 0.97 / 0.87 / 0.53; starvation at null level for exact and cbig256. Ground cfast 60 s (collapsed): level 0 not starved (rho_probe 0.78), levels 1-4 100 % of probe blocks starved by 24-77 nats median (own null 0.3-3 %). [Report](2026-10-14_probe2/report.md).

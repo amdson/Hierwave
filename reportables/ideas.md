@@ -115,6 +115,14 @@ On the enumerable hierarchy, optimise the objective with exact expectations, and
 >
 > It relates to ctrunc: depth 1 there suffered from a weak value function, and converged children might fix that. Not yet tried. Status: untested.
 
+> **Annotation (2026-10-14, ccur):** tested as a per-level lr schedule on cfast (engineering only).
+> - Setup: levels 3–4 frozen at init while levels 0–2 train, then released fine to coarse (L3 at 35 %, L4 at 55 % of 300 s); ground.
+> - Result: the order does not change the outcome. While the coarse levels were frozen, the fine levels got worse in fill-following contexts (fine cost per cell 2.80 vs 2.32 untrained at L = 4; 2.64 vs 1.98 at L = 3). The untrained coarse levels are diverse (3 nats) but not fill-following (line_match 0.50, 88 % dirt), so there was nothing fill-like to learn from.
+> - After release, the top level went to all dirt within 40 updates (cfast: 175 from init).
+> - Bench (300 s, 2 seeds): budget met by both (0 final violations), neither accepted (probes flagged). F 1.23 vs cfast 0.60; line_match 0.50 in both; ccur seed 1 ended in the stripes mode.
+>
+> Status: tried, no gain on ground. Not applicable to dimers (T = 0). Columns: see the report. [Report](2026-10-14_ccur/report.md)
+
 ## 5. Convolutional networks and modern non-linearities (from chat, 2026-10-13)
 "conv almost certainly have a good prior for this task." Also: replace tanh MLPs (agreed in chat).
 
@@ -133,6 +141,13 @@ From the clamp diagnostic: give every child draw, for each declared count factor
 The user: "exploring at higher T is definitely in scope." Draw training worlds at τ_b > 1 (or a mixture of τ values), and weight each draw's gradient contribution by the importance ratio to the τ = 1 objective, so the gradient of the stated objective stays unbiased (constraint 3) while the fine levels keep visiting contexts a deterministic τ = 1 policy would never produce. Also agreed in the same exchange: the bench training budget is 300 s per seed from now on (the session runs autonomously).
 
 > **Annotation (2026-10-14, orchestrator):** motivated by the clamp and cresid findings (fine levels deterministic, context-blind; cresid's extra information unusable because the contexts are never visited). Queued as variant `chot` on the next free agent. Status: untested.
+
+> **Outcome (2026-10-14, chot):** built as variant `chot` on cfast. Hot draws are eps-hot, with coins keyed by the coordinate noise. They sample the whole-logit tempered q^(1/tau_b). Each world is weighted by the product of bounded mixture ratios q/((1-eps)q+eps q_b) over its hot levels. The gradcheck passes at eps 0.3, tau_b 3, with zero and wrong critics; the unweighted control is rejected.
+> - At 300 s on ground it does not help. Fill vs own fine cost is 2.20 vs 0.79 (L = 4) and 2.46 vs 0.30 (L = 3), against 1.76 vs 0.63 and 2.25 vs 0.44 for cfast through the same path. The top level is still deterministic by update ~300, and everything is all dirt.
+> - Bench, 300 s x 2 seeds: ground, dimers (diagonal still 0.000) and toy_support are all within noise of cfast, and none is accepted.
+> - The reason is structural. An unbiased importance-weighted estimator has the same expected update as on-policy training, so contexts q reaches with probability ~0 get weight ~0 however often they are visited. Making exploration change what the fine levels learn needs a biased estimator or a different objective (constraints 3 and 4), which is the user's call.
+>
+> Status: tried, no effect. [Report](2026-10-14_chot/report.md)
 
 ## 13. Fine-level saturation diagnostics and the lr / τ levers (from chat / csat agent, 2026-10-14)
 I tested cresid's hypothesis that the fine-level bias saturates early, so training never visits fill-following contexts. I logged per-level entropy, the forced fraction and the spread of b during cfast training on ground, then tried actor lr 1e-3 and a τ anneal over the whole budget (engineering freedoms).
