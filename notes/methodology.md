@@ -1,6 +1,6 @@
 # Coloured-pass sampler: methodology and state of play
 
-Status as of 2026-10-14, after the box session's four agent waves. This note is for readers who have not followed the daily reports. Every number comes from a report in `reportables/`, cited by folder: [clamp] means `reportables/2026-10-13_clamp/`. `notes/coloured_pass_constitution.md` overrides this note if they disagree.
+Status as of the evening of 2026-10-14, after the box session's four agent waves and the afternoon-to-overnight switch to the kernel route (section 7). This note is for readers who have not followed the daily reports. Every number comes from a report in `reportables/`, cited by folder: [clamp] means `reportables/2026-10-13_clamp/`. `notes/coloured_pass_constitution.md` overrides this note if they disagree.
 
 ## 1. Problem statement
 
@@ -204,40 +204,173 @@ Training creates the gap: untrained, fill contexts are slightly cheaper than the
 
 **Net:** on ground, fill-context training and a soft early phase both look necessary, and neither is sufficient yet [box_waves].
 
-## 7. Current status and open directions
+## 7. The kernel route (amortised MCMC training)
 
-**Latest experiment: ccombo** [reportables/2026-10-14_ccombo/]. The three pieces were combined on ground, one seed per arm, 300 s each:
-- a cstart early phase in fill contexts (f = 1, L = 3) for the first 35 % of training, decaying to full-depth training by 80 %;
-- the LN+SiLU 6 x 6 actor;
-- cbound's schedules (whole-logit τ 8 → 1, λ ramp 1 → 20).
+Reverse KL stalled on ground (section 6). On 2026-10-14 the user relaxed constraints 3 and 4 for training only (amendment in `notes/coloured_pass_constitution.md`; decision in `notes/decision_2026-10-14_kernel_route.md`). Reports are cited by folder as before; [overnight] is the wave log `reportables/2026-10-14_overnight/report.md`. Every result below was trained by weighted maximum likelihood (ML) on kernel-refined states unless a mix with reverse KL is stated.
 
-Result: the combination fails the clamp gate, so the bench was not run. When levels 3-4 are released from the clamp they lock into all-dirt certificates within about 300 updates, while τ is still 2.5-3; own-draw line_match stays at 0.500. With the clamp fully removed, the fine levels forget the fill contexts (L = 3 fill cost 1.17 against −0.004 for cstart_f1L3_ln6). Keeping half of each batch clamped to the end (`ccombo_floor`) fixes L = 4 (fill cost 0.56 against 1.16, the best to date) but not L = 3 (0.110, soft 0.317 against 0.194), and parent-awareness is still weak (rho2 changes in 2.2 % of draws against 7.9 % for the probes). So the fill-context phase helps the fine levels only while it is on, and nothing yet stops the coarse levels collapsing once they are trained on their own draws. Next tries, in order: re-soften the top level at its release (per-level whole-logit τ restarted at 8) with the clamped floor kept; train levels 3-4 on target-like certificates as well (ccoarse's generic coarse prior, under ideas #14); run the `ccombo_notau` / `ccombo_nophase` ablations and a second seed.
+### 7.1 Premise
 
-**Open user decisions:**
-- *Adopt the v2 gate* and drop the old probe flag.
-- *Target-like certificates.* Options:
-  - (a) Clamp only rho from the prior and let the model sample and train cert onward. ccoarse argues this is within #14.
-  - (b) A certificate-aware coarse prior.
-  - (c) Train the coarse levels on repaired own draws.
+If K is a Markov kernel that leaves p* invariant, then KL(qK ‖ p*) ≤ KL(q ‖ p*). Applying K to q's draws gives states closer to p*, and fitting q to them by weighted ML (minimise −Σ w_i log q(x_i)) is an improvement direction. The chain does not need to mix. Training still consults only the target energy, and generation is unchanged: the fixed-step local pass, never a chain. The cost is that the route is only as good as the states the kernels reach: from a collapsed q, a local kernel returns states near the collapsed mode (section 8). Admitted kernels: exact block Gibbs, MH subtree resampling with q as proposal (multiple-try allowed), coarse flips, annealed blocks. Each is defined only from the factors, the hierarchy and the sampler. Violations inside an acceptance ratio are priced at a fixed λ ≤ 20 or treated as infeasible. All code is in `castlegen/kernels/`.
 
-  (b) and (c) raise questions under constraints 1, 4 and 6.
+### 7.2 Teacher-forced log q and weighted ML (kernel_c)
+
+`logq.py` runs the pass with every draw set to a given state's value (*teacher forcing*) and returns log q; a forced value outside the least-violating set has q = 0 and is counted as infeasible. `make_ml_update` is an Adam step on −Σ w_i log q(x_i) / Σ w_i. Check: teacher-forced log q equals the log q recorded when cfast generated the state, to under 1e-5 (40 states, τ = 1 and 1.7; 8 tests).
+
+Fit to exact p* on one enumerated 4 x 4 block, LN+SiLU actor, one seed, 240 s [kernel_c]:
+
+| problem | arm | fwd KL(p* ‖ q) | F per cell (F*) |
+| --- | --- | --- | --- |
+| toy_support | ML on 256 exact samples | 0.026 | −0.4629 (−0.4688) |
+| toy_support | exact reverse KL | 0.056 | −0.4651 |
+| toy_modes | ML on 256 exact samples | 0.033 | 0.2534 (0.2513) |
+| toy_modes | exact reverse KL | 0.014 | 0.2520 |
+
+ML matches reverse KL in free energy and mode masses, and its entropy stays at or above the target's (0.335 against 0.332 per cell on toy_support), where reverse KL sits below. The tanh reverse-KL arm lost support (forward KL 2.13); tanh ML did not (0.046). The sampled arm is 2-3 times worse in KL than exact weights (batch noise, constant lr). The update needs only (state, weight) pairs; acceptance probabilities never enter it.
+
+### 7.3 Exact fine-block Gibbs (kernel_a, sweep2a)
+
+`exact_block.py` enumerates every joint completion of a block, prices it by all touching factor instances, and samples the exact conditional. A block (L, depth) is a level-L cell's channels plus those of its descendants down to L − depth; blocks sharing no instance run in parallel (4 colours on ground). On ground (1, 1) is rho1, cert1 and four tiles (480 values), (2, 0) is rho2 and cert2 (255). Joint (2, 2) blocks have 1.4e13 completions and were not built. Tests (9): conditional energy differences equal full-energy differences; blocks from an invalid start reproduce the exact toy statistics within 4 SE; exact samples stay exact.
+
+Experiment [kernel_a]: 160 worlds (75 % probe lifts, 25 % cstart2 own draws), two Gibbs cycles, ML on levels 0-2, levels 3-4 frozen. Clamp gate, one seed:
+
+| model | L=3 fill cost | L=3 soft | L=3 own | line_match, L=3 clamp |
+| --- | --- | --- | --- | --- |
+| cstart2 (reverse KL) | −0.004 | 0.194 | 1.12 | 0.59 |
+| ML on kernel states | −0.107 | 0.128 | 0.46 | 0.770 |
+| probe | | 0.014 | | 0.876 |
+
+The network class that stalled at block terraces under reverse KL now follows the hill (1-2 rows of dirt teeth, not flat terraces). rho2 responsiveness is 0.037 against the probes' 0.079, rho1 0.028 against 0.037; own-context line_match stays 0.51 as levels 3-4 are untrained.
+
+The iterated loop [sweep2a] (arm A probe lifts only; arm B half own draws; six cycles and 8 updates per iteration) shows the chains plateau after two cycles: probe-context soft energy goes 0.020 to 0.129 and stays at 0.128-0.131 through cycle 30. So p*'s fine conditional given the coarse parents sits at about 0.13 per cell, not the probe's 0.014, with line_match about 0.73. L=3 fill cost is −0.106 (A), −0.106 and −0.111 (B, 552 and 1016 updates); the loop saturates after 100-300 updates. Arm B helps own contexts (L=3 own 0.35 against 0.86 for A).
+
+### 7.4 MH subtree kernel (kernel_b)
+
+A block is a level-L cell plus every sampled channel below it. The proposal is the coloured pass restricted to the block, tempered by whole-logit (−soft − b)/τ; teacher forcing the old values gives the reverse density. The move is independent *multiple-try* MH: K candidates with weights p*/q, one picked ∝ weight, accepted with min(1, Σw / (Σ_{i≠j} w + w_x)); K = 1 is plain MH.
+
+Verification: block energy delta equals `energy.py` to 3e-6; draws follow exp(log q) (TV 0.0016). On the toys, chains from exact samples stay exact (|z| ≤ 1.3 with a deliberately bad q; one borderline 2.5). Dropping the q ratio gives |z| 9188 (toy_modes) and 37.5 (toy_support), so the test has power. Two own-draw runs with a mild bad q did not converge (z 3.4, 6.1; acceptance 0.03-0.12), read as slow mixing since the same q is invariant from exact starts. Delayed acceptance was not built: the block pass is one scan, so a screen saves no compute.
+
+**Ground acceptance** [kernel_b]: one move per (state, random cell), 256 per cell, λ = 20, τ = 1, K = 1 (K = 8 is higher). Cells are acceptance / fraction changed.
+
+| q, start | L=1 | L=2 | L=3 | L=4 |
+| --- | --- | --- | --- | --- |
+| cfast, own draws (100 % dirt) | .84/.29 | .64/.57 | .49/.49 | .56/.56 |
+| cfast or cstart_f1L3, probe lifts | .36-.62/.05-.06 | 0 | 0 | 0 |
+
+Acceptance from own draws is uninformative: a collapsed q proposes another all-dirt block and accepts it (dirt to fill in at most 1 % of accepted moves for cfast, 7 % at L=4 for cstart_f1L3). **From probe lifts the acceptance is 0 % at L ≥ 2 for every trained q, τ and K.** For cfast the median log ratio is −73 / −270 / −1228 at L = 2 / 3 / 4: q gives the probe's block 35 / 194 / 827 nats less than its own proposal, and the proposal costs 12 / 30 / 246 nats more energy. The reverse-KL coarse conditionals were badly wrong.
+
+**After the fine levels were fitted by ML** [sweep2b]: same procedure, but q is kernel_a's fit (levels 3-4 untrained). Probe-lift acceptance, K = 1 (K = 8), τ = 1:
+
+| L=1 | L=2 | L=3 | L=4 |
+| --- | --- | --- | --- |
+| .93 (.99) | **.79** (.92) | **.44** (.80) | .03 (.16) |
+
+The two tables use different q's and are not comparable cell for cell (L=1 differs, .36 against .93, for this reason). Probe moves went from 0 / 0 / 0 to .79 / .44 / .03 at L = 2 / 3 / 4, and the L=2 proposal gap shrank from −35 to −1.4 nats. This confirmed the bottom-up hypothesis: once the fine levels are right, a q subtree proposal is a usable kernel one level up. τ = 2 hurts from probes at L ≥ 3.
+
+### 7.5 Coarse flips and single-cell Gibbs (sweep2b)
+
+`coarse_flip.py` picks a level-L cell, proposes its channels from a flip distribution with full support (`uniform`, or the pass conditional tempered at τ_c), redraws the subtree from q, and accepts with the exact multiple-try ratio. With the q flip at τ_c = τ it equals kernel_b's move bit for bit. Coarse single-cell Gibbs enumerates a cell's channels jointly (2925 completions at L3, 39 321 at L4), rejection-free. Toy invariance (128 chains): |z| ≤ 1.25 on toy_modes, ≤ 0.86 on toy_support at K = 1; dropping the q ratio gives 800 and 153. Two K = 4 toy_support runs show z = 3.53, both from `empty_block_frac` (exact 5.5e-4; one empty block seen where about 4.5 were expected, so the SE equals the estimate). On toy_modes rho2 is pinned by a unary, so the flip is trivial there. A K ≥ 2 toy_support check with a frequent statistic is missing.
+
+### 7.6 Batched colour Gibbs and annealed blocks (speed2)
+
+`colour_gibbs.py` resamples all cells of one (level, channel, colour) class in all worlds at once from exp(−(soft + λ·violations)/τ). No two cells of a class share a factor instance on the toys or ground, so this is a valid parallel Gibbs step (22 tests; conditionals equal brute force; a negative control at τ = 1.5 gives |z| 43). A level-0 sweep runs at 1.4e8 cells/s (3e7 contended). `anneal_block` is annealed importance sampling inside a block (τ 8 → 1, one masked sweep per step); on the toys its weights recover the exact log Z ratio (modes −11.510 ± 0.014 against −11.505; support −5.998 ± 0.008 against −5.985).
+
+**Random starts fail; valid starts work.** From random starts 0 of 64 blocks reach zero violations (about 10 remain at L3), because single-cell moves cannot cross hard counts; a λ ramp from 0 erases a valid start. Annealing τ only, λ fixed at 20, hard final phase, from valid starts [speed2 part 2]:
+
+| level, steps, start | valid | ESS of 64 | all-dirt blocks made partly filled |
+| --- | --- | --- | --- |
+| L3, 32, probe | 1.00 | 15.7 | |
+| L3, 32, q draw | 0.98 | 1.5 | 17 % |
+| L4, 128, probe | 0.92 | 5.6 | |
+| L4, 128, q draw | 0.89 | 3.6 | 34 % |
+
+Cost is 0.10 s per 64 blocks at L3 (32 steps) and 0.44-0.57 s at L4 (128 steps). The perturbation is local (10-25 % of cells change), and AIS weights from non-equilibrium starts are heuristic.
+
+### 7.7 Fine blocks for T = 0 (dimers_kernel)
+
+`fine_block.py` gives k x k tiles of level-0 cells at a random offset (7 tests, exact on 4 x 8 periodic dimers). A k = 2 block can only flip a 2 x 2 square, which conserves the number of diagonal dimers; a rhombus needs 2 x 3 cells, which k = 3 contains (15 480 completions; k = 4 has 2.9e6, too large for the GPU path). Pure kernel chains without learning, 600 cycles, h / v / d [dimers_kernel]:
+
+| start | k = 2 | k = 3 |
+| --- | --- | --- |
+| cfast draws (.467 / .533 / 0) | .509 / .491 / **.000** | .382 / .390 / .228 |
+| probe rhombi (.495 / 0 / .505) | .420 / .075 / .505 | .400 / .207 / .393 |
+
+So local blocks can restore the third orientation, but only with k ≥ 3, and they mix slowly: chains from opposite starts did not meet, so the stationary mix is unmeasured (bulk target 1/3 each). With ML on refined own draws, validity was lost within about 50 updates in all four arms (own violations 2e-4 to 0.05-0.1 per cell), with hard-priced blocks and exp(−20V) weights alike. The orientation fractions of those draws are fractions of violating states and say nothing about the target.
+
+### 7.8 Speed-ups (speed1)
+
+Half the fine-loop time was the (1, 1) Gibbs sweep and a third the ML step. Changes (semantics-preserving): factored block energy (13 times on the sweep, bit-identical states); teacher forcing over the 16 colour steps at once (4.4 times on the ML step, gradients within 2.4e-3 from float32 order, so the test tolerance went from 1e-5 to 1e-4); frozen levels skipped; cycles and updates fused under `lax.scan`. Result: 0.24-0.43 s per iteration against 1.61 (3.7 times contended to 6 times quiet; the GPU was shared), 16.8 ML updates/s against 2.5. The 300 s gate is unchanged (L3 fill −0.114, line_match 0.743), and own-draw line_match is 0.508: a faster fine loop does not move own draws. The coarse cycle is now the main cost, about 0.7 of 4.5 s per ckernel iteration.
+
+## 8. What the route established on ground
+
+**Fine levels follow the hill.** Under ML on exact-Gibbs states, levels 0-2 leave the reverse-KL terrace plateau: L=3 fill cost −0.107 against −0.004, clamp line_match 0.77 against 0.59 [kernel_a]; 0.73-0.74 in the iterated, faster loop, saturating within about 300 updates [sweep2a, speed1]. The ceiling is the equilibrated conditional itself (soft 0.13 per cell, line_match about 0.73).
+
+**ckernel.** The variant `ckernel` (`castlegen/variants/ckernel.py`) per iteration: 32 contexts (16 probe lifts, jitter 0-3, and 16 own τ = 1 draws); four coarse flips per world (L in {3, 4}, q mode, τ_c = 2, K = 4); single-cell Gibbs at L4 then L3; four K = 8 MTM moves at L2; three fine Gibbs cycles; then 8 ML steps on all levels. All kernels at λ = 20. Own draws over 440 updates [sweep2b]:
+
+| update | dirt | own line_match | own soft/cell | own violations/cell |
+| --- | --- | --- | --- | --- |
+| 8 | 0.83 | 0.504 | 1.10 | 0.0187 |
+| 424 | 0.52 | **0.619** | 0.20 | 0.0011 |
+
+This is the first variant above own-draw line_match 0.50. The coarse gap of the clamp gate closes: L=3 own −0.084 against fill −0.110 (cfast 2.23 against 0.72). On the v2 bench (1 seed, 368 updates; line_match 0.609 there) probe rho is 0.38 / 0.82 / 0.86 / 0.86 / 0.58 at levels 0-4, starvation 0 / 0.5 / 5.4 / 10 / 3.5 % (cfast 1 / 76 / 100 / 100 / 100 %), F −0.112 per cell against 0.774.
+
+**Caveat 1: violations.** The worst final violation fraction is 3.2e-3 at L3 (budget 2e-4), so the row is not accepted. Plain ML has no violation pressure.
+
+**Caveat 2: the gain comes from probe-lift contexts, outside the frozen rules.** The own-draws-only ablation (32 own draws per iteration, 280 updates) stays collapsed: dirt 0.90, line_match 0.50, though the kernels lower energy inside the dirt mode (soft 1.10 to 0.56). Even in the main run the refined states' line_match is within 0.007 of the raw draws', so the kernels do not move draws; ML on refined probe-start chains does. The amendment covers kernels on q's own draws, and the inequality in 7.1 needs q-started chains. ideas #14 admits fine levels conditioned on arbitrary parents, not coarse levels trained to reproduce probes' coarse states. Change request #1 (`notes/constitution_change_requests.md`) records this; the orchestrator's ruling is that the probe arm stays as a labelled upper bound and the main line must move own draws out of the dirt state with kernels on own draws only.
+
+**Violation arms** (upper-bound arm; one seed each, 300 s including setup, shared GPU) [wave2_bench]:
+- *Weighting by exp(−20V) does nothing.* Probe-refined states have no violations and nearly every own-refined world has some, so the weights drop the own states and the fit becomes probe-only ML (arms with λ = 20 and λ = ∞ kernels gave bit-identical own draws for 128 updates). The violations are q's mass leaking onto violating states, which ML on valid targets never penalises.
+- *λ = 20 kernels create L4 violations* (support4 from 0 to 11 in 16 worlds), by trading a hard violation for a larger soft gain; at λ = ∞ L4 stays 0.
+- *The 3.2e-3* is 13 support3 violations in 16 worlds (one violation is 2.4e-4 at L3): the coarse levels choose certificates the children cannot realise next to their neighbours, and repair then creates L4 violations.
+- *Mixing in cfast's λ-controlled reverse-KL update* works at lr 1e-3 (32 steps per iteration: own raw violations 1e-4 to 4e-4 at every level, line_match 0.57-0.59) and collapses at cfast's lr 3e-3 (dirt 0.99, line_match 0.500).
+
+Bench, 300 s, 2 seeds, upper-bound arm:
+
+| variant | worst final violations | F/cell | line_match | starved % 0 / 1 / 2 / 3 / 4 |
+| --- | --- | --- | --- | --- |
+| ckernel_rkl32, seed 0 | 2.4e-4 (L2; 4 of 16 384 instances) | −0.026 | 0.560 | 0 / 3.9 / 10 / 24 / 41 |
+| ckernel_rkl32, seed 1 | 1.8e-4 (within budget) | 0.001 | 0.585 | 0 / 4.3 / 10 / 23 / 44 |
+| ckernel_rkl48, seed 0 | 4.9e-4 | 0.036 | 0.558 | 0.2 / 5.2 / 12 / 27 / 44 |
+
+rkl32 misses by one violation on one seed. The violation pressure re-introduces starvation at L3-L4 (about 24 % and 42 %, against 10 % and 3.5 % for ML only). rkl48 is worse, and its seed 0 got 112 ML updates under contention. Seed 0 of ckernel_rkl (16 steps) spent 254 s of 300 s compiling and is not a measurement.
+
+**Dimers.** k = 3 blocks restore the third orientation (7.7), but ML loses validity in every arm, so there is no trained orientation result. The valid references remain cbound_lam (0.47 / 0.30 / 0.23, violations 6e-5) and cfast (0.51 / 0.49 / 0.00).
+
+**Status at the time of writing** (ground, 300 s, v2 bench):
+
+| variant | own-draw line_match | worst final violations | v2 starvation | accepted? |
+| --- | --- | --- | --- | --- |
+| cfast (reverse KL) | 0.50 | 1.9e-5 | 76-100 % at levels 1-4 | no: all dirt |
+| ckernel (probe + own contexts) | 0.609 | 3.2e-3 | 10 % at L3 | no: violations; outside frozen rules |
+| ckernel_rkl32 (probe + own) | 0.56 / 0.585 | 2.4e-4 / 1.8e-4 | 24 % at L3, 42 % at L4 | no: one seed over budget; outside frozen rules |
+| ckernel, own draws only (not benched) | 0.50 | 5e-3 own raw | not measured | no: collapsed |
+
+Two reports disagree on small items: ckernel's line_match is 0.609 on the bench, 0.619 in the instrumented run and in wave2_bench's table, and its L3 final violation is 3.2e-3 on the bench against 1.5e-3 in wave2_bench's own 32-world evaluation of the same recipe (different runs and noise).
+
+## 9. Current status and open directions
+
+**Where things stand.** The reverse-KL route's last experiment was ccombo [ccombo]: a fill-context early phase, the LN+SiLU 6 x 6 actor and cbound's schedules, one seed per arm, 300 s. It failed the clamp gate, so the bench was not run: levels 3-4 locked into all-dirt certificates within about 300 updates after release, and own-draw line_match stayed 0.500. Keeping half of each batch clamped (`ccombo_floor`) fixed L=4 (fill cost 0.56 against 1.16) but not L=3 (0.110). That is the point at which the project switched to the kernel route (section 7). The kernel route moves the fine levels (section 8) and, with probe-lift contexts, the coarse levels, but no variant is accepted. The main line, kernels on own draws only, is still collapsed to the dirt state.
+
+**Open questions:**
+- **(a) Own draws leaving the dirt state, with kernels applied to own draws only.** wave2-explore: in progress. It uses a bottom-up curriculum, tempered or multiple-try coarse flips, annealed subtree blocks from valid starts (7.6, handed over as the exploration move) and delayed acceptance. `<!-- wave2-explore result: TBD -->`
+- **(b) Violation pressure without re-introducing collapse or starvation.** wave2-bench2: in progress. It applies reverse KL to levels 2-4 only at low lr and ML to levels 0-2, prices L4 kernels as infeasible, runs a fine sweep after every coarse move, and warms the compile cache before the bench. `<!-- wave2-bench2 result: TBD -->`
+- **(c) The user's decision on change request #1:** admit kernel-refined probe lifts as training contexts for all levels, or keep them as an upper-bound diagnostic. If admitted, the bench's probe check no longer tests generalisation to unseen target-like states and needs held-out probes with different jitter or seeds.
+- **(d) Coarse kernel speed.** speed-1b: in progress. The coarse cycle (block_mh, coarse_flip) is about 0.7 s of each 4.5 s ckernel iteration. `<!-- speed-1b result: TBD -->`
+- **(e) Dimers with the reverse-KL mix.** Part 2 of dimers_kernel (ML plus a violation term, as in ckernel_rkl). `<!-- dimers part 2: TBD -->`
+
+**Other user decisions still open** (from before the kernel route):
+- *Adopt the v2 gate* and drop the old probe flag (the v1 flag still fires and still counts in bench verdicts).
 - *ground_hard.* Named as an open decision; no specification exists in the repo yet.
+- *Target-like certificates by reverse-KL means* (options (a)-(c) of ccoarse). Change request #1 is the kernel-route version of the same question.
 
-**The per-candidate / tabular-head proposal.** cstart2 and box_waves suggest a fine actor that can key on the parent, tested first with exact gradients on a small ground block:
-- per-candidate scoring;
-- a discrete pattern embedding;
-- a tabular-like head with free logits keyed on parent count and neighbour heights.
-
-The first two are engineering freedoms. But on dimers a candidate head and hashed pattern inputs collapsed like the MLP [cdim3], so expressiveness alone is not the obstacle.
-
-The third is a proposal, not a freedom, for two reasons. A table over joint values of several channels (parent count x neighbour heights) is what constraint 5 forbids. Keying on "neighbour heights" is also a ground-specific feature, which conflicts with constraint 1. It needs approval, and probably a generic formulation, before even an experiment.
+**The per-candidate / tabular-head proposal** (tested first with exact gradients on a small ground block) stays unapproved: a table over joint values of parent count and neighbour heights is what constraint 5 forbids, and "neighbour heights" is ground-specific (constraint 1). The kernel results make it less urgent for the fine levels, which already follow the hill, though parent responsiveness is still half the probes' for rho2.
 
 **Other threads:**
 - The same-colour floor needs more passes or a finer colouring (ideas #3; cmulti's objective awaits approval).
-- Columns needs positional information at the fine level.
+- Columns needs positional information at the fine level. The kernel route has not been run on columns.
 - Dimers' v2 row (43 % of probe blocks starved, 0.2-nat median deficit) is unexplained [v2board].
+- Open verification gaps: a K ≥ 2 toy_support invariance check with a frequent statistic; k = 4 fine blocks on dimers; a second seed for almost every kernel-route result.
 
-## 8. Glossary
+## 10. Glossary
 
 - **Colour**: the class (Y mod 4, X mod 4); one colour's sites are drawn in parallel.
 - **Least-violating set A**: values minimising closed violations plus one-step lookahead.
@@ -253,8 +386,19 @@ The third is a proposal, not a freedom, for two reasons. A table over joint valu
 - **Clamp gate**: fine cost below L in fill-following vs own coarse contexts.
 - **line_match**: agreement with the designed fill line.
 - **Start depth L**: in cstart, levels ≥ L are clamped to a supplied context.
+- **Amortised MCMC**: training q toward states produced by applying MCMC kernels to its own draws, so that no chain has to mix; generation stays the fixed-step pass.
+- **p*-invariant kernel**: a Markov kernel K that leaves the target unchanged; then KL(qK ‖ p*) ≤ KL(q ‖ p*).
+- **Teacher forcing**: running the pass with every draw set to a given state's value, to read off log q of that state.
+- **Weighted ML**: the update −Σ w_i log q(x_i) on states x_i with weights w_i.
+- **AIS weight**: the annealed-importance-sampling weight of a block, tracked from exact energy differences along a τ schedule; unbiased only from an exact starting distribution.
+- **ESS**: effective sample size of a set of weights, (Σw)² / Σw²; here given out of 64 blocks.
+- **Multiple-try (MTM)**: an MH move with K candidates, one picked in proportion to p*/q and accepted with a corrected ratio; K = 1 is plain MH.
+- **Delayed acceptance**: screening a proposal with the cheap coarse factors before the full ratio. Specified in the amendment, not built.
+- **Colour Gibbs sweep**: exact single-cell Gibbs on all cells of one (level, channel, colour) class in parallel; valid because no factor instance holds two cells of a class.
+- **Own draws vs probe lifts (as contexts)**: contexts are the states the kernels start from. Own draws are the sampler's τ = 1 output; probe lifts are designed valid states lifted to all levels. Probe-lift contexts are outside the frozen rules (change request #1).
+- **Upper-bound arm**: a run that uses probe-lift contexts, kept as a labelled diagnostic.
 
-## 9. Where to find things
+## 11. Where to find things
 
 - **Rules:** `notes/coloured_pass_constitution.md`, `notes/box_rules_2026-10-14.md`, `reportables/ideas.md`.
 - **Harness:** `castlegen/bench/` (including `shares.py`, the v2 check) and `castlegen/bench/problems/`; documented in `notes/bench.md`; results in `results/board.md`.
@@ -266,3 +410,9 @@ The third is a proposal, not a freedom, for two reasons. A table over joint valu
   - Variants: `creplay.py`, `cbig.py`, `_cln_core.py`, `cstart.py`, `cbound.py`, `_coarse_prior.py`.
   - `_exactopt.py`: exact-gradient tool.
 - **Reports:** `reportables/<date>_<name>/report.md`; session summary in `reportables/2026-10-14_box_waves/report.md`; log in `reportables/progress.md`. Hand-over notes: `notes/context.md`, `notes/handoff.md`.
+- **Kernel route:**
+  - `castlegen/kernels/`: `logq.py` (teacher forcing, ML update), `exact_block.py` and `amortised.py` (exact block Gibbs, GPU port, loop pieces), `block_mh.py` (MH and multiple-try subtree), `coarse_flip.py`, `colour_gibbs.py`, `anneal.py`, `fine_block.py` (T = 0), tests in `tests/kernels/`.
+  - Variant: `castlegen/variants/ckernel.py` (with the `ckernel_rkl*` configurations).
+  - Decision and rules: `notes/decision_2026-10-14_kernel_route.md`, the amendment in `notes/coloured_pass_constitution.md`, `notes/constitution_change_requests.md`.
+  - Reports (`reportables/2026-10-14_<name>/report.md`): `kernel_c`, `kernel_a`, `kernel_b`, `sweep2a`, `sweep2b`, `speed1`, `speed2` (parts 1-2), `dimers_kernel`, `wave2_bench`. Running: `wave2_explore`, `speed1b`.
+  - Wave log, newest first: `reportables/2026-10-14_overnight/report.md`.

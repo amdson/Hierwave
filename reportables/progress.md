@@ -17,6 +17,9 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 23:30 · methodology writer · finished
+Approach: extended notes/methodology.md with the kernel route (new sections 7-8, status, glossary, paths); no experiments. Result: pieces, ground results, caveats and status table documented, TBD markers left for wave2-explore, wave2-bench2, speed-1b, dimers part 2. Next: fill the TBD markers when those reports land.
+
 ## 2026-10-14 09:35 · wave2-explore (own-draw coarse exploration) · finished
 Approach: own draws only (no probe contexts), ckernel_own: A1 curriculum + coarse flips K=16; A2 + annealed L4 candidates with exact AIS weights; A3a-c Neal tempered transitions on L3/L4 subtrees (tau_hi 2 / 6, lambda ladder 20->1).
 Result: [report](2026-10-14_wave2_explore/report.md). No arm leaves the dirt state: own line_match 0.50 in all five arms (dirt 0.84-0.90; 272-992 updates in 300 s). Clamp gate gap closes (own L3 0.35 -> 0.05-0.14), as before. Accepted pure-dirt -> partial moves: <= 5 % (L4 flips, TT tau 2); anneal from full-support q 1.5 % valid; lambda ladder acc ~0. Diagnosis: own rho already follows fill (rho4 row 0 = 0.02); the collapse is in cert B (0.66 in row 0) which fixes tiles via hard support/honour; |rho - count| 0.37/cell at L4.
