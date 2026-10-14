@@ -20,6 +20,13 @@ free energy), or why it stopped.
 Next: what you would try next.
 ```
 
+## 2026-10-14 (night) · cgraded (graded vs binary penalty in MCMC, ideas #21) · finished
+Approach: diagnostic asked for by the user. Ground, 16 worlds, colour_gibbs at τ = 1 from shared greedy-pass starts. Penalty is λ × violation count vs λ × Σ d_f, where d_f is the L1 table-index distance to the nearest finite entry, built generically. No training.
+Result: [report](2026-10-14_cgraded/report.md).
+- λ = 20 is effectively hard (λ = 200 gives an identical chain). Time to all-valid is a tie: median first-valid sweep 488 (binary) vs 500 (graded), all 16 worlds valid by sweep 800 in both. Graded clears levels 3–4 about 100 sweeps sooner, but the last fine-level violations set the finish. Final stats are equal.
+- λ = 3: graded plateaus at about 3× fewer violations (levels 2–4 about 6–10× fewer), but it is a stronger penalty with a different stationary law, and neither arm reaches validity.
+Next: the graded signal helps at coarse levels only. Try block or joint moves for the fine-level tangles (ideas #20(a)), or graded acceptance in WalkSAT-style repair.
+
 ## 2026-10-14 (late) · graded (ideas #21; graded penalty first test, addendum (c)) · resumed
 Approach: GPU 1 (coordinator's assignment): `ckpop_hard_gpen` 300 s seed 0 with the bench-style eval (copy of cr2_penalty/scripts/arm_eval.py), vs arm_ckpop_hard_pen_s0 / pen16 / pen_lr5; 4-seed bench if at least as valid and better line_match; dimers 120 s with cgpen (dk_loop_pen.py copy) vs the penalty-only run; exactopt landscape if time.
 Result: pending, [report](2026-10-14_graded/report.md).
