@@ -316,4 +316,4 @@ On ground, this gives unsupported columns for support and the full- or occupied-
 > - Graded clears levels 3–4 faster, but level 0 has d = 1, so the fine-level tail is unchanged.
 > - At λ = 3 it gives about 3× fewer violations, but that is partly a stronger penalty.
 > - Verdict: helps coarse levels and does no harm; it is not the lever for the remaining fine-level misses.
-> - Written before `castlegen/graded.py` landed. run.py has its own simpler d_f (plain L1 on all table axes); on ground's support and honour tables the two should agree, but this is not checked.
+> - Written before `castlegen/graded.py` landed. run.py has its own simpler d_f (plain L1 on all table axes); on all 21 hard factors of ground it equals graded.py's factor_distance(...).d exactly (checked).
