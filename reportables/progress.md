@@ -17,6 +17,21 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 01:00 · creplay · finished
+Approach: finished the importance-weighted coupled-replay estimator (t1 everywhere, t2 dropped at branched levels, (N_c/R)·Σ_selected c_i). Tests: replay faithfulness 4/4, gradcheck 4/4 (CPU). GPU shared with other agents.
+Result:
+- Per-world SNR at init on ground: level 4 0.010 → 142, level 3 0.014 → 93 (variance /13 900 and /6 800; means agree).
+- But updates are slow: 1.4–2.0 s/update on ground at R = (8,8) / (16,16), K = 4, vs 0.07 s for cfast. Compile takes 140–350 s and misses the cache, so seed 0 ends up untrained.
+- Ground bench: creplay worst final viol 6.3e-2 (s0 untrained; s1 4.7e-3), F 1.626, 0 / 201 updates. cfast: 1.5e-3, F 0.792, 1142 / 2028 updates. creplay still collapses to ~98 % dirt.
+- toy_support: creplay s1 KL 0.026 (3953 updates) vs cfast 0.031 (6001).
+- Not accepted. Columns not run. [Report](2026-10-13_creplay/report.md)
+Next: cut replay cost (K = 2, top level only, larger B), fix the compile-cache miss, rerun ground and columns at equal updates, run the clamp diagnostic.
+
+## 2026-10-14 01:10 · fixes (round 2) · started
+Approach: relax cpass.py:256 assert to rtol 1e-2/atol 1 (float32 GPU reduction order), then GPU bench (2 x 150 s, warmed) cpass ground, ctrunc_full ground, cfast columns rerun; regenerate board. Shared GPU, cores 56-63.
+Result: pending.
+Next: report in 2026-10-13_gpu_baselines/report.md.
+
 ## 2026-10-14 01:00 · cbig2 · started
 Approach: does B=256/1024 alone close the toy_modes variance gap (exactopt: sampled B=8 KL 0.19/block vs exact 0.013)? Bench cfast, cbig64, cbig256, cbig1024 on toy_modes and cfast, cbig256 on toy_support, 2 seeds x 150 s, shared GPU, tag r4. Added `cbig1024` variant line to cbig.py.
 Next: report in 2026-10-13_cbig/report.md.

@@ -95,6 +95,15 @@ On the enumerable hierarchy, optimise the objective with exact expectations, and
 > - **Order:** independent draws within a colour leave a hard floor of 0.037 on the tiny problem, which only more passes or a finer colouring remove.
 > Status: done.
 
+> **Annotation (2026-10-14, creplay):** coupled coarse replays, the variance fix that exactopt's verdict points to.
+> - Setup: the importance-weighted creplay estimator, branching the top 2 levels with 8 replayed draws × 4 actions per world.
+> - Correctness: it passes the exact-gradient check.
+> - Variance: per-world gradient SNR on ground at init rises from 0.010 / 0.014 to 142 / 93 at levels 4 / 3, with means unchanged.
+> - Bench (150 s): it loses on throughput, at 1.4 s/update vs cfast's 0.07 s, and the first seed spends its whole budget compiling.
+> - Ground still collapses to all dirt (201 updates). toy_support seed 1: KL 0.026 vs cfast 0.031.
+>
+> Status: works as variance reduction; untested as a learner at equal update counts. [Report](2026-10-13_creplay/report.md)
+
 ## 7. Low-to-high scheduling of 1-step updates (from chat, 2026-10-13; low priority)
 "scheduling low to high 1-step updates. not high priority, just worth considering"
 

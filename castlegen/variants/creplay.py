@@ -26,7 +26,7 @@ from castlegen.bench.variant import register
 from . import _creplay_core as rcore
 from .cfast import CFast
 
-CFG = dict(K=0, Kr=4, blev=2, R=(None, 64), chunk=1024)
+CFG = dict(K=0, Kr=4, blev=2, R=(8, 8), chunk=1024)   # R=(8,8): ~1.4 s/update on ground (shared 3090)
 
 
 @register

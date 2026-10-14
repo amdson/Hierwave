@@ -11,15 +11,19 @@ Each action is replayed from scratch under the world's noise (coordinate-keyed,
 so every other draw uses its stored noise: the replay is an exact sample of
 the future given a_i = a), and scored by draw i's cone return G_i^a.
 
-Estimator of draw i's term (unbiased for both cases, as in cpass):
-  enum:    sum_a grad q(a) [ell(a) + G^a]                          (exact over a_i)
-  sampled: sum_a grad q(a) [ell(a) + Q(a)]
-           + (1/K) sum_k grad log q(a_k) [(G^k - Q(a_k)) - mean_{j != k}(G^j - Q(a_j))]
-Every other draw keeps cfast's score-function term with its cone return; a
-branched draw's own score term is dropped (it is replaced, not added).  With
-cfast's site subsampling (fine levels), the subsampled standard term covers
-the non-branched draws only (sel flags ride along with the subsample), which
-keeps the sum unbiased.
+Estimator (importance-weighted over a uniform subset; unbiased).  Each
+draw's gradient is sum_a grad q(a) [ell(a) + G^a] = t1 + c_i, where
+  t1  = sum_a grad q(a) [ell(a) + Q(a)]        (exact, cheap, every draw)
+  c_i = E[ sum_a grad q(a) (G^a - Q(a)) ]      (the part that needs returns).
+At a non-branched level c_i is cfast's score term t2 = grad log q(a_i) (G_i - Q(a_i)).
+At a branched level every draw keeps t1 (subsampled as in cfast where a step
+has more than `sub` sites), every t2 is dropped, and the level gets
+(N_c / R) sum_{selected i} c_i with c_i from the coupled replays:
+  enum:    sum_a grad q(a) (G^a - Q(a))                         (exact over a_i)
+  sampled: (1/K) sum_k grad log q(a_k) [(G^k - Q(a_k)) - mean_{j != k}(G^j - Q(a_j))]
+Selection is uniform without replacement among the N_c structurally valid
+(channel, colour, site) triples, independent of the trajectory, so
+E[(N_c/R) sum_sel c_i] = sum_i E[c_i] (constitution hard constraint 3).
 
 Replays are batched over (world, draw, action) and run in chunks with lax.map
 (memory).  No windowing: at the levels branched here the cones cover nearly
@@ -252,35 +256,36 @@ def build(var, lay):
 
     # ---------------------------------------------------------------- losses
     def branch_terms(params, cparams, br, brec, tau, lam, gs, p0, l):
-        """Sum over worlds and selected draws of the branch estimator (actor
-        loss) and of the critic's squared errors on the replayed actions."""
+        """Sum over worlds and selected draws of the coupled correction c_i
+        (actor loss) and of the critic's squared errors on the replayed
+        actions.  c_i estimates sum_a grad q(a) (G^a - Q(a)) given h_i:
+          enum:    sum_a grad q(a) (G^a - Q(a))                      (exact over a_i)
+          sampled: (1/K) sum_k grad log q(a_k) [(G^k - Q(a_k)) - mean_{j != k}(G^j - Q(a_j))]
+        The caller weights the sum by N_c / R (uniform selection)."""
         sel = br[l]
         a_tot, c_tot = 0.0, 0.0
         for c_i, (key, D) in enumerate(zip(btab[l]["keys"], btab[l]["D"])):
             r = brec[key]
             on = sel["ci"] == c_i                                             # (B, R)
             b = core.mlp(params[key], r["feat"])
-            logits = jnp.where(r["mask"], -r["soft"] / tau - b, -jnp.inf)
+            mk = r["mask"]
+            logits = jnp.where(mk, -r["soft"] / tau - b, -jnp.inf)
             logq = jax.nn.log_softmax(logits, -1)
             q = jnp.exp(logq)
-            mk = r["mask"]
-            lq_sg = jax.lax.stop_gradient(jnp.where(mk, logq, 0.0))
-            el = r["soft"] + lam[l] * r["nv"] + tau * lq_sg
             Qr = core.mlp(cparams[key], cfeat_sel(r, key, tau, lam, p0, sel["kk"]))
             QQ = jax.lax.stop_gradient(Qr) * gs[key]
             acts = jnp.where(on[..., None], jnp.clip(sel["acts"], 0, D - 1), 0)
             Gk = sel["Gk"]
             lqm = jnp.where(mk, logq, 0.0)
-            # enumeration
-            Gfull = jnp.zeros_like(el)
+            # enumeration: every action of A was replayed (duplicates write the same value)
+            Gfull = jnp.zeros_like(QQ)
             Gfull = jax.vmap(jax.vmap(lambda g, a, v: g.at[a].set(v)))(Gfull, acts, Gk)
-            le = jnp.sum(jnp.where(mk, q * jax.lax.stop_gradient(el + Gfull), 0.0), -1)
-            # sampled + leave-one-out
-            t1 = jnp.sum(jnp.where(mk, q * jax.lax.stop_gradient(el + QQ), 0.0), -1)
+            ce = jnp.sum(jnp.where(mk, q * jax.lax.stop_gradient(Gfull - QQ), 0.0), -1)
+            # sampled: leave-one-out over the K i.i.d. actions
             rk = Gk - jnp.take_along_axis(QQ, acts, -1)
             beta = (jnp.sum(rk, -1, keepdims=True) - rk) / (Kr - 1)
-            ls = t1 + jnp.mean(jnp.take_along_axis(lqm, acts, -1) * jax.lax.stop_gradient(rk - beta), -1)
-            a_tot = a_tot + jnp.sum(jnp.where(on, jnp.where(sel["enum"], le, ls), 0.0))
+            cs = jnp.mean(jnp.take_along_axis(lqm, acts, -1) * jax.lax.stop_gradient(rk - beta), -1)
+            a_tot = a_tot + jnp.sum(jnp.where(on, jnp.where(sel["enum"], ce, cs), 0.0))
             Qk = jnp.take_along_axis(Qr, acts, -1)
             c_tot = c_tot + jnp.sum(jnp.where(on, jnp.sum((Qk - Gk / gs[key]) ** 2, -1), 0.0))
         return a_tot, c_tot
@@ -303,10 +308,11 @@ def build(var, lay):
                 la = jnp.take_along_axis(logq, r["a"][..., None], -1)[..., 0]
                 Qa = jnp.take_along_axis(Q, r["a"][..., None], -1)[..., 0]
                 t2 = la * jax.lax.stop_gradient(G[key] - Qa)
-                keep = r["valid"] & ~r["sel"]
-                lev = lev + wgt.get(key, 1.0) * jnp.sum(jnp.where(keep, t1 + t2, 0.0))
+                term = t1 if l in br else t1 + t2       # branch level: every score term replaced
+                lev = lev + wgt.get(key, 1.0) * jnp.sum(jnp.where(r["valid"], term, 0.0))
             if l in br:
-                lev = lev + branch_terms(params, cparams, br, brec, tau, lam, gs, p0, l)[0]
+                bw = btab[l]["Nc"] / btab[l]["R"]
+                lev = lev + bw * branch_terms(params, cparams, br, brec, tau, lam, gs, p0, l)[0]
             total = total + lev / nval[l]
         return total / recs[keys[0]]["a"].shape[0]
 
