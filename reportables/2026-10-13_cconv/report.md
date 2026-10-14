@@ -105,3 +105,40 @@ Images (copied after the runs): `images/round2_cconv_r2_toy_support_s0.png`, `_s
 ### Plain answer
 
 At equal updates the conv actor matches or beats the MLP on F (toy_modes clearly for r4: KL 0.026 vs 0.077 at ~400 updates; toy_support by 0.01-0.04) but NOT on violations on toy_support (conv 6e-3 to 3e-2 vs cfast 6e-4 at ~200-350 updates; at 150 s cconv_r2 is down to 2e-3 / 2.4e-4). So cconv was mostly throughput-limited on F; its constraint-satisfaction is slower to converge. With a 3-5x cheaper step (r2/w16) it reaches parity with cfast on F at equal wall clock. Not shown: a win on acceptance criteria (exact stats and probes fail for all), anything on ground/dimers/columns. Caveats: 1 seed per equal-update cell, update counts only roughly matched, heavy GPU contention.
+
+## Round 3 (ground and columns, 300 s), 2026-10-14
+
+`cconv_r2` (r=2, cw=16, B=16) then `cfast` (default B=8), 2 seeds x `--train 300`, back to back on cores 32-39 after a 40 s warm-up smoke. The GPU was shared with other agents' jobs. No 300 s ground or columns cfast baseline was on the board when I started, so I ran my own (tag `cc3_r3`). Harness and code untouched. Per-seed numbers, seed 0 / seed 1.
+
+### Ground
+
+| variant | updates | F/cell | final viol per level l0..l4 (s0) | final viol (s1) | raw worst | dirt frac | line_match | roughness | accepted |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| cconv_r2 | 1104 / 993 | 0.636 / 0.696 | 4.6e-5, 1.4e-4, 1.8e-4, 0, 0 | 2.3e-5, 1.4e-4, 1.2e-4, 0, 0 | 2.0e-4 | 0.9994 / 0.9994 | 0.500 / 0.500 | 0.03 / 0.05 | no |
+| cfast | 4238 / 4170 | 0.592 / 0.902 | 0, 0, 0, 0, 0 | 1.1e-5, 4.6e-5, 1.1e-2 (l2), 0, 0 | 1.0e-3 / 7.8e-3 (s1, l1-l2) | 0.997 / 0.953 | 0.500 / 0.500 | 0.37 / 3.9 | no |
+
+Acceptance: both fail probes (cconv: 16/16 probes above the 99th percentile, median gap 1.7 nats/cell; cfast flagged) and across-seed stats. cconv fails across-seed only on fill_err (0.069 vs 0.039); finite support holds for both.
+
+Answers.
+- (a) Avoids the all-dirt collapse: NO. With 3-4x the round-1 updates (about 1000 per seed, setup 27 s on s0, so s0 is no longer untrained), cconv_r2 produces 99.94 % dirt, line_match exactly 0.500 on both seeds (all dirt gives 0.5), roughness near 0. This is the same collapse as cfast (95-99.7 % dirt). The round-1 "not all dirt" image was largely the undertrained net.
+- (b) Follows the fill line: NO (line_match 0.500).
+- (c) Violations under 2e-4: YES at final (worst 1.8e-4, level 2, seed 0; 1.4e-4 at level 1 in both seeds), raw worst 2.0e-4 (borderline). Round 1 had 0.7-7.6 %. But this is the collapsed state: a sampler that outputs all dirt trivially satisfies the constraints, so the pass is not evidence of capability. cfast (4x the updates) is no better: s1 has 1.1e-2 at level 2.
+- Level concentration: the remaining violations are at levels 1-2 (1.2-1.8e-4), not at the fine level (level 0 is 2-5e-5); levels 3-4 are zero. In round 1 level 4 was worst (7.6e-2) and level 0 was 7e-3, so training moved the violations away from the top, and what remains is mid-fine, at the budget edge, in a collapsed sampler.
+- Per-level entropy was not measured (the bench does not report it).
+
+### Columns
+
+| variant | updates | F/cell | final viol l0..l4 (s0) | final viol (s1) | raw worst | density | empty x-column frac | accepted |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| cconv_r2 | 1585 / 2034 | -0.0000 / -0.0000 | all 0 | all 0 | 0 | 0.000 | 1.000 | no (probes fail) |
+| cfast | 7870 / 5186 | -0.024 / -0.027 | 7.5e-3, 3.6e-2 (l1), 0, 0, 0 | 8.8e-3, 9.8e-3, 0, 0, 0 | 9.3e-3 (l0) | 0.015 / 0.019 | 0.77 / 0.78 | no |
+
+- cconv_r2 on columns collapses to ALL AIR: density 0, every x column empty, F = 0, zero violations. The image is blank. Round 1 (cconv_b16, ~90 updates) had 18 % violations and patchy dirt; with 20x more updates the violation went to zero by emptying the world. So no, it does not avoid the all-air collapse.
+- cfast is not collapsed to all air (1.5-1.9 % density, a few isolated dirt cells; 77-78 % empty columns) but it is mostly empty too, with 0.7-3.6 % final violations at levels 0-1 (budget 2e-4) and wrong stats (gap_len negative, i.e. not matching). Fails.
+- Columns violations for cfast are at the fine levels (0 and 1), unlike ground.
+
+### Plain statement
+
+At 300 s the conv actor stops violating constraints but only by collapsing: all dirt on ground, all air on columns. Its update count is 4-7x lower than cfast's (about 1000-2000 vs 4000-8000), so the 4x fewer updates parity seen on toy_support does not carry over to the structured problems: it matches cfast's failure rather than fixing it. The conv representation did not give the fine levels any ability to build the fill line in this run. Caveats: 2 seeds, shared GPU, one configuration, final training state only (no entropy or dirt-versus-update curves), no clean cconv-vs-cfast update-matched run.
+
+Images (copied right after each run): `images/round3_cconv_r2_ground_s0.png`, `_s1`, `round3_cfast_ground_s0.png`, `_s1`, `round3_cconv_r2_columns_s0.png`, `_s1`, `round3_cfast_columns_s0.png`, `_s1`. Bench run ids: `*_cconv_r2_ground_cc3_r3`, `20261014-014619_cfast_ground_cc3_r3`, `20261014-020022_cconv_r2_columns_cc3_r3`, `20261014-021136_cfast_columns_cc3_r3`.

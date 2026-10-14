@@ -17,6 +17,16 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 02:25 · cconv3 · finished
+Approach: cconv_r2 vs cfast, ground and columns, 2 seeds x 300 s, GPU shared (ideas #5).
+Result: ground cconv_r2 (~1000 upd): final viol <=1.8e-4 (within budget, levels 1-2) but 99.94 % dirt, line_match 0.500: all-dirt collapse; cfast (~4200 upd) 95-99.7 % dirt, s1 viol 1.1e-2. Columns cconv_r2 (1600-2000 upd): ALL AIR collapse (F 0, 0 viol); cfast 1.5-1.9 % density, 0.7-3.6 % viol at l0-l1. None accepted. Report: reportables/2026-10-13_cconv/report.md (round 3).
+Next: dirt/air-vs-update and per-level entropy curves for cconv; whether conv still collapses with the csat remedies.
+
+## 2026-10-14 02:21 · cstart · started
+Approach: ideas #14 (user-approved). Variant cstart on cfast: each training world picks a start depth L; levels >= L take the coarse state from a context source (lift of a probe state), levels < L sample with normal cone-return gradients; full-depth worlds train everything as cfast. 50/50 mixture, L uniform on {1..4} for clamped worlds. Cores 40-47, shared GPU.
+Result: -
+Next: -
+
 ## 2026-10-14 02:20 · chot · finished
 Approach: ideas #12. Training draws are eps-hot (keyed coins; whole-logit tempered q^(1/tau_b), tau_b = 3; eps = 1.28 expected hot draws per world at the top level). Each world is weighted by the product of bounded mixture ratios q/((1-eps)q+eps q_b), which is unbiased (constraint 3). tests/variants/test_chot.py: 11 passed. Gradcheck at eps 0.3, tau_b 3, zero and wrong critics, hot at all levels or top only: passes; the unweighted negative control is rejected (z -10).
 Result: gate 2 fails. Ground at 300 s, fill vs own fine cost: chot 2.20 vs 0.79 (L4), 2.46 vs 0.30 (L3); chot_off (= cfast) 1.76 vs 0.63, 2.25 vs 0.44. Level 4 is deterministic by update ~300 in both, all dirt, line_match 0.500. Batch ESS 7.1/8. Bench at 300 s x 2 seeds vs cfast (shared GPU): ground 0 viol both, F 0.741 vs 0.806, all dirt, probes flagged. Dimers: chot 1.9e-4 (in budget) vs cfast 2.2e-4, diagonal 0.000 in both. toy_support: chot 0 viol vs 3.7e-4, F -0.447 vs -0.449. None accepted. Expected in hindsight: unbiased IS leaves the expected update unchanged, so states q never reaches get ~0 weight. Report: reportables/2026-10-14_chot/report.md.
