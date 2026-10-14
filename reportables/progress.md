@@ -17,6 +17,11 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 01:51 · cfine · started
+Approach: csat proposal 1 / creplay's coupled enumeration extended to the fine levels (0-2 on ground): branch a random subset of non-forced (|A| > 1) draws per level, enumerate A when |A| <= K, replays restricted to the draw's cone window. Gate 1 gradcheck + windowed-replay faithfulness, gate 2 dimers / ground entropy / clamp, gate 3 bench only if gate 2 moves. Cores 16-23.
+Result: -
+Next: -
+
 ## 2026-10-14 01:55 · creplay2 · finished
 Approach: engineering-only speed-up of creplay (default now R=(2,2), K=4), compile-cache fix, GPU bench vs cfast, equal-update (300) comparison on ground.
 Result: 0.18 s/update on ground (was 1.43; replays cost ~0.8 ms each + ~30 ms latency, 95 % in levels 0-2, so starting from the stored state would save <=5 %). Cache miss cause: the bench imports cbig, which resets the cache dir to /workspace/jax_cache, while timing scripts used ~/.cache/jax_cfast; warm setup now 31 s ground / 13 s toy_support. Coarse SNR x1200 (l3) / x3400 (l4) over cfast. Bench (shared GPU): ground creplay 1106/1151 updates, F 0.76/1.82, worst final 9.8e-4/3.1e-2 vs cfast 1399/1545, F 0.72/0.97, viol ~0; toy_support KL 0.057/0.057 vs 0.026/0.042. Equal updates (300): F 1.43/1.29 vs 1.10/1.27; line_match 0.5 for all; both collapse to dirt. None accepted. More coarse signal changes nothing on ground. [Report](2026-10-13_creplay/report.md).
@@ -32,10 +37,10 @@ Approach: ideas #7 as an lr schedule on cfast (engineering only): actor lr 0 for
 Result: -
 Next: -
 
-## 2026-10-14 ctop · started
-Approach: at the top level of ground (cfast at init, 50, 200 updates) compare the cone return (downstream cost) of the actual draw, a fill-following probe value and the all-dirt value, by coupled replays under the same noise; split by term (soft, lambda*viol, tau*log q) and level.
-Result: -
-Next: -
+## 2026-10-14 02:10 · ctop · finished
+Approach: top-level (level 4) draws of ground under cfast at init, 50 and 200 updates: coupled replays with the draw overridden to the probe's fill-following value or to all dirt; cone return split by term and level; plus a joint clamp of the whole top level (probe vs all dirt).
+Result: at init the joint comparison is a tie (partial fill cheaper by 0.09 per fine cell at tau 2, dearer by 0.016 at tau 1); single draws: cert4 prefers dirt already (+0.018 per cell, 80 % of sites, lambda*viol), rho4 prefers fill (-0.011). After 50 updates all dirt is cheaper by +0.31 per cell, after 200 by +0.90 (soft energy at level 0). The preference for dirt is built by the fine levels' first updates. Report: reportables/2026-10-14_ctop/report.md.
+Next: ccur's bottom-up order must beat the first-50-update drift; check cert4 candidate gradients (enumeration) early.
 
 
 ## 2026-10-14 01:28 · cconv3 · started
