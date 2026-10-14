@@ -121,8 +121,9 @@ class CRevise(CFast):
                 logq = jax.nn.log_softmax(logits, -1)
                 q = jnp.exp(logq)
                 lq_sg = jax.lax.stop_gradient(jnp.where(r["mask"], logq, 0.0))
-                # the old value's terms (revising steps) and log D are constant over the candidates
-                ell = r["soft"] + lam[l] * r["nv"] + tau * (lq_sg + logD[key])
+                # revising steps: the cost of each candidate in the hybrid state, relative to the old value
+                # (soft_c, nv_c; the old value's terms and log D are constant over the candidates)
+                ell = r["soft_c"] + lam[l] * r["nv_c"] + tau * (lq_sg + logD[key])
                 Q = jax.lax.stop_gradient(core.mlp(cparams[key], cfeat(r, key, tau, lam, p0))) * gs.get(key, 1.0)
                 t1 = jnp.sum(jnp.where(r["mask"], q * (ell + Q), 0.0), -1)
                 la = jnp.take_along_axis(logq, r["a"][..., None], -1)[..., 0]

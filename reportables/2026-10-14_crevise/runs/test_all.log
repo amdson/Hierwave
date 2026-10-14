@@ -5,4 +5,35 @@ wrong l0_t@rev1 {'proj_z': 0.643, 'rand_z': 0.37, 'hotelling_p': 0.024, 'proj_ra
 .{'l0_t': (0.0, -21.38), 'l0_t@rev1': (0.0, 12.12)}
 .{'l0_t': (0.0, -124.4), 'l0_t@rev1': (0.0, 12.12)}
 .{'J_path': 0.4611185732798689, 'rkl_x0': -3.611251232278679, 'gap': 4.072369805558548, 'masked_logD': 4.158883467986886, 'n_traj': 10502, 'n_final': 998, 'sum_q': 1.0000000897354602, 'ident_max': 9.346008297939079e-06, 'E_mean': -2.0420283847463656, 'H_logq_traj': 1.65573642816609, 'H_x0': 1.5692228475323138}
-.
+.two_level l0_t {'proj_z': -0.83, 'rand_z': -1.36, 'hotelling_p': 0.234, 'proj_ratio': 0.964, 'rel_noise': 0.046}
+two_level l1_c {'proj_z': -0.751, 'rand_z': -1.068, 'hotelling_p': 0.107, 'proj_ratio': 0.973, 'rel_noise': 0.049}
+{'J_path': -3.0381705229326528, 'rkl_x0': -3.481306216983938, 'gap': 0.44313569405128517, 'masked_logD': 1.0986123279549096, 'n_traj': 119814, 'n_final': 44614, 'sum_q': 1.0000000177066215, 'ident_max': 2.5394749684437556e-05, 'E_mean': -0.5554776066223335, 'H_logq_traj': 3.58130520622631, 'H_x0': 2.9258286103616045}
+........
+=================================== FAILURES ===================================
+___________________________ test_flat_unbiased[zero] ___________________________
+
+flat = (<castlegen.variants.crevise.CRevise object at 0x79e05ca732f0>, <castlegen.variants._crevise_gradcheck.ExactPath objec...nmask': array([4.158883, 4.158883, 4.158883, ..., 4.158883, 4.158883, 4.158883],
+      shape=(10502,), dtype=float32)})
+critic = 'zero'
+
+    @pytest.mark.parametrize("critic", ["zero", "wrong"])
+    def test_flat_unbiased(flat, critic):
+        var, ex, J, g, info = flat
+        cparams = var.cparams
+        if critic == "wrong":
+            cparams = gc.randomize(cparams, jax.random.PRNGKey(5), scale=3.0, last_only=True)
+        est, cost = _estimate(var, cparams, 300, 16, 20_000, 3, TAU, LAM[:1])
+        assert abs(cost.mean() - J) < 4 * cost.std() / np.sqrt(len(cost)), (cost.mean(), J)
+        gf = gc.flat(g)
+        for k, s in gc.block_slices(g).items():
+            z = gc.ztest(est[:, s], gf[s], 16)
+            print(critic, k, {x: round(z[x], 3) for x in ("proj_z", "rand_z", "hotelling_p", "proj_ratio", "rel_noise")})
+>           assert abs(z["proj_z"]) < 4 and abs(z["rand_z"]) < 4, (critic, k, z)
+E           AssertionError: ('zero', 'l0_t@rev1', {'hotelling_p': 3.267587425621944e-15, 'hotelling_F': 9.874666733751805, 'hotelling_k': 11, 'unseen_frac': 0.0, ...})
+E           assert (4.468761898898307 < 4)
+E            +  where 4.468761898898307 = abs(4.468761898898307)
+
+tests/variants/test_crevise.py:164: AssertionError
+=========================== short test summary info ============================
+FAILED tests/variants/test_crevise.py::test_flat_unbiased[zero] - AssertionEr...
+1 failed, 17 passed in 552.77s (0:09:12)

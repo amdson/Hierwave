@@ -64,13 +64,31 @@ Verdict fields: final violations fail (seed 2's single L3 instance; zero are all
 - **Dimers showed the same trade in its pure form** (section 2): valid, but the penalty alone keeps the diagonal out of own draws and makes the h/v split unstable.
 - **Follow-ups queued (section 3.4):** less penalty pressure (16 steps; lr 5e-4) to see whether line_match recovers while L2 stays under budget.
 
-### 3.4 Lower-pressure arms
+### 3.4 Lower-pressure arms (seed 0, 300 s, GPU 1 alone, bench-style eval)
 
-(pending)
+| arm | penalty steps / lr | ML / pen upd | final viol L0/1/2/3/4 | viol budget | F/cell | line_match | dirt | ρ 0-4 | starved % 0-4 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ckpop_hard_pen (3.1) | 32 / 1e-3 | 1136 / 4545 | 1.1e-5 / 3.1e-5 / 1.8e-4 / 0 / 0 | pass | +0.038 | 0.552 | 0.43 | .30/.78/.72/.52/−.02 | 0/3.7/9.6/25/25 |
+| ckpop_pen16 | 16 / 1e-3 | 1392 / 2785 | 8.4e-5 / 4.6e-5 / **4.9e-4** / 0 / 0 | fail (L2) | −0.110 | 0.626 | 0.50 | .39/.75/.85/.61/−.20 | 0/1.2/8.1/21/38 |
+| ckpop_pen_lr5 | 32 / 5e-4 | 1176 / 4705 | 8.0e-5 / 1.8e-4 / **3.7e-4** / **1.2e-3** / 0 | fail (L2, L3) | −0.118 | 0.621 | 0.50 | .37/.79/.83/.65/−.16 | 0/1.8/7.7/16/37 |
+| ckpop_hard_rkl (wave6, 4 seeds) | 32 RKL / 1e-3 | ~900 / ~3600 | L2 pooled 3.5e-4 | fail | −0.090 | 0.60-0.63 | 0.49 | | 18-38 at L3/L4 |
+
+Halving the pressure (steps or lr) restores the structure of the reverse-KL arm (line_match 0.62-0.63, F −0.11, dirt 0.50, L1-L3 ρ 0.75-0.85) and loses the budget at L2 (2-2.5x over) and, for the lr arm, at L3. So within this family validity and structure trade monotonically along the pressure axis; the penalty-only term shifts the curve (at equal structure it is more valid than the reverse-KL mix: pen16 L2 4.9e-4 at lm 0.63 vs rkl 3.5e-4 pooled at lm 0.60-0.63 is not better, though; at equal validity it is at lm 0.55) rather than breaking the trade-off. The next lever is not pressure but a better-shaped signal (graded distances, guided revisions: `reportables/2026-10-14_graded/`, `_guided_step/`, `_crevise/`).
 
 ## 4. Ground: upper-bound arm `ckernel_pen4w3f` (probe-lift contexts, change request #1)
 
-(pending)
+`ckernel_rkl4w3f` with the penalty-only term in place of the reverse-KL mix (32 steps, lr 1e-3, L4 scale 0.3, λ control). Bench 4 x 300 s, GPU 1 alone (run 20261014-201533_ckernel_pen4w3f_ground_cr2), 1720-1984 ML updates per seed. **NOT accepted, but 4 of 4 seeds within the violation budget** (first 4-of-4 on ground on any arm).
+
+| seed | final violated instances L0/1/2/3/4 | worst | F/cell | line_match | rough | valid raw | ρ 0-4 | starved % 0-4 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | 4 / 1 / 2 / 0 / 0 | 1.2e-4 | −0.041 | 0.589 | 0.68 | 8 | .30/.83/.69/.78/.68 | 0/4.2/10.9/12.0/1.3 |
+| 1 | 4 / 1 / 1 / 0 / 0 | 6.1e-5 | −0.051 | 0.577 | 1.10 | 11 | .35/.84/.79/.80/.44 | 0/4.7/7.3/13.5/28.8 |
+| 2 | 0 / 1 / 0 / 0 / 0 | 1.5e-5 | −0.023 | 0.557 | 0.46 | 13 | .35/.81/.76/.79/.52 | 0/4.8/10.8/20.9/5.4 |
+| 3 | 0 / 0 / 1 / 0 / 0 | 6.1e-5 | +0.008 | 0.575 | 0.48 | 14 | .29/.72/.83/.75/.64 | 0/5.3/8.9/20.8/3.3 |
+
+Pooled: L0 7.6e-6, L1 1.1e-5, **L2 6.1e-5 [1.7e-5, 1.6e-4]**, L3 0, L4 0. Fails: across-seed roughness (0.46-1.10), the old probe flag. Mean F −0.027.
+
+Against the reverse-KL mix on the same arm (section 5: F −0.13, line_match 0.66-0.71, pooled L2 2.4e-4, 3 of 8 seeds): validity is solved on every seed and structure falls to the own-draws level (0.56-0.59). The probe contexts' advantage in line_match disappears under the penalty: the term pulls the fine conditionals toward flat, safe completions whatever the coarse contexts were trained on. Images `images/bench/ckernel_pen4w3f_ground_s*.png`.
 
 ## 5. Wave5-bench rows re-run on a cool GPU (upper-bound arm, unchanged objective)
 
@@ -112,4 +130,7 @@ Pooled: L0 4.9e-5; L1 8.8e-5; L2 2.4e-4 [1.4, 4.0]e-4 (same as scale 2); **L3 3.
 
 ## Verdict
 
-(pending)
+- **Change request #2 does what it was adopted for.** With the penalty-only term in place of the reverse-KL mix, the violation budget is met on 3 of 4 own-draws seeds (pooled L2 interval entirely under 2e-4; the miss is one L3 instance) and on 4 of 4 probe-context seeds (pooled L2 6.1e-5, L3/L4 zero), with across-seed agreement passing on the own-draws arm. No row is accepted: the own-draws miss is a single instance, and every row fails the old probe flag (uninformative) or roughness agreement.
+- **It does not break the validity/structure trade-off, it moves along it.** Full pressure: valid, line_match 0.55-0.59, F −0.03..+0.04. Half pressure: line_match 0.62-0.63, F −0.11, L2 2-2.5x over budget. On dimers: valid but no diagonal and an unstable h/v split. The penalty term alone is mode-seeking at λ = 20 (cdim3's mechanism), so dropping the energy and entropy terms removes one collapse pressure and keeps another.
+- **Clean numbers for the wave5 rows:** at ~1900 updates per seed the reverse-KL probe-context arm sits at pooled L2 2.4e-4, F −0.13, line_match 0.66-0.71, 3 of 8 seeds pass; L3 singles are seed-driven, not scale-driven.
+- **Next (the user's direction, agents running):** a better-shaped violation signal rather than more pressure: graded distances in the penalty (addendum c, `reportables/2026-10-14_graded/`), guided revising steps that read the graded field (`_guided_step/`, `_crevise/`); and the acceptance gate (v2, eval size) so single L3 instances stop deciding rows.

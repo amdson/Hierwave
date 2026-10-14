@@ -250,16 +250,22 @@ def revise_pass(sch, params, seed, designed, tau, lam, rho, share=True, record=T
                         dv = nv[idx, a]
                         e = soft[idx, a] + lam[l] * dv
                         extra = 0.0
+                        soft_c, nv_c = soft, nv
                     else:
+                        # the cost terms of EVERY candidate value come from the hybrid state (the all-action
+                        # term needs the cost as a function of a; the (i)-state soft / nv only shape the logits)
                         soft_h, nv_h, _ = lay.cond(hyb, c.name, Y, X)
                         o = hyb[c.name][Yc, Xc]
                         dv = nv_h[idx, a] - nv_h[idx, o]
                         e = soft_h[idx, a] - soft_h[idx, o] + lam[l] * dv
                         extra = tau * float(np.log(c.D))
+                        soft_c = soft_h - soft_h[idx, o][:, None]
+                        nv_c = nv_h - nv_h[idx, o][:, None]
                     cost = jnp.where(draw, e + tau * la + extra, 0.0)
                     if record:
-                        outs.append({"feat": feat, "soft": soft, "nv": nv, "mask": mask, "a": a,
-                                     "valid": draw, "logq": logq, "cost": cost, "dv": jnp.where(draw, dv, 0)})
+                        outs.append({"feat": feat, "soft": soft, "nv": nv, "soft_c": soft_c, "nv_c": nv_c,
+                                     "mask": mask, "a": a, "valid": draw, "logq": logq, "cost": cost,
+                                     "dv": jnp.where(draw, dv, 0)})
                     else:
                         outs.append(cost)
                     if m == 0:

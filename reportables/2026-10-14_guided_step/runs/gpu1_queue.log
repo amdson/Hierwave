@@ -1,3 +1,26 @@
 20:36:52 queue=1 done=0 util=66
 20:37:52 queue=1 done=0 util=0
 20:38:52 queue=1 done=0 util=0
+20:39:53 queue=1 done=0 util=30
+20:40:53 queue=1 done=0 util=14
+20:41:53 queue=1 done=0 util=59
+20:42:53 queue=1 done=0 util=90
+20:43:53 queue=1 done=0 util=95
+20:44:53 queue=1 done=0 util=34
+20:45:53 queue=1 done=0 util=0
+20:46:53 queue=1 done=0 util=0
+20:47:53 queue=1 done=0 util=94
+20:48:53 queue=1 done=0 util=94
+20:49:53 queue=1 done=0 util=62
+20:50:53 queue=1 done=0 util=95
+20:51:53 queue=1 done=0 util=59
+20:52:54 queue=0 done=1 util=0
+20:52:54 start pen_s0
+20:54:43 done pen_s0
+20:54:43 start rkl_w2b
+20:58:01 done rkl_w2b
+20:58:01 start rkl123x2_C
+21:01:17 done rkl123x2_C
+21:01:17 start hard_w1
+21:04:35 done hard_w1
+ALL_DONE
