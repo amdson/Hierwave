@@ -45,7 +45,12 @@ KA_INIT = "reportables/2026-10-14_kernel_a/runs/ml_init/params_ground.pkl"
 S2A_INIT = "reportables/2026-10-14_sweep2a/runs/armB_s0/params_ground.pkl"
 CK = dict(net="ln", win=(-2, 3), init=S2A_INIT, nctx=32, own_frac=0.5, upi=8, ml_B=8, ml_lr=1e-3,
           n_fine=3, m_l2=4, K_l2=8, m_flip=4, K_flip=4, flip_Ls=(3, 4), flip_mode="q", tau_c=2.0,
-          kernel_lam=20.0, level_on=None, diag_n=16)
+          kernel_lam=20.0, level_on=None, diag_n=16,
+          # wave2-bench (violation pressure; all off by default = sweep2b's ckernel):
+          ml_wlam=0.0,        # ML weight of a refined state: exp(-ml_wlam * V) normalised per minibatch
+          rkl_n=0,            # cfast fused reverse-KL steps (tau 1, own draws, lambda control) per iteration
+          rkl_lr=1e-3, rkl_lam0=None,   # rkl_lam0: restart lambda at cfast's lam0 (None: keep the init's lambda)
+          diag_every=2)
 
 
 class CKernel(CFast):
@@ -70,10 +75,11 @@ class CKernel(CFast):
         from castlegen.kernels import coarse_flip as cf
         from castlegen.kernels.amortised import JaxBlockGibbs, make_energy, make_ml_update_drawwise
         p, c = self.problem, self.cfg
-        lamk = c["kernel_lam"]
-        self.J20 = JaxBlockGibbs(p, region, 2, 0, lam=lamk)
-        self.J11 = JaxBlockGibbs(p, region, 1, 1, lam=lamk)
-        self.Gc = {L: JaxBlockGibbs(p, region, L, 0, lam=lamk, chunk=4096) for L in sorted(c["flip_Ls"], reverse=True)}
+        lamk = float(c["kernel_lam"])
+        lamg = None if np.isinf(lamk) else lamk        # lam = inf: violating completions infeasible (logged as kernel_lam)
+        self.J20 = JaxBlockGibbs(p, region, 2, 0, lam=lamg)
+        self.J11 = JaxBlockGibbs(p, region, 1, 1, lam=lamg)
+        self.Gc = {L: JaxBlockGibbs(p, region, L, 0, lam=lamg, chunk=4096) for L in sorted(c["flip_Ls"], reverse=True)}
         self.fl = self.J11.K.flat
         self.E = make_energy(self.fl, self.J11.K.insts, fine_max=2)
         lay = self.layout(region)
@@ -117,6 +123,50 @@ class CKernel(CFast):
         t, f = np.asarray(st["t"]), np.asarray(st["fill"])
         ss = [self.problem.stats({"t": t[b], "fill": f[b], "rho4": np.zeros_like(f[b])}) for b in range(t.shape[0])]
         return {"dirt": float(np.mean([s["dirt_frac"] for s in ss])), "line_match": float(np.mean([s["line_match"] for s in ss]))}
+
+    def _level_viol(self, st, lo, hi, region):
+        """Per-level violated hard fraction and violated count per factor (bench energy.py) of worlds lo:hi."""
+        from castlegen.bench import energy as en
+        p = self.problem
+        x = jax.device_get({c.name: st[c.name][lo:hi] for c in p.chans})
+        viol, nh, fac = np.zeros(p.T + 1), np.zeros(p.T + 1), {}
+        for b in range(hi - lo):
+            E = en.energy(p, {k: np.asarray(v[b]) for k, v in x.items()}, region)
+            for l in range(p.T + 1):
+                viol[l] += E.viol[l]; nh[l] += E.nhard[l]
+            for k, (_, v, _) in E.per_factor.items():
+                if v:
+                    fac[k] = fac.get(k, 0) + v
+        return {"frac": (viol / np.maximum(nh, 1)).tolist(), "per_world": (viol / (hi - lo)).tolist(), "factors": fac}
+
+    def _rkl_setup(self, log):
+        lay = self.lay_tr
+        self.fn = self.train_fns(lay)
+        self._measure_baseline(lay, log)
+        if self.cfg["rkl_lam0"] is not None:
+            self.lam = np.where(self.nhard > 0, float(self.cfg["rkl_lam0"]), 0.0)
+
+    def _rkl_steps(self, n):
+        """n of cfast's fused reverse-KL updates (tau = 1) on the sampler's own draws, with cfast's
+        adaptive lambda (<= lam_max = 20) driven by the own-draw raw violation rate."""
+        cfg, region = self.cfg, Region(self.lay_tr.W)
+        out = []
+        for _ in range(n):
+            seeds = np.arange(self.train_seed, self.train_seed + cfg["B"]); self.train_seed += cfg["B"]
+            des = self._batch(seeds, region)
+            lam = jnp.asarray(self.lam, jnp.float32)
+            res = self.fn["fused"](self.params, self.cparams, self.opt, self.copt, self.gs, jnp.asarray(seeds, jnp.int32),
+                                   des, jnp.float32(1.0), lam, cfg["rkl_lr"], cfg["lr_critic"], cfg["clip"],
+                                   jax.random.PRNGKey(self.updates + 7919 * self.seed + 1))
+            _, self.params, self.cparams, self.opt, self.copt, loss, closs, viol, tot, _ = res
+            viol = np.asarray(viol)
+            hf = np.where(self.nhard > 0, viol / np.maximum(self.nhard, 1), 0.0)
+            self.vbar = (1 - cfg["alpha"]) * self.vbar + cfg["alpha"] * hf
+            step = cfg["eta"] * np.clip(self.vbar / self.eps - 1, -1, 1)
+            self.lam = np.where(self.nhard > 0, np.clip(self.lam + step, 0, cfg["lam_max"]), 0.0)
+            self.rkl_updates += 1
+            out.append(hf)
+        return np.mean(out, 0)
 
     def refine(self, st, key):
         """One kernel cycle on a batch of states (dict).  Returns (states, diagnostics)."""
@@ -175,6 +225,10 @@ class CKernel(CFast):
         t_ref = time.time() - t0
         idx = np.arange(c["ml_B"])
         _ = self.mlstep(self.params, opt, {k: x[idx] for k, x in st2.items()}, jnp.ones(c["ml_B"]), jnp.float32(c["ml_lr"]), on)
+        self.rkl_updates = 0
+        if c["rkl_n"] > 0:
+            self._rkl_setup(log)
+            self._rkl_steps(1)          # warm compile (one real step)
         t_setup = time.time() - t0
         log({"t": t_setup, "setup_done": True, "start": self.start, "t_build": t_build, "t_ctx": t_ctx, "t_refine_compiled": t_ref})
         it = 0
@@ -197,24 +251,41 @@ class CKernel(CFast):
             if n_prb:
                 rec["soft_probe"], rec["soft_probe_refined"] = float(s0[:n_prb].mean()), float(s1[:n_prb].mean())
             rec["viol_own"], rec["viol_own_refined"] = float(nv0[n_prb:].mean()), float(nv1[n_prb:].mean())
+            if c["diag_every"] and it % c["diag_every"] == 1 % c["diag_every"]:
+                st0 = parts and {k: jnp.concatenate([q[k] for q in parts]) for k in parts[0]}
+                rec["lv_own_raw"] = self._level_viol(st0, n_prb, c["nctx"], region)
+                rec["lv_own_refined"] = self._level_viol(st, n_prb, c["nctx"], region)
+                if n_prb:
+                    rec["lv_probe_refined"] = self._level_viol(st, 0, n_prb, region)
+            nvw = np.asarray(nv1) * cells           # violated hard instances per refined state
             tm = time.time()
-            losses, ninf, nfeas, ndraw = [], 0, 0, 0
+            losses, ninf, nfeas, ndraw, wl = [], 0, 0, 0, []
             for u in range(c["upi"]):
                 idx = self.rng.choice(c["nctx"], c["ml_B"], replace=False)
+                vw = nvw[idx]
+                w = np.exp(-c["ml_wlam"] * (vw - vw.min()))
+                w = w / w.sum() * c["ml_B"]
+                wl.append(float((w ** 2).sum() and w.sum() ** 2 / (w ** 2).sum()))
                 self.params, opt, info = self.mlstep(self.params, opt, {k: x[idx] for k, x in st.items()},
-                                                     jnp.ones(c["ml_B"]), jnp.float32(c["ml_lr"]), on)
+                                                     jnp.asarray(w, jnp.float32), jnp.float32(c["ml_lr"]), on)
                 losses.append(float(info["loss"]) / cells)
                 ninf += int(info["n_infeasible"]); nfeas += int(info["n_feasible"])
                 self.updates += 1
             rec.update({"t": time.time() - t0, "update": self.updates, "loss_per_cell": float(np.mean(losses)),
                         "infeasible_draws_per_state": ninf / (c["upi"] * c["ml_B"]),
                         "feasible_state_frac": nfeas / (c["upi"] * c["ml_B"]),
-                        "time_ctx": tr - ti, "time_refine": tm - tr, "time_ml": time.time() - tm})
+                        "time_ctx": tr - ti, "time_refine": tm - tr, "time_ml": time.time() - tm,
+                        "ml_ess": float(np.mean(wl)), "refined_viol_states_frac": float((nvw > 0).mean())})
+            if c["rkl_n"] > 0:
+                tk = time.time()
+                rec["rkl_raw_viol"] = self._rkl_steps(c["rkl_n"]).tolist()
+                rec["lam"] = self.lam.tolist(); rec["rkl_updates"] = self.rkl_updates
+                rec["time_rkl"] = time.time() - tk
             log(rec)
         self.timing = {"setup": t_setup, "total": time.time() - t0, "iters": it}
 
     def info(self):
-        return {**super().info(), "start": self.start}
+        return {**super().info(), "start": self.start, "rkl_updates": getattr(self, "rkl_updates", 0)}
 
 
 def _variant(name, **over):
@@ -228,3 +299,9 @@ def _variant(name, **over):
 
 
 register(CKernel)
+# wave2-bench arms (upper bound: probe-lift contexts, outside the frozen constitution, change request #1)
+_variant("ckernel_w20", ml_wlam=20.0)
+_variant("ckernel_rkl", ml_wlam=20.0, rkl_n=16, rkl_lam0=10.0)
+_variant("ckernel_rkl32", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0)   # rkl_lr 1e-3
+_variant("ckernel_rkl48", ml_wlam=20.0, rkl_n=48, rkl_lam0=10.0)   # rkl_lr 1e-3
+_variant("ckernel_inf", ml_wlam=20.0, kernel_lam=float("inf"))

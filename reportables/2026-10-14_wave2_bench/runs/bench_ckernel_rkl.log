@@ -1,0 +1,49 @@
+[seed 0] train 306s  final viol {'0': 0.00118255615234375, '1': 0.004547119140625, '2': 0.0147705078125, '3': 0.020263671875, '4': 0.01171875}  F 1.1836054157465696  support 0
+[seed 1] train 300s  final viol {'0': 0.000133514404296875, '1': 0.000274658203125, '2': 0.00054931640625, '3': 0.0, '4': 0.0}  F -0.04479792341589928  support 0
+{
+ "final_violations": {
+  "worst_frac": 0.020263671875,
+  "ok": false
+ },
+ "raw_violations_worst": 0.019287109375,
+ "exact_stats": {
+  "per_stat": {},
+  "ok": null
+ },
+ "raw_vs_final": {
+  "per_stat": {
+   "dirt_frac": true,
+   "dirt_excess": true,
+   "roughness": true,
+   "line_match": true,
+   "floating": true,
+   "fill_err": true
+  },
+  "ok": true
+ },
+ "across_seeds": {
+  "per_stat": {
+   "dirt_frac": false,
+   "dirt_excess": false,
+   "roughness": false,
+   "line_match": false,
+   "floating": false,
+   "fill_err": true
+  },
+  "ok": false
+ },
+ "probes": {
+  "flagged": [
+   null,
+   null
+  ],
+  "ok": false
+ },
+ "finite_support": {
+  "worst_mismatch": 0.0,
+  "ok": true
+ },
+ "free_energy": 0.5694037461653352,
+ "within_budget": true,
+ "accepted": false
+}

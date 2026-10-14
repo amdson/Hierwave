@@ -1,0 +1,4 @@
+raw frac [0.00011 0.00039 0.0004  0.00012 0.     ] count [58.0, 51.0, 13.0, 1.0, 0.0] lm 0.569
+  factors {'support3': [1, 4096], 'honourB3top': [2, 4096], 'honourB3bot': [6, 4096], 'support2': [5, 16384], 'honourA2top': [1, 16384], 'honourB2top': [7, 16384], 'honourB2bot': [20, 16384], 'support1': [23, 65536], 'honourB1top': [8, 65536], 'honourB1bot': [19, 65536], 'support0': [31, 262144]}
+final frac [5.0e-05 2.2e-04 4.3e-04 1.2e-04 0.0e+00] count [27.0, 29.0, 14.0, 1.0, 0.0] lm 0.569
+  factors {'support3': [1, 4096], 'honourA3top': [2, 4096], 'honourB3top': [1, 4096], 'honourB3bot': [6, 4096], 'support2': [5, 16384], 'honourA2top': [1, 16384], 'honourB2top': [2, 16384], 'honourB2bot': [10, 16384], 'support1': [16, 65536], 'honourA1top': [2, 65536], 'honourB1top': [1, 65536], 'honourB1bot': [2, 65536], 'support0': [22, 262144]}

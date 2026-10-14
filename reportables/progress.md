@@ -17,6 +17,11 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 09:20 · wave2-bench (ckernel upper-bound arm) · finished
+Approach: violation pressure for ckernel (#18); UPPER BOUND, probe-lift contexts outside the frozen constitution (change request #1). (a) exp(-20V) ML weights; (b) cfast's lambda-controlled reverse-KL steps on own draws mixed with ML (amendment); (c) raw/final violations per level and factor.
+Result: [report](2026-10-14_wave2_bench/report.md). (a) no effect: own-refined states nearly all violate (lam=20 kernels even add support4 violations at L4), probe-refined are clean, so weights reduce training to probe-only ML; violations are q's mass leakage, which ML never penalises. (b) RKL 32 steps/iter at lr 1e-3 cuts violations 10-50x and keeps line_match 0.56-0.59; at lr 3e-3 it collapses (dirt 0.99, lm 0.50). Bench ckernel_rkl32 ground 300 s x 2: NOT accepted, worst final 2.4e-4 (L2, seed 0; seed 1 within budget), F -0.012, line_match 0.56/0.58, rho 0.33/0.80/0.47/0.75/0.47, starved 0/4/10/24/42 % (L3/L4 starvation up from 10/3.5). rkl48: worst 4.9e-4. (c) ckernel's 3.2e-3 = 13 L3 violations in 16 worlds, mostly support3, raised by repair (also creates support4); honourB/support = coarse certs the children cannot realise.
+Next: RKL on L2-4 only at low lr with ML at L0-2; lam=inf coarse kernels at L4; fix the bench cold compile on seed 0.
+
 ## 2026-10-14 11:00 · dimers-kernel (fine-block Gibbs on dimers, ideas #18) · finished
 Approach: exact k x k fine-block Gibbs (castlegen/kernels/fine_block.py) + footprint MTM from q, draw-wise ML on own draws, dimers; does the kernel route rebalance the three orientations?
 Result: kernel exact (7 tests pass). k=2 blocks conserve the diagonal count (cfast draws stay d=0.000 after 600 cycles); k=3 reaches d=0.23 but two opposite starts do not meet in 600 cycles. ML loop (4 arms, 300 s) lost validity (viol 0.02-0.1/cell), so its 1/3-each orientation numbers are not usable. Report: reportables/2026-10-14_dimers_kernel/report.md.
