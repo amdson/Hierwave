@@ -80,3 +80,57 @@
   - **scripts/:** run_ck2.py, eval_viol.py, bench_row.py, timing.py, env.sh, ckernel_snapshot.py.
   - **runs/:** arm_l2x2/, arm_l2x3/ (loop.jsonl, params), arm_*.log, eval_arm_l2x2/3.json and .log, timing_summary.txt, bench_ckernel_rkl4w3f_l2x2.log, bench_row.txt.
   - **images/bench/:** ckernel_rkl4w3f_l2x2_ground_s0-3.png.
+
+## Part 2: ckernel_rkl4w3f_l2x15 (L2 scale 1.5), bench alone on an "idle" GPU (UPPER-BOUND ARM)
+
+**Upper bound: probe-lift contexts (change request #1).**
+
+- **Variant:** `ckernel_rkl4w3f_l2x15`, which is `rkl_level_scale={2: 1.5, 4: 0.3}` with everything else as in Part 1.
+- **Warm:** a 40 s smoke run through the bench's import path (scripts/run_ck2.py; runs/smoke_l2x15). Its setup took 123 s, so the cache was cold for the new constants.
+- **Bench:** `--seeds 4 --train 300`, run 20261014-123103_ckernel_rkl4w3f_l2x15_ground. No other GPU process was visible during the bench.
+
+### The GPU was throttled, so this row is not the intended test
+- **Updates:** every seed got only **328-352 ML updates** (41-44 iterations, about 4.8 s per iteration), against about 1300 expected. The chip was throttling, not shared:
+  - After the bench, `nvidia-smi` showed 100 % utilisation, SM clock **255 MHz of 2100**, temperature 90 °C, P2, and active throttle reason 0x20 (software thermal slowdown); see runs/nvidia_smi_after_l2x15.txt.
+  - So the GPU ran at about 1/8 clock.
+  - This most likely also explains the 288-344 updates of Part 1's seeds 2-3, which ran from about 12:15. That is thermal throttling, not another agent's job as I assumed in Part 1.
+- **Consequence:** this row measures an undertrained model (a quarter of the updates). It does not test the L2 scale of 1.5.
+
+| seed | setup s | ML / RKL upd | final viol L0/1/2/3/4 (violated instances in 16 worlds) | worst | pass | F/cell | line_match | ρ 0/1/2/3/4 direct [subtree] | starved % 0/1/2/3/4 |
+|---|---|---|---|---|---|---|---|---|---|
+| 0 | 85 | 328 / 1312 | 8.0e-5 (21) / **2.3e-4 (15)** / **6.1e-4 (10)** / **9.8e-4 (4)** / 0 | 9.8e-4 (L3) | no | -0.007 | 0.600 | .37/.75[.83]/.43[.42]/.73[.52]/.61[.29] | 0/4.1/11.7/18.3/9.7 |
+| 1 | 100 | 352 / 1408 | 2.7e-5 (7) / 1.2e-4 (8) / **4.3e-4 (7)** / 0 / 0 | 4.3e-4 (L2) | no | -0.011 | 0.582 | .34/.79[.84]/.78[.74]/.78[.62]/.56[.30] | 0/4.1/10.3/23.6/9.7 |
+| 2 | 101 | 336 / 1344 | 1.1e-4 (29) / **2.3e-4 (15)** / **7.9e-4 (13)** / **1.5e-3 (6)** / 0 | 1.5e-3 (L3) | no | +0.011 | 0.559 | .35/.84[.88]/.71[.66]/.79[.67]/.54[.31] | 0/3.8/11.1/20.1/10.3 |
+| 3 | 101 | 344 / 1376 | 8.8e-5 (23) / **2.3e-4 (15)** / **6.7e-4 (11)** / **4.9e-4 (2)** / 0 | 6.7e-4 (L2) | no | -0.012 | 0.581 | .36/.83[.87]/.67[.63]/.83[.72]/.51[.21] | 0/4.0/11.5/16.1/19.3 |
+
+- **Pass count:** 0 of 4 seeds. Bench mean F is -0.005.
+- **Across-seed check fails** on roughness; the other stats agree. Raw vs final agrees and finite support holds.
+
+### Pooled final rates, Poisson 95 % intervals
+
+| level | count / instances | rate [95 %] |
+|---|---|---|
+| L0 | 80 / 1 048 576 | 7.6e-5 [6.1e-5, 9.5e-5] |
+| L1 | 53 / 262 144 | 2.0e-4 [1.5e-4, 2.6e-4] |
+| L2 | 41 / 65 536 | 6.3e-4 [4.5e-4, 8.5e-4] |
+| L3 | 12 / 16 384 | 7.3e-4 [3.8e-4, 1.3e-3] |
+| L4 | 0 / 2 048 | 0 |
+
+### Verdict
+**Not accepted: 0 of 4 seeds pass.**
+
+| level | allowed per seed (16 worlds) | observed per seed | excess |
+|---|---|---|---|
+| L2 | 3 | 7-13 | 4-10 instances, on all 4 seeds |
+| L3 | 0 | 2-6 on seeds 0, 2, 3 | 2-6 instances |
+| L1 | 13 | 15 on seeds 0, 2, 3 | 2 instances |
+
+- **These are the numbers of a model at a quarter of its usual update count.** They match the undertrained seeds 2-3 of Part 1, and the 300-500-update runs of earlier waves.
+- **No conclusion about scale 1.5 can be drawn.**
+- **What would test it:** re-run the same command once `nvidia-smi` shows the SM clock back near 2 GHz (check `clocks.sm` and throttle reasons before benching), and confirm about 1300 updates on seed 0 before trusting the row.
+- **Part 1's bench is affected too:** seeds 2-3 were throttled, so the clean evidence for L2 scale 2 is its seeds 0-1 only.
+
+### Files (Part 2)
+- **castlegen/variants/ckernel.py:** variant `ckernel_rkl4w3f_l2x15`.
+- **runs/:** smoke_l2x15/ and smoke_l2x15.log, bench_ckernel_rkl4w3f_l2x15.log, bench_row_l2x15.txt, nvidia_smi_after_l2x15.txt.
+- **images/bench/:** ckernel_rkl4w3f_l2x15_ground_s0-3.png.

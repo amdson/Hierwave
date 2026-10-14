@@ -22,11 +22,17 @@ Goals: (1) ground's coarse levels trained by the kernel route; (2) own-draw line
 
 **Decisions waiting on the user** (`notes/constitution_change_requests.md`): #1 probe-lift contexts for the coarse levels (the upper-bound arm); #2 ML plus a penalty-only violation term; #3 a violation price on the post-repair output at the coarsest level. My recommendation is #2 first: it is one sentence in the amendment, every piece it needs exists, and it is the direct fix for the one failing level on both arms.
 
+**Caveat found at the very end.** The GPU was thermally throttled (1/8 clock) during the last hour's benches, so the final rows of wave5_bench (and possibly wave6_pop) are training-starved; rerun them on a cool GPU before drawing conclusions from them. Box rules now require a clock check before benches.
+
 **Housekeeping.** Everything is committed and pushed on `coloured-pass`; no agent processes are running; the full test suite passes except one pre-existing exactopt tolerance test and two legacy data fixtures (regress). `notes/methodology.md` has the kernel-route sections with the final numbers.
 
 ## Wave log (newest first)
 
 (waves are appended here as they finish)
+
+### Wave 7 (last, part 2): wave5-bench part 2, and a GPU throttling finding
+- `ckernel_rkl4w3f_l2x15` (L2 scale 1.5), 4 seeds on an otherwise idle GPU: 0 of 4 accepted, but the row cannot judge the scale: every seed got only 328-352 updates (about a quarter of normal) because the 3090 was software-thermally throttled (SM clock 255 of 2100 MHz, 90 C, throttle reason 0x20). Part 1's seeds 2-3 (288-344 updates) were very likely throttled too, not contended as stated there, and wave6_pop's bench may have been affected. Added to the box rules: check clocks before any bench.
+- The clean evidence on the L2 scale is therefore part 1's two well-trained seeds at scale 2 (L2 within budget, one seed accepted, one L3 single event). Next session: re-run l2x2 and l2x15 on a cool GPU and confirm about 1300 updates per seed before trusting a row.
 
 ### Wave 7 (last): wave5-bench, L2-only reverse-KL scale on the upper-bound arm (not accepted, 1 of 4)
 - Scale 2 at L2 (`ckernel_rkl4w3f_l2x2`): on the two well-trained seeds (920-1344 updates) L2 is fixed (2 violations each, 3 allowed) and one of them passes everything (seed 1: F -0.117, line_match 0.645); the other fails L3 by a single violation. Seeds 2-3 got only 288-344 updates (GPU loaded by wave6-pop's bench during their training) and fail L2, L3 and line_match, so the row is partly training-starved. Pooled L2 2.3e-4 [1.3, 3.8]e-4 (from 2.9e-4); L3 1.8e-4 (3 events, 0 in both earlier 4-seed benches; consistent with the stronger L2 step pushing violations up a level). Scale 3 is worse. Next: re-run on a quiet GPU and a scale around 1.5.

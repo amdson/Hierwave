@@ -1,0 +1,27 @@
+== ckernel_rkl4w3f_l2x15 20261014-123103_ckernel_rkl4w3f_l2x15_ground train 300.0 seeds 4
+ seed 0 updates 328 rkl 1312 lam [20.0, 20.0, 20.0, 20.0, 0.0] train_s 300.578515291214
+   raw ['1.3e-04', '6.9e-04', '8.5e-04', '2.4e-04', '0.0e+00'] final ['8.0e-05', '2.3e-04', '6.1e-04', '9.8e-04', '0.0e+00']
+   F -0.007 line_match [0.6002197265625, 0.009200301595941216] dirt [0.51812744140625, 0.010719054774779097]
+   blocks {}
+   block keys ['version', 'n_own', 'n_probe', 'levels', 'lambda', 'starve_nats', 's']
+ seed 1 updates 352 rkl 1408 lam [19.8, 20.0, 20.0, 20.0, 0.0] train_s 300.6560306549072
+   raw ['3.1e-05', '4.3e-04', '4.3e-04', '0.0e+00', '0.0e+00'] final ['2.7e-05', '1.2e-04', '4.3e-04', '0.0e+00', '0.0e+00']
+   F -0.011 line_match [0.581787109375, 0.008007167386997426] dirt [0.489044189453125, 0.006424217188369232]
+   blocks {}
+   block keys ['version', 'n_own', 'n_probe', 'levels', 'lambda', 'starve_nats', 's']
+ seed 2 updates 336 rkl 1344 lam [20.0, 20.0, 20.0, 20.0, 0.0] train_s 304.2564888000488
+   raw ['1.5e-04', '4.1e-04', '1.3e-03', '1.2e-03', '0.0e+00'] final ['1.1e-04', '2.3e-04', '7.9e-04', '1.5e-03', '0.0e+00']
+   F 0.011 line_match [0.5587158203125, 0.00726969451147021] dirt [0.486328125, 0.0067132290623590895]
+   blocks {}
+   block keys ['version', 'n_own', 'n_probe', 'levels', 'lambda', 'starve_nats', 's']
+ seed 3 updates 344 rkl 1376 lam [20.0, 20.0, 20.0, 20.0, 0.0] train_s 304.1876573562622
+   raw ['1.2e-04', '6.9e-04', '6.7e-04', '4.9e-04', '0.0e+00'] final ['8.8e-05', '2.3e-04', '6.7e-04', '4.9e-04', '0.0e+00']
+   F -0.012 line_match [0.5809326171875, 0.008037073282846006] dirt [0.48833465576171875, 0.007227852583766252]
+   blocks {}
+   block keys ['version', 'n_own', 'n_probe', 'levels', 'lambda', 'starve_nats', 's']
+ verdict worst final {'worst_frac': 0.00146484375, 'ok': False} F -0.004717432428151369 accepted False
+-- v2 block check (direct [subtree]): rho_pool / starved_probe per level
+ckernel_rkl4w3f_l2x15 seed 0 rho 0.37[0.37] / 0.75[0.83] / 0.43[0.42] / 0.73[0.52] / 0.61[0.29] | starved % 0.0 / 4.1 / 11.7 / 18.3 / 9.7
+ckernel_rkl4w3f_l2x15 seed 1 rho 0.34[0.34] / 0.79[0.84] / 0.78[0.74] / 0.78[0.62] / 0.56[0.30] | starved % 0.0 / 4.1 / 10.3 / 23.6 / 9.7
+ckernel_rkl4w3f_l2x15 seed 2 rho 0.35[0.35] / 0.84[0.88] / 0.71[0.66] / 0.79[0.67] / 0.54[0.31] | starved % 0.0 / 3.8 / 11.1 / 20.1 / 10.3
+ckernel_rkl4w3f_l2x15 seed 3 rho 0.36[0.36] / 0.83[0.87] / 0.67[0.63] / 0.83[0.72] / 0.51[0.21] | starved % 0.0 / 4.0 / 11.5 / 16.1 / 19.3

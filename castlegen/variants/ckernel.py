@@ -559,4 +559,6 @@ _variant("ckernel_rkl4w3f_l2x2", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, coarse_l
          rkl_level_scale={2: 2.0, 4: 0.3}, fast=True)
 _variant("ckernel_rkl4w3f_l2x3", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, coarse_lam=float("inf"),
          rkl_level_scale={2: 3.0, 4: 0.3}, fast=True)
+_variant("ckernel_rkl4w3f_l2x15", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, coarse_lam=float("inf"),
+         rkl_level_scale={2: 1.5, 4: 0.3}, fast=True)
 _variant("ckernel_inf", ml_wlam=20.0, kernel_lam=float("inf"))
