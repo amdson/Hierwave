@@ -1,3 +1,54 @@
 [seed 0] train 300s  final viol {'0': 1.52587890625e-05, '1': 1.52587890625e-05, '2': 0.0001220703125, '3': 0.0, '4': 0.0}  F -0.041128844022750854  support 0
 [seed 1] train 301s  final viol {'0': 1.52587890625e-05, '1': 1.52587890625e-05, '2': 6.103515625e-05, '3': 0.0, '4': 0.0}  F -0.05094064958393574  support 0
 [seed 2] train 301s  final viol {'0': 0.0, '1': 1.52587890625e-05, '2': 0.0, '3': 0.0, '4': 0.0}  F -0.022549089044332504  support 0
+[seed 3] train 300s  final viol {'0': 0.0, '1': 0.0, '2': 6.103515625e-05, '3': 0.0, '4': 0.0}  F 0.007597111165523529  support 0
+{
+ "final_violations": {
+  "worst_frac": 0.0001220703125,
+  "ok": true
+ },
+ "raw_violations_worst": 0.0001220703125,
+ "exact_stats": {
+  "per_stat": {},
+  "ok": null
+ },
+ "raw_vs_final": {
+  "per_stat": {
+   "dirt_frac": true,
+   "dirt_excess": true,
+   "roughness": true,
+   "line_match": true,
+   "floating": true,
+   "fill_err": true
+  },
+  "ok": true
+ },
+ "across_seeds": {
+  "per_stat": {
+   "dirt_frac": true,
+   "dirt_excess": true,
+   "roughness": false,
+   "line_match": true,
+   "floating": true,
+   "fill_err": true
+  },
+  "ok": false
+ },
+ "probes": {
+  "flagged": [
+   true,
+   true,
+   true,
+   true
+  ],
+  "ok": false
+ },
+ "finite_support": {
+  "worst_mismatch": 0.0,
+  "ok": true
+ },
+ "free_energy": -0.026755367871373892,
+ "within_budget": true,
+ "accepted": false
+}
+BENCH_DONE ckernel_pen4w3f

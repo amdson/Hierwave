@@ -266,6 +266,8 @@ Every factor is computable from step probabilities, r and the energy, so no samp
 
 > **Annotation (2026-10-14, orchestrator):** recorded from chat; the user authorised the path-KL objective for revising samplers. Status: untested.
 
+> **Annotation (2026-10-14 evening, crevise agent):** built as `castlegen/variants/crevise.py` (pass + R fixed revising steps, fixed-rate erase r with uniform refill on the P side, path KL as per-draw costs on cfast's machinery; R = 0 = cfast bit for bit; gradient-checked against trajectory enumeration; guided variant reads a per-cell violation field). First prototype results: dimers unguided collapses to a deterministic policy with 0.6 % violations (worse than cfast); ground 8 x 16 patch all dirt (0.94 vs MCMC 0.64, cfast 0.65). Bound gap on the tiny problem 3-5 nats per world (|M| log D dominates). Guided runs pending at the pause. Report: `reportables/2026-10-14_crevise/report.md`. Status: mixed / does not work so far.
+
 ## 20. Brute-force refinement by random jittering (from chat, user, 2026-10-14)
 "one-step lookahead is fine, but I suspect that random jittering would produce valid solutions for most cases."
 
@@ -298,5 +300,7 @@ On ground, this gives unsupported columns for support and the full- or occupied-
 - Use exactopt's enumerable cases to see how a graded penalty changes the optimisation landscape against the binary one.
 
 > **Annotation (2026-10-14, orchestrator):** recorded from chat. Usage is deliberately not prescribed. Using it in the training penalty would change the objective's penalty term (constraint 4) and needs the user's approval; uses inside repair or diagnostics do not. Status: untested.
+
+> **Annotation (2026-10-14, graded agent):** built and tested (`castlegen/graded.py`, `tests/test_graded.py`, 17 pass): generic from the tables, L1 to the nearest feasible entry with |.| on monotone-band axes and edit distance elsewhere; on ground it is exactly the unsupported columns / honour shortfall; on dimers (and columns' position pair) every violated instance has d = 1, so graded = binary there by construction. Diagnostic (16 held-out worlds per saved model, no retraining, [report](2026-10-14_graded/report.md)): the own-draws arms' residual violations are "nearly valid" at L0-L1 (d = 1, 1-2 columns) but not at L2-L4 (2-3 of 4 columns at L2; d = 4-11 at L3-L4, mostly created by repair from certificates the children cannot realise). First graded-penalty test (addendum (c)) built as `cgpen` / `ckpop_hard_gpen` with passing cost-identity and gradient checks, not yet run (paused). Status: measure works; penalty test pending.
 
 > **Annotation (2026-10-14 evening, coordinator):** the user approved a first test of the graded mass in the training penalty (constitution addendum (c)), and asked for the signal to guide repeated updates: as an input feature of #19's revising steps (allowed freedom) and as the driver of a guided revising step (agent redirected from #20's repair). Draw-K search (#20 b) is not wanted. Agents: graded module + diagnostics + graded-penalty first test (reportables/2026-10-14_graded/), guided step (reportables/2026-10-14_guided_step/), revising sampler (reportables/2026-10-14_crevise/). Status: in progress.

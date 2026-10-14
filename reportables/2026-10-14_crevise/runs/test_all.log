@@ -1,1 +1,8 @@
-..
+.....zero l0_t {'proj_z': 0.338, 'rand_z': 2.797, 'hotelling_p': 0.095, 'proj_ratio': 1.007, 'rel_noise': 0.023}
+zero l0_t@rev1 {'proj_z': 4.469, 'rand_z': 3.902, 'hotelling_p': 0.0, 'proj_ratio': 1.425, 'rel_noise': 0.104}
+Fwrong l0_t {'proj_z': -0.203, 'rand_z': 2.997, 'hotelling_p': 0.085, 'proj_ratio': 0.992, 'rel_noise': 0.049}
+wrong l0_t@rev1 {'proj_z': 0.643, 'rand_z': 0.37, 'hotelling_p': 0.024, 'proj_ratio': 1.313, 'rel_noise': 0.536}
+.{'l0_t': (0.0, -21.38), 'l0_t@rev1': (0.0, 12.12)}
+.{'l0_t': (0.0, -124.4), 'l0_t@rev1': (0.0, 12.12)}
+.{'J_path': 0.4611185732798689, 'rkl_x0': -3.611251232278679, 'gap': 4.072369805558548, 'masked_logD': 4.158883467986886, 'n_traj': 10502, 'n_final': 998, 'sum_q': 1.0000000897354602, 'ident_max': 9.346008297939079e-06, 'E_mean': -2.0420283847463656, 'H_logq_traj': 1.65573642816609, 'H_x0': 1.5692228475323138}
+.
