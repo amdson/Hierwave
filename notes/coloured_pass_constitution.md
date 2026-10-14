@@ -65,6 +65,17 @@ Constraints 3 and 4 are relaxed **for training only**, as follows.
 - Reverse-KL training remains valid and may be mixed with the above; which objective produced a result is stated in every report.
 - New diagnostics are admitted as evidence: per-kernel, per-level acceptance rates, and where the kernels move mass in the sampler's own draws.
 
+## Amendment 2026-10-14 (b): path-KL training for revising samplers (user decision)
+
+Authorised by the user on 2026-10-14 (ideas.md #19). It applies alongside the kernel-route amendment.
+
+- **Generation:** generation may use a fixed number of revising steps per level, in which later steps redraw earlier values (diffusion-style). Constraint 2 applies unchanged: fixed step count, local windows, finite support, coordinate-keyed noise.
+- **Training:** for such samplers, the training objective may be the path KL, KL(Q ‖ P).
+  - Q is the generator's trajectory distribution.
+  - P = p\*(x_0) · Π_k r(x_k | x_{k−1}), with r a **fixed** noising process declared with the sampler. It must not be learned unless approved separately.
+  - This upper-bounds the reverse KL of goal 2 and equals it when the sampler never revises. Constraint 3 (unbiased gradient) applies to this objective, and constraint 4 is read with the path KL in place of the per-draw reverse KL.
+- **Reporting:** reports state the objective used and, where measurable, the bound's gap. On enumerable cases, compare against the exact reverse KL of x_0.
+
 ## Invariants checked in code
 
 These are asserted or tested on every change. A failure blocks all experiments until it is fixed.
