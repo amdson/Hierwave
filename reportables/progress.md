@@ -17,6 +17,16 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 04:02 · cstart2 · finished
+Approach: ideas #14 isolated. cstart f = 1.0, L = 3 fixed (levels 0-2 train only in probe-lifted fill contexts), 300 s, 1 seed each (shared GPU, ~4500 updates each): tanh, LN+SiLU, LN+SiLU 6x6, tanh + count resid.
+Result: fill cost at L=3 (incl. -tau H) 0.24 / 0.30 / -0.004 / 0.18 vs untrained 1.98 and f9L4 1.25; soft 0.37 / 0.44 / 0.19 / 0.32 vs probe 0.014 (best still 14x). Completions are block terraces, line_match 0.58-0.63 (untrained 0.60, probe 0.88). Parent-awareness: rho2 changes 1.4-2.8 % under probe j0->j2 vs 7.9 % in the probes (untrained 0.6 %). Cost curves plateau after ~update 800; end-of-training batch-gradient SNR statistically 0 (M=400; also ~0 at init, so not a clean undertraining test). Verdict: the fine function class / optimisation is the limit on ground, matching cdim2. [Report](2026-10-14_cstart2/report.txt) (report.md write blocked).
+Next: fine actor with per-candidate scoring / discrete pattern embedding / tabular-like head, tested on this same f1L3 gate.
+
+## 2026-10-14 04:00 · cbound2 · started
+Approach: confirm cbound_lam on dimers (120 s, two new seeds 11/12, cfast control seed 11), orientation/entropy/violations every 5 updates; bench only if time remains.
+Result: pending.
+Next: -
+
 ## 2026-10-14 04:55 · cbound · finished
 Approach: soft-policy curriculum (ideas #17): bounded b (tanh cap / last-layer projection, c 1→30), λ ramp 1→λ0, τ on the whole logit (8→1), combinations; exact gradients on dimers 4x4 first, then the cfast variant `cbound`.
 Result: exact, λ 20: λ ramp + whole τ 8→1 KL 4e-5 (h/v/d 0.505/0.248/0.248, H 0.376); whole τ 8→1 0.031; λ ramp 0.24; caps and whole τ 4→1 3.25 (stripes); all hold for 400 post steps at τ 1. Sampled dimers 60 s: cfast diag 0.000 (3806 upd); cbound_lam 0.47/0.30/0.23, H 0.272, viol 6e-5 (recovered late, 1 seed); whole8 diag 0.047; wholelam 0.000. Ground cbound_lam: all dirt by update 500 (λ 3), gate 0.75 vs 1.62 / 0.56 vs 2.08, so no move and no bench. [Report](2026-10-14_cbound/report.md).

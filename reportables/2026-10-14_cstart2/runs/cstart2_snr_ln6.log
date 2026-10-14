@@ -1,0 +1,7 @@
+[32mActivated conda/uv virtual environment at [36m/venv/main[0m
+/workspace/hierwave_git/reportables/2026-10-14_cstart2/snr.py:42: RuntimeWarning: invalid value encountered in scalar divide
+  bs.append((mb @ mb - tb / M) / tb)
+trained {"0": {"snr_batch": 7.315030079398935e-19, "snr_se": NaN, "noise": 2.106271524226445e-15}, "1": {"snr_batch": 0.002168432103690099, "snr_se": 0.005092419175186701, "noise": 0.8436057750023483}, "2": {"snr_batch": 0.004111600122363311, "snr_se": 0.00434826093573202, "noise": 48.024448186559475}}
+/workspace/hierwave_git/reportables/2026-10-14_cstart2/snr.py:43: RuntimeWarning: invalid value encountered in scalar divide
+  res[l] = {"snr_batch": float(sig / trc), "snr_se": float(np.std(bs)), "noise": float(trc)}
+trained_zero_critic {"0": {"snr_batch": NaN, "snr_se": NaN, "noise": 0.0}, "1": {"snr_batch": -0.0011442542061277314, "snr_se": 0.002915097069870627, "noise": 7.02621888082657}, "2": {"snr_batch": 0.0041687984423248335, "snr_se": 0.0032671876721838376, "noise": 199.25231795238136}}

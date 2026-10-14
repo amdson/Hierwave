@@ -154,3 +154,8 @@ def _variant(name, **over):
 _variant("cstart_off", frac=0.0)          # control: cfast through cstart's code path
 _variant("cstart_L34", Ls=(3, 4))          # clamped worlds start at L = 3 or 4 only
 _variant("cstart_f9L4", frac=0.9, Ls=(4,))  # diagnostic upper bound: 90 % of worlds clamped at L = 4
+# cstart2: every world clamped at L = 3 (levels 0-2 see only probe-lifted fill contexts), by fine actor class
+_variant("cstart_f1L3", frac=1.0, Ls=(3,))                                   # tanh MLP, 4 x 4
+_variant("cstart_f1L3_ln", frac=1.0, Ls=(3,), net="ln")                      # LN + SiLU, 4 x 4
+_variant("cstart_f1L3_ln6", frac=1.0, Ls=(3,), net="ln", win=(-2, 3))        # LN + SiLU, 6 x 6
+_variant("cstart_f1L3_res", frac=1.0, Ls=(3,), resid=True)                   # tanh MLP + count residuals
