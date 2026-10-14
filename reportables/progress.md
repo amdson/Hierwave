@@ -107,8 +107,13 @@ Approach: cfg options on cfast: net (tanh | ln = LayerNorm + SiLU 64x2) and win 
 Result: GPU shared, 2 x 150 s, B = 8, none accepted (probes flagged everywhere). KL per block, s0 / s1: toy_support cln6 1.28 / 0.78, cln 0.45 / 0.90, cfast 0.70 / 0.58 (cfast misses the budget, 5.9e-3); toy_modes cln6 0.26 / 0.26, cln 0.16 / 0.22, cfast 0.15 / 0.16. Ground: all three collapse to all dirt (line ignored); cln6 s0 misses the budget (1.5e-3) after a 125 s compile. Microbenchmark: 5.1 / 6.1 / 6.0 ms per update (cfast / cln / cln6), but the bench gave cln* 2.5-4x fewer updates (contention). The exact-gradient gains do not transfer at B = 8: variance binds. Report: reportables/2026-10-13_cln/report.md.
 Next: fixed-update-count comparison; cln6 at large B (cbig).
 
+## 2026-10-14 baselines300 · finished
+Approach: cfast 300 s x 2 seeds on all five problems, cbig256 300 s on the toys (ideas: none, baselines).
+Result: nothing accepted. cfast F gap to F* toy_support 0.016/0.026 (150 s: 0.055), toy_modes 0.011/0.011; cbig256 gap 0.003/-0.003 (support), 0.003/0.002 (modes), exact stats and seeds ok, probes still flagged. Ground still all dirt (viol 3e-5), columns still near-all air (viol 1.5e-2), dimers diagonal still 0 (viol 1.2e-4). Doubling the budget changed no acceptance and no collapse. Report reportables/2026-10-14_baselines300/report.md.
+Next: compare variants against these 300 s rows.
+
 ## 2026-10-14 baselines300 · started
-Approach: cfast at 300 s/seed (2 seeds) on toy_support, toy_modes, ground, columns, dimers; cbig256 at 300 s on the toys; compare with 150 s baselines. Cores 48-55, one run at a time, smoke warm-up first.
+Approach: cfast at 300 s/seed on all five problems plus cbig256 on the toys.
 Result: -
 Next: -
 
