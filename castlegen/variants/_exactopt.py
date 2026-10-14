@@ -62,8 +62,48 @@ def block_problem(which):
                                render=None, exact={}, tol={})
 
 
+def dimers_problem(H=4):
+    """Dimers (triangular lattice, hard perfect matching, T = 0, no soft terms) on H rows with
+    top / bottom edges (designed channel), same factors as the bench problem."""
+    from castlegen.bench.problem import Chan
+    from castlegen.bench.problems import dimers as dm
+    p = dm.build_dimers()
+
+    def edge(seed, Y, X, period, H=H):
+        Y = np.asarray(Y, np.int64)
+        return np.where(Y == 0, 1, np.where(Y == H - 1, 2, 0)).astype(np.int64)
+    chans = [Chan("edge", 0, 3, designed=edge) if c.name == "edge" else c for c in p.chans]
+    return dataclasses.replace(p, name=f"dimers_{H}", H=H, chans=chans, stats=None, probes=None, render=None,
+                               exact={}, tol={})
+
+
+def reachable_designed(lay, designed):
+    """gc.reachable_states with designed channels held at their values."""
+    p = lay.p
+    st = {c.name: (np.asarray(designed[c.name], np.int32)[None] if c.designed is not None else
+                   np.full((1,) + lay.hw[c.level], -1, np.int32)) for c in p.chans}
+    for l in lay.levels:
+        for k in range(core.NCOL):
+            Y, X, valid = (np.asarray(a) for a in lay.sites(l, k))
+            for c in lay.chans[l]:
+                def masks(state, c=c, Y=Y, X=X):
+                    _, nv, look = lay.cond(state, c.name, jnp.asarray(Y), jnp.asarray(X))
+                    v = nv + look
+                    return v == jnp.min(v, axis=1, keepdims=True)
+                m = np.asarray(jax.vmap(masks)({n: jnp.asarray(a) for n, a in st.items()}))
+                for s in np.flatnonzero(valid):
+                    rows, vals = np.nonzero(m[:, s])
+                    st = {n: a[rows] for n, a in st.items()}
+                    m = m[rows]
+                    st[c.name][:, Y[s], X[s]] = vals
+    return {c.name: st[c.name] for c in p.sampled()}
+
+
 def get_problem(name):
     """(problem, region)."""
+    if name.startswith("dimers"):                      # dimers4 (H = 4), dimers4x8: periodic W
+        H, _, W = name[6:].partition("x")
+        return dimers_problem(int(H)), Region(int(W) if W else 4)
     if name == "tiny":
         return gc.tiny_problem(), Region(8)
     return block_problem(name), Region(4, periodic=False)
@@ -201,7 +241,8 @@ class Enum:
                 self.__dict__.update(pickle.load(fh))
             self.set_lam(lam)
             return
-        self.X = gc.reachable_states(lay)
+        self.des = {k: jnp.asarray(v, jnp.int32) for k, v in problem.designed_values(0, region).items()}
+        self.X = reachable_designed(lay, self.des) if self.des else gc.reachable_states(lay)
         N = self.N = len(next(iter(self.X.values())))
         if verbose:
             print(f"[enum] {problem.name}: {N} reachable outcomes ({time.time() - t0:.1f}s)", flush=True)
@@ -209,7 +250,7 @@ class Enum:
         lam0 = jnp.zeros(T + 1, jnp.float32)
 
         def one(forced):
-            _, _, lq, rec = core.coloured_pass(lay, params, 0, {}, 1.0, lam0, forced=forced, record=True)
+            _, _, lq, rec = core.coloured_pass(lay, params, 0, self.des, 1.0, lam0, forced=forced, record=True)
             return rec
 
         f = jax.jit(jax.vmap(one))
@@ -271,7 +312,8 @@ class Enum:
     def _check_reference(self, n):
         rng = np.random.default_rng(0)
         for i in rng.choice(self.N, min(n, self.N), replace=False):
-            e = en.energy(self.p, {k: a[i] for k, a in self.X.items()}, self.region)
+            e = en.energy(self.p, {**{k: np.asarray(v) for k, v in self.des.items()},
+                                   **{k: a[i] for k, a in self.X.items()}}, self.region)
             assert abs(e.soft - self.S[i]) < 1e-3 and abs(sum(e.viol.values()) - self.H[i].sum()) < 1e-6, \
                 (i, e.soft, self.S[i], e.viol, self.H[i])
 
@@ -418,6 +460,8 @@ class Enum:
 
     def kl_coarse(self, q):
         """KL of the joint marginal of every coarse level (>= 1), q vs the target."""
+        if self.p.T == 0:
+            return 0.0                      # no coarse level
         if not hasattr(self, "_cinv"):
             top = np.concatenate([self.X[c.name].reshape(self.N, -1) for c in self.p.sampled() if c.level >= 1], 1)
             self._cinv = np.unique(top, axis=0, return_inverse=True)[1].ravel()
@@ -428,10 +472,18 @@ class Enum:
         return float(np.sum(qm[ok] * (np.log(qm[ok]) - np.log(np.maximum(pm[ok], 1e-300)))))
 
 
+def dimer_stats(X):
+    """Per outcome: orientation fractions h / v / diag (partner direction // 2)."""
+    o = np.asarray(X["p"]).reshape(len(X["p"]), -1) // 2
+    return {"horizontal": (o == 0).mean(1), "vertical": (o == 1).mean(1), "diagonal": (o == 2).mean(1)}
+
+
 def stat_fn_for(name):
     if name == "support":
         return lambda X: {k: toys.support_block_stats(X["t"])[k] for k in ("flat_block_frac", "empty_block_frac",
                                                                            "dirt_frac")}
+    if name.startswith("dimers"):
+        return dimer_stats
     if name == "modes":
         return lambda X: {k: toys.modes_block_stats(X["t"])[k] for k in ("mode_other", "mode_L", "broken_bonds")}
     return None
@@ -461,7 +513,7 @@ def train_exact(enum, kind, params, steps, lr, lam, every, stat_fn, clip=10.0, t
             m = {"step": i, "t": time.time() - t0, **enum.evaluate(kind, params, stat_fn)}
             curve.append(m)
             log(f"[{kind}] {i} kl {m['kl']:.4f} coarse {m['kl_coarse']:.4f} " +
-                " ".join(f"{k} {m[k]:.3f}" for k in m if k in ("flat_block_frac", "mode_other", "p_viol")))
+                " ".join(f"{k} {m[k]:.3f}" for k in m if k in ("flat_block_frac", "mode_other", "p_viol", "horizontal", "vertical", "diagonal")))
         if i == steps:
             break
         params, opt = update(params, opt, jnp.float32(tau_at(i, steps, tau0)))
@@ -492,7 +544,7 @@ def train_sampled(var, kind, enum, steps, lam, every, stat_fn, B, tau0=2.0, log=
             m = {"step": i, "t": time.time() - t0, **enum.evaluate("mlp", var.params, stat_fn)}
             curve.append(m)
             log(f"[{kind} B={B}] {i} kl {m['kl']:.4f} coarse {m['kl_coarse']:.4f} " +
-                " ".join(f"{k} {m[k]:.3f}" for k in m if k in ("flat_block_frac", "mode_other", "p_viol")))
+                " ".join(f"{k} {m[k]:.3f}" for k in m if k in ("flat_block_frac", "mode_other", "p_viol", "horizontal", "vertical", "diagonal")))
         if i == steps:
             break
         tau = jnp.float32(tau_at(i, steps, tau0))
@@ -517,7 +569,7 @@ def train_sampled(var, kind, enum, steps, lam, every, stat_fn, B, tau0=2.0, log=
 # ----------------------------------------------------------------------- CLI
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("problem", choices=["tiny", "support", "modes"])
+    ap.add_argument("problem", help="tiny | support | modes | dimers<H>[x<W>] (periodic width W, default 4)")
     ap.add_argument("--runs", default="exact_mlp,exact_table_feat,exact_table_hist,cpass,cfast")
     ap.add_argument("--steps", type=int, default=2000)
     ap.add_argument("--every", type=int, default=50)
@@ -546,7 +598,8 @@ def main():
     if a.problem != "tiny":
         valid = enum.H.sum(1) == 0
         meta["n_valid_reachable"] = int(valid.sum())
-        meta["F_valid_per_cell"] = float(-np.log(np.exp(-enum.S[valid]).sum()) / 16)
+        meta["F_valid_per_cell"] = float(-np.log(np.exp(-enum.S[valid]).sum()) / (problem.H * region.W))
+        meta["log_nvalid_per_cell"] = float(np.log(valid.sum()) / (problem.H * region.W))
     print(json.dumps(meta), flush=True)
     for run in a.runs.split(","):
         t0 = time.time()

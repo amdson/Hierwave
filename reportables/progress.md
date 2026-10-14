@@ -17,6 +17,11 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 03:06 · cstart · finished
+Approach: ideas #14. cstart on cfast: per batch 4 of 8 worlds clamped (levels >= L taken from a probe lift, problem.probes, jitter uniform), L uniform on 1..4; clamped draws masked from actor, critic and returns; full-depth worlds = cfast. tests/variants/test_cstart.py 11 passed (frac 0 bit-identical to cfast's update; clamped world = clamped_pass; params at levels >= L untouched); cone/gradient tests 17 passed.
+Result: gate not moved at the default mixture. Clamp gate fill vs own per fine cell, 300 s: cstart 2.04 vs 1.19 (L4), 2.05 vs 0.65 (L3); cfast 1.99 vs 1.12, 2.13 vs 0.66. 120 s concurrent pair: cstart 2.24 vs 2.31, 2.07 vs 1.81 (gap closed only because own stayed high); cstart_off 1.99 vs 0.77, 2.43 vs 0.48. Collapse delayed (dirt 0.74 at update 200 vs 0.97) but still by ~450. Diagnostic arm cstart_f9L4 (90 % clamped at L=4, 5007 updates): fill 1.16 (L4), 1.25 (L3), own 0.90/0.71; fine levels draw block staircases with teeth, clamped line_match 0.55/0.62 (= untrained). Bench v2 300 s x2 (shared GPU, 2907/5421 updates): not accepted, worst final viol 7.8e-3 (seed 0), F 1.63, line_match 0.50, dirt 0.95-0.99, starvation 1.0 at levels 2-4. Dimers: identical to cfast by construction (T=0, test). Report content handed to the orchestrator (report.md write was blocked for this agent); figures and runs in reportables/2026-10-14_cstart/.
+Next: pair heavy early clamping (f9L4 as a warm-start phase, decaying to 50/50) with a fine conditional that reads the parent count inside the block (ideas #11 / candidate scoring).
+
 ## 2026-10-14 03:40 · ccol · finished
 Approach: columns analogue of csat: cfast 120 s with per-level entropy/density instrumentation, bench v2 block check (60 s), clamp test at L=4..1.
 Result: top level (L4) deterministic first, at update 125, in the same window density drops 0.38 -> 0.06 (settles at 0.055, never < 0.05); empty x-columns 0.5-0.7. Block check: probes starved 99.9-100 % at L3-4, 98 % L2, 44 % L0-1 (null ~0). Clamp: trained fine cost 0.35 own vs 4.35 probe-lifted at every L=1..4, violations 0.24/cell; density follows the counts but columns are invalid. [Report](2026-10-14_ccol/report.md).
@@ -44,6 +49,14 @@ Next: report in reportables/2026-10-14_ccoarse/.
 Approach: ideas #7 as an lr schedule on cfast: levels 3-4 frozen at init while 0-2 train, staged release (L3 35 %, L4 55 %), critic always on, tau as cfast. castlegen/variants/ccur.py (ccur, ccur_diag, ccur_off = cfast + same diagnostics).
 Result: order does not change the outcome. At release the fine levels were worse in fill contexts (fine cost/cell 2.80 vs untrained 2.32 at L=4; 2.64 vs 1.98 at L=3): the frozen coarse draws are 3 nats diverse but not fill-following (line_match 0.50, 88 % dirt). After the L4 release, dirt > 0.95 within 40 updates (cfast: 175 from init); line_match 0.500 throughout. Bench --train 300, 2 seeds, GPU shared: ground ccur 0 final viol, F 1.23, dirt 1.00 / 0.875 (s1 stripes), not accepted (probes, across-seeds); cfast 0 viol, F 0.60, dirt 1.00, not accepted (probes). Columns: ccur worst 3.2e-2, F -0.006, density 0.004 / 0.016; cfast 9.2e-3, F -0.022, density 0.003 / 0.019; both collapse to near-empty. Dimers not run (T = 0: nothing to freeze). Harness files changed during the session (hashes differ between paired runs). Report folder: reportables/2026-10-14_ccur/ (figures in images/; report.md write was blocked for this agent, content in the handoff).
 Next: visiting fill-following coarse contexts is the missing piece, not order: whole-logit tempered exploration (ideas #12).
+
+## 2026-10-14 cdim2 · finished
+Approach: dimers as exactopt problem (4 rows x 4 periodic columns; 100 239 reachable, 412 valid matchings), exact-gradient training at lambda 20, tau 1: tanh MLP, table_feat, table_hist, 4x4 and 6x6 windows, 1500 steps; plus lr 1e-2 and LN+SiLU nets.
+Result: table_feat / table_hist reach KL 0.0175, P(viol) 6e-4, 0.377 nats/cell (max), h/v/d 0.51/0.25/0.25, both windows, still falling. Every neural actor (tanh MLP both windows, lr 1e-2, LN+SiLU 64x2) goes to all-horizontal stripes: KL 3.249, 0 violations, 0.173 nats/cell. So diverse and valid is expressible (table_hist = full chain rule here); the network gets stuck: representation/optimisation, not the sampler class. Report: reportables/2026-10-14_cdim2/report.md.
+Next: distill table_hist into the MLP to see if it can hold the solution; test a larger region (colours with several sites).
+
+## 2026-10-14 cdim2 · started
+Approach: add dimers to _exactopt; exact MLP / table_feat / table_hist at lambda 20 to see whether diverse valid policies are representable.
 
 ## 2026-10-14 cdim · finished
 Approach: dimers (T = 0) entropy collapse vs lambda and tau, cfast cfg overrides only (5 `_variant`s appended to cfast.py), 60 s each, one seed.
