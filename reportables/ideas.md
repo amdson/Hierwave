@@ -126,3 +126,8 @@ On the enumerable hierarchy, optimise the objective with exact expectations, and
 From the clamp diagnostic: give every child draw, for each declared count factor, the parent's value minus its known siblings' sum and the number of siblings still unknown (allowed freedom "more information to learned parts").
 
 > **Annotation (2026-10-14, cresid):** built as variant `cresid` (generic, off by default elsewhere; tests and finite support pass). It doesn't help at 150 s: fine cost in fill contexts is 2.02 vs 0.74 own at L = 4 (cfast 1.97 vs 0.72), and the rho draws are still context-blind and deterministic. Ground bench: cresid meets the violation budget (6.1e-5) but F is 1.41 vs cfast 0.86, and both are all dirt. Likely cause: the bias saturates (deterministic rho) and training never visits fill contexts. Status: tried, no effect on the gate. [Report](2026-10-13_cresid/report.md)
+
+## 12. Exploration at higher τ, importance-weighted to τ = 1 (from chat, user, 2026-10-14)
+The user: "exploring at higher T is definitely in scope." Draw training worlds at τ_b > 1 (or a mixture of τ values), and weight each draw's gradient contribution by the importance ratio to the τ = 1 objective, so the gradient of the stated objective stays unbiased (constraint 3) while the fine levels keep visiting contexts a deterministic τ = 1 policy would never produce. Also agreed in the same exchange: the bench training budget is 300 s per seed from now on (the session runs autonomously).
+
+> **Annotation (2026-10-14, orchestrator):** motivated by the clamp and cresid findings (fine levels deterministic, context-blind; cresid's extra information unusable because the contexts are never visited). Queued as variant `chot` on the next free agent. Status: untested.
