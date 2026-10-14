@@ -8,6 +8,13 @@ Goals: (1) ground's coarse levels trained by the kernel route; (2) own-draw line
 
 (waves are appended here as they finish)
 
+### Wave 2: wave2-explore, own draws only (negative, with a diagnosis)
+- Five arms (bottom-up curriculum + coarse flips K = 16; + annealed L4 blocks; tempered transitions tau <= 2 and <= 6; hot-end lambda 1), one seed, 300 s each, no probe contexts: own-draw line_match stays at 0.50 in all five; dirt 0.84-0.90. The clamp-gate gap closes in every arm (own contexts fit), but that is the fine levels fitting own contexts, not exploration.
+- Diagnosis: rho is NOT what is stuck (rho4 in the top row already follows the fill, 0.02 vs 0.00). The stuck channel is the B certificate (occupied columns, 0.66 in the top row); the hard support and honour constraints make the tiles follow it, and freeing a column means lowering B consistently bottom-up through four levels. Flips redraw certificates high from q; tempered transitions at lambda 20 do not cross; lowering lambda at the hot end leaves violations that get rejected (median log acceptance -756). The ~5 % accepted dirt->partial moves are lost because contexts are redrawn fresh every iteration.
+- Annealed L4 blocks from full-support q draws (exact AIS weights) were 1.5 % valid at 32 steps (speed-2's 98 % used valid own-block starts).
+- Wave 3 launched (wave3-explore): persistent chain populations so accepted moves accumulate; certificate-aware bottom-up proposals with the certificate factors tempered inside the proposal only.
+- Also this wave: notes/methodology.md extended with the kernel-route sections (status table; TBD markers for the runs still in flight).
+
 ### Wave 2 (partial): wave2-bench, violation pressure on the upper-bound arm (probe-lift contexts, change request #1)
 - exp(-20V) weighting does nothing: probe-refined states have zero violations but nearly all own-refined states violate, so the weights drop them and the fit becomes probe-only ML. The 3.2e-3 is 13 support3 violations in 16 worlds: the coarse levels choose certificates the children cannot realise next to their neighbours; repair then creates L4 violations.
 - Mixing cfast's reverse-KL update (32 steps per iteration, lr 1e-3) brings violations to 5e-5..4.3e-4 at line_match 0.57-0.59; at cfast's lr 3e-3 it collapses the model (dirt 0.99).
