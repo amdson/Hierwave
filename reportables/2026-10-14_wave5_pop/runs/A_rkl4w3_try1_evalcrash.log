@@ -1,0 +1,6 @@
+warm-up 264.2 s
+Traceback (most recent call last):
+  File "/workspace/hierwave_git/reportables/2026-10-14_wave5_pop/scripts/arm_eval.py", line 22, in <module>
+    m = eval_seed(prob, v, k, 16, out / "eval_s%d.png" % k)
+                                  ~~~~~~~~~~~~~~~~~~~~~^~~
+TypeError: unsupported operand type(s) for %: 'PosixPath' and 'int'

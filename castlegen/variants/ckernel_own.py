@@ -34,6 +34,8 @@ from castlegen.bench.variant import register
 
 from .ckernel import CKernel
 
+_BUILT = {}     # wave5-pop: per-process memo of built kernels (see CKernelOwn._build)
+
 OWN = dict(own_frac=1.0, phase1_s=60.0, mtm_Ls_1=(1, 2), mtm_Ls_2=(2,), ml_levels_1=(0, 1, 2),
            flip_Ls=(3, 4), K_flip=16, flip_mode="q", tau_c=2.0, m_flip=4,
            an_n=0, an_L=4, an_K=8, an_steps=64, an_tau_hi=8.0, an_lam_kind="const", an_B=4, an_full_support=True,
@@ -46,7 +48,25 @@ class CKernelOwn(CKernel):
     def __init__(self, problem, seed, workdir, **cfg):
         super().__init__(problem, seed, workdir, **{**OWN, **cfg})
 
+    _BUILT_ATTRS = ("J20", "J11", "Gc", "fl", "E", "mtm", "flip", "mlstep", "gen", "lay_tr",
+                    "mtm1", "mtm2", "full_val", "tt", "ann")
+
     def _build(self, region):
+        """wave5-pop: the built kernels / jitted callables are memoised per process (key: problem,
+        width, full cfg, the init lambda baked into gen), so a second instance with the same
+        configuration (the bench's seed 1, or a warm-up instance) reuses the traced functions
+        instead of re-tracing ~35 s of them.  Pure compile caching: no state is shared."""
+        key = (self.problem.name, region.W, repr(sorted((k, repr(v)) for k, v in self.cfg.items() if k not in ("max_iters", "cache_all"))),
+               tuple(np.round(np.asarray(self.lam, float), 9).tolist()))
+        hit = _BUILT.get(key)
+        if hit is not None:
+            for a, x in hit.items():
+                setattr(self, a, x)
+            return
+        self._build_uncached(region)
+        _BUILT[key] = {a: getattr(self, a) for a in self._BUILT_ATTRS if hasattr(self, a)}
+
+    def _build_uncached(self, region):
         from castlegen.kernels import block_mh as bm
         from castlegen.kernels import explore as ex
         super()._build(region)
@@ -239,7 +259,9 @@ register(CKernelOwn)
 
 
 POP = dict(phase1_s=0.0, m_flip=0, tt_Ls=(4, 3), tt_tau_hi=2.0, tt_n=16, tt_m=4, refresh=0.1, n_cycles=1, cg_sweeps=0,
-           hard_sweeps=0, lv_n=8, lv_every=2, clock_setup=True)
+           hard_sweeps=0, lv_n=8, lv_every=2, clock_setup=True,
+           max_iters=None,        # wave5-pop: stop after this many iterations (warm-up instances only)
+           cache_all=True)        # wave5-pop: persist every compile (jax min compile time 0) during train
 
 
 class CKernelPop(CKernelOwn):
@@ -274,6 +296,8 @@ class CKernelPop(CKernelOwn):
         from castlegen.kernels.logq import ml_opt_init
         t0 = time.time()
         c, p = self.cfg, self.problem
+        if c["cache_all"]:
+            jax.config.update("jax_persistent_cache_min_compile_time_secs", 0.0)
         region = Region(c["W_train"] or p.W_train)
         cells = p.H * region.W
         self._build(region)
@@ -286,8 +310,13 @@ class CKernelPop(CKernelOwn):
         pop = self._own_ctx(n, region)
         age = np.zeros(n, int)
         fresh = self._own_ctx(nref, region)                 # warm the refresh shape
+        self._pop_stats(fresh, self._to_flat(fresh))
+        _ = {k: x.at[jnp.asarray(np.arange(nref))].set(fresh[k]) for k, x in pop.items()}
+        if c["lv_n"] > 0:                                   # warm the logging shape
+            self._own_ctx(c["lv_n"], region)
         pop, _, v = self.refine(pop, key, 2)
         self.E(v)
+        self._pop_stats(pop, v)
         if c["cg_sweeps"] > 0 or c["hard_sweeps"] > 0:
             from castlegen.kernels import colour_gibbs as cg
             if c["cg_sweeps"] > 0:
@@ -304,7 +333,7 @@ class CKernelPop(CKernelOwn):
         log({"t": t_setup, "setup_done": True, "start": self.start, "refresh": nref})
         it = 0
         t_end = budget_s if c["clock_setup"] else budget_s + t_setup
-        while time.time() - t0 < t_end:
+        while time.time() - t0 < t_end and (c["max_iters"] is None or it < c["max_iters"]):
             it += 1
             ti = time.time()
             fresh = self._own_ctx(nref, region)
@@ -379,3 +408,9 @@ def _pop_variant(name, **over):
 # wave4-pop: violation pressure, own draws only (inside the frozen constitution)
 _pop_variant("ckpop_hard", hard_sweeps=2)
 _pop_variant("ckpop_hard_rkl", hard_sweeps=2, rkl_n=32, rkl_lr=1e-3, rkl_lam0=10.0, rkl_levels=[0, 1, 2, 3])
+
+# wave5-pop: reverse-KL pressure on L4 too, the L4 parameter step scaled down (wave2-bench's rkl4w3 recipe)
+_pop_variant("ckpop_rkl4w3", hard_sweeps=2, rkl_n=32, rkl_lr=1e-3, rkl_lam0=10.0, rkl_levels=[0, 1, 2, 3, 4],
+             rkl_level_scale={4: 0.3})
+_pop_variant("ckpop_rkl4w1", hard_sweeps=2, rkl_n=32, rkl_lr=1e-3, rkl_lam0=10.0, rkl_levels=[0, 1, 2, 3, 4],
+             rkl_level_scale={4: 0.1})

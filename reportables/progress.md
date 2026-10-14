@@ -26,6 +26,11 @@ Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
 
+## 2026-10-14 11:20 · wave5-pop (ckpop_hard_rkl: compile budget, L4 pressure, bench) · finished
+Approach: (#18; own draws only, inside the frozen constitution) setup was Python re-tracing (340 compile requests, ~85 s quiet / 171 s contended; seed 1 re-traced because every instance built new jits): per-process memo of built kernels + all loop shapes warmed + persist sub-1 s compiles + a warm-up wrapper (scripts/bench_warm.py; harness untouched). L4 arms: reverse-KL on L0-4 with L4 step x0.3 / x0.1.
+Result: [report](2026-10-14_wave5_pop/report.md). Setup 171/52 s -> 1.2/1.2 s, updates 224/608 -> 912/904. L4 arms rejected: lambda_4 decays to 0 (raw L4 never violates), starvation L4 81 % / 34 %. Bench ckpop_hard_rkl 2 x 300 s (warmed): NOT accepted; worst final 9.8e-4 (seed 1 L3; seed 0 3.1e-4 at L2), L4 0 on both, F -0.092, line_match 0.61/0.63, starved L3/L4 23/23 and 19/34 %; across-seeds roughness fails (1.07 vs 1.89); probe check fails (0-5 of 16 raw worlds valid). GPU shared.
+Next: violation pricing on the repaired output (change request #3) or the penalty-only term (#2); more updates per second (iteration ~3 s).
+
 ## 2026-10-14 · speed-3 (generation speed) · finished
 Approach: profiled the vmapped own-draw pass (train_pass record=False) and coloured_pass on ground/toys; hoisted per-colour geometry and Gumbel noise out of the scan, encoded context images in the scan carry (one gather per window).
 Result: [report](2026-10-14_speed3/report.md). Draws bit-identical to the old code (tests/variants/test_gen_speed.py, 6 layouts; GPU 160 worlds). Only ~1.1x on ground (B=32: 8.0 -> 7.3 ms, B=128: 17.2 -> 15.7 ms, quiet GPU), nothing on toys. Host designed_values (~0.6 ms/world on ground) is as large as the device pass.

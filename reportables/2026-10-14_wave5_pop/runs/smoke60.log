@@ -1,0 +1,3 @@
+warm-up: 263.2 s ({'setup': 216.68106865882874, 'total': 229.2455039024353, 'iters': 3})
+{"seed": 0, "setup_s": 1.3, "train_s": 60.8, "updates": 136, "rkl_updates": 545, "iters": 17, "iter_t": [3.2, 6.5, 9.7, 13.0, 16.3, 19.8]}
+{"seed": 1, "setup_s": 1.8, "train_s": 63.9, "updates": 120, "rkl_updates": 481, "iters": 15, "iter_t": [4.3, 8.7, 12.6, 17.0, 21.2, 25.4]}
