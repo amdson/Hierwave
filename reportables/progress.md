@@ -17,6 +17,11 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 05:59 · ccombo · finished
+Approach: cstart phase (frac 1, L 3 for 35 %, decaying to full depth by 80 %) + LN+SiLU 6x6 + whole-logit tau 8->1 geometric + lambda ramp 1->20 (ideas #14, #17), ground, one seed, 300 s; fix arm ccombo_floor (clamped share decays to 0.5, not 0).
+Result: [report](2026-10-14_ccombo/report.md). Clamp gate (fill / own, fine cost per cell): ccombo L3 1.17 / 0.20, L4 1.77 / 0.69; ccombo_floor L3 0.110 / 0.71, L4 0.56 / 0.97 (cstart_f1L3_ln6: -0.004 / 1.12, 1.16 / 1.50; cfast 2.23 / 0.34, 1.97 / 0.72). Levels 3-4 collapse to all dirt within ~300 updates of release (tau still 2.5-3); own line_match 0.500 in both. L=3 gate not met, so no bench (per rule).
+Next: per-level schedule for the top level (re-soften at release, keep the clamped floor), or probe/ccoarse contexts for levels 3-4.
+
 ## 2026-10-14 05:45 · methodology (writer) · finished
 Approach: documentation only; no experiments, no code changes. Wrote notes/methodology.md, a self-contained write-up of the current coloured-pass methodology (problem, sampler, training and estimators, constitution, evaluation incl. bench v2 and the ground fast loop, established results with report citations, open decisions, glossary).
 Result: [notes/methodology.md](../notes/methodology.md), ~3.2k words of prose. Flags: cbig256 toy_support seed 1 misses the violation budget (4.9e-4) although summaries call the toys solved; clamp-gate cfast reference varies by ~0.3-0.5 nats between runs; ground_hard has no written spec in the repo. ccombo left as a TBD placeholder.

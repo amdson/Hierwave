@@ -206,14 +206,12 @@ Training creates the gap: untrained, fill contexts are slightly cheaper than the
 
 ## 7. Current status and open directions
 
-**In progress: ccombo.** A sibling agent is combining three pieces on ground, gated by the clamp test and v2 starvation:
-- a cstart early phase in fill contexts (f = 1, L = 3), decaying to full-depth training;
+**Latest experiment: ccombo** [reportables/2026-10-14_ccombo/]. The three pieces were combined on ground, one seed per arm, 300 s each:
+- a cstart early phase in fill contexts (f = 1, L = 3) for the first 35 % of training, decaying to full-depth training by 80 %;
 - the LN+SiLU 6 x 6 actor;
-- cbound's schedules.
+- cbound's schedules (whole-logit τ 8 → 1, λ ramp 1 → 20).
 
-No result yet.
-
-<!-- ccombo result: TBD -->
+Result: the combination fails the clamp gate, so the bench was not run. When levels 3-4 are released from the clamp they lock into all-dirt certificates within about 300 updates, while τ is still 2.5-3; own-draw line_match stays at 0.500. With the clamp fully removed, the fine levels forget the fill contexts (L = 3 fill cost 1.17 against −0.004 for cstart_f1L3_ln6). Keeping half of each batch clamped to the end (`ccombo_floor`) fixes L = 4 (fill cost 0.56 against 1.16, the best to date) but not L = 3 (0.110, soft 0.317 against 0.194), and parent-awareness is still weak (rho2 changes in 2.2 % of draws against 7.9 % for the probes). So the fill-context phase helps the fine levels only while it is on, and nothing yet stops the coarse levels collapsing once they are trained on their own draws. Next tries, in order: re-soften the top level at its release (per-level whole-logit τ restarted at 8) with the clamped floor kept; train levels 3-4 on target-like certificates as well (ccoarse's generic coarse prior, under ideas #14); run the `ccombo_notau` / `ccombo_nophase` ablations and a second seed.
 
 **Open user decisions:**
 - *Adopt the v2 gate* and drop the old probe flag.
