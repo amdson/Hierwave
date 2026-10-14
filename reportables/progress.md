@@ -53,10 +53,13 @@ Approach: test whether the fine-level learned bias saturates early (deterministi
 Result: pending.
 Next: see reportables/2026-10-14_csat/report.md.
 
+## 2026-10-14 cconv (round 2) · finished
+Approach: equal-update comparison cconv_r2 / cconv / cfast (ideas #5); report: reportables/2026-10-13_cconv/report.md (round 2).
+Result: at ~equal updates conv F is better or equal (toy_modes KL 0.026 vs 0.077; toy_support 0.01-0.04 lower) but toy_support violations are 10-50x higher early; at 150 s cconv_r2 (2.5-3.8k updates) F -0.441/-0.451 vs cfast (10-15k) -0.411/-0.449. None accepted.
+Next: cconv_r2 on ground/columns at B=16 with longer budget.
+
 ## 2026-10-14 cconv (round 2) · started
-Approach: equal-update comparison cconv_r2 / cconv / cfast on toy_support and toy_modes (~300 updates), then cconv_r2 vs cfast equal wall clock (ideas #5).
-Result: pending.
-Next: see report.
+Approach: added cconv_r2; equal-update and equal-wall-clock comparisons on toy_support/toy_modes.
 
 ## 2026-10-14 01:05 · cconv · finished
 Approach: first GPU bench of cconv (ideas #5) vs cfast, 2 seeds x 150 s, shared GPU.

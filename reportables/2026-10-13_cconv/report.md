@@ -61,3 +61,47 @@ Images: `images/cconv_b16_ground_s0.png`, `cfast_ground_s0.png`, `cconv_b16_colu
 ## Next
 
 Equal-updates comparison needs a faster step: r=2/width 16 is 3x faster (0.20 s/update at B=64); one run at that setting with 600 s on toy_support would say whether the gap is throughput. Not run (time box, and one change allowed).
+
+## Round 2 (equal updates), 2026-10-14
+
+Added `cconv_r2` to `castlegen/variants/cconv.py` (class `CConvR2`, r=2, cw=16, B=16; nothing else changed, harness untouched). GPU SHARED with 3-5 other jobs, so s/update varied 2-4x between runs (cconv r4/w32 B=64: 0.24-0.40 s/update; cconv_r2: 0.04-0.06; cfast B=8: 0.01-0.02). The harness takes a time budget, not an update budget, so I set `--train` from smoke-run rates; achieved counts therefore scatter around the 300 target and every cell is listed with its actual count. 1 seed per cell (seed 0). Cold compile of cconv_r2's fused step is ~60 s; my first smoke got 0 updates, later runs used the warm cache. F is only meaningful when final violations are near the 2e-4 budget (a violating sampler can show F below F*).
+
+### Equal updates (target ~300), all cells run
+
+| problem | variant | train s | updates | F | F - F* | worst final viol (raw) | exact stats | probes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| toy_support (F* -0.4688) | cconv_r2 | 20 | 175 | -0.4226 | 0.046 | 2.9e-2 (8.8e-3) | fail | n/a (no valid draws) |
+| | cconv_r2 | 32 | 203 | -0.4046 | 0.064 | 2.2e-2 (5.7e-3) | fail | n/a |
+| | cconv | 90 | 282 | -0.3908 | 0.078 | 5.9e-3 (2.0e-3) | fail | flagged |
+| | cconv | 130 | 477 | -0.4173 | 0.052 | 1.4e-2 (2.4e-3) | fail | flagged |
+| | cfast | 10 | 343 | -0.3812 | 0.088 | 6.1e-4 (6.1e-4) | fail | flagged |
+| | cfast | 8 | 82 | -0.3462 | 0.123 | 2.1e-3 (2.2e-3) | fail | flagged |
+| toy_modes (F* 0.2513) | cconv_r2 | 30 | 373 | 0.3351 | 0.084 | 0 | fail | flagged |
+| | cconv_r2 | 36 | 814 | 0.2794 | 0.028 | 0 | fail | flagged |
+| | cconv | 86 | 137 | 0.3513 | 0.100 | 0 | fail | flagged |
+| | cconv | 150 | 416 | 0.2768 | 0.026 | 0 | fail | flagged |
+| | cfast | 9 | 256 | 0.3471 | 0.096 | 0 | fail | flagged |
+| | cfast | 12 | 370 | 0.3280 | 0.077 | 0 | fail | flagged |
+
+Closest-matched pairs. toy_modes at ~370-416 updates: cconv 0.277 (KL 0.026), cconv_r2 0.335 at 373 (0.084), cfast 0.328 at 370 (0.077). So at equal updates on toy_modes cconv (r4) is clearly better than cfast; cconv_r2 about equal to cfast at 373 and equal to cconv only at 814 updates. toy_support at ~200-350: cconv_r2 -0.405..-0.423, cconv -0.391 (282), cfast -0.381 (343): conv F is lower (better) by 0.01-0.04, but its final violations are 10-50x higher (6e-3 to 3e-2 vs 6e-4), and F is flattered by violations. Single seed, noisy counts, differences of ~0.02 are within what the earlier 2-seed runs show as seed spread (cfast -0.416/-0.406; wc below -0.411/-0.449).
+
+### Equal wall clock, toy_support, 150 s x 2 seeds (cconv_r2 then cfast back to back, shared GPU)
+
+| variant | seed | updates | F | F - F* | worst final viol (raw) | exact stats | probes | seeds agree |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| cconv_r2 | 0 | 2498 | -0.4411 | 0.028 | 2.0e-3 (2.4e-4) | fail | flagged | yes |
+| | 1 | 3819 | -0.4508 | 0.018 | 2.4e-4 (2.4e-4) | fail | flagged | |
+| cfast | 0 | 10406 | -0.4110 | 0.058 | 0 | fail | flagged | NO |
+| | 1 | 14623 | -0.4486 | 0.020 | 0 | fail | flagged | |
+
+cconv_r2 gets 4x fewer updates than cfast yet matches it on F (mean -0.446 vs -0.430) and is more consistent across seeds, but seed 0 final violation (2e-3) misses the 2e-4 budget, where cfast has zero. Neither variant is accepted (exact stats fail, probes flagged).
+
+### Figure
+
+`images/round2_F_vs_update_toy_support.png`: training cost per cell (moving mean of the logged `cost_per_world` / 512 cells) versus update, seed 0, toy_support (cconv from the 130 s run, cconv_r2 and cfast from the 150 s runs). Caveat: the run logs contain no F, so this is the training-objective proxy (includes penalty terms, tau annealing over the first 20% of time), not the evaluated F; it drops below F* while violations are present. The curve shows the conv actors descending much faster per update than cfast (cconv_r2 reaches F* level by update ~150; cfast is far above at the same count and only gets near -0.42 after ~2000 updates). Per-update comparison from the log is therefore consistent with the table: conv is more sample-efficient per update.
+
+Images (copied after the runs): `images/round2_cconv_r2_toy_support_s0.png`, `_s1`, `round2_cfast_toy_support_s0.png`, `_s1`, `round2_cconv_r2_toy_modes_s0.png`, `round2_cfast_toy_modes_s0.png`.
+
+### Plain answer
+
+At equal updates the conv actor matches or beats the MLP on F (toy_modes clearly for r4: KL 0.026 vs 0.077 at ~400 updates; toy_support by 0.01-0.04) but NOT on violations on toy_support (conv 6e-3 to 3e-2 vs cfast 6e-4 at ~200-350 updates; at 150 s cconv_r2 is down to 2e-3 / 2.4e-4). So cconv was mostly throughput-limited on F; its constraint-satisfaction is slower to converge. With a 3-5x cheaper step (r2/w16) it reaches parity with cfast on F at equal wall clock. Not shown: a win on acceptance criteria (exact stats and probes fail for all), anything on ground/dimers/columns. Caveats: 1 seed per equal-update cell, update counts only roughly matched, heavy GPU contention.

@@ -285,3 +285,12 @@ class CConvB16(CConv):
 
     def __init__(self, problem, seed, workdir, **cfg):
         super().__init__(problem, seed, workdir, **{"B": 16, **cfg})
+
+
+@register
+class CConvR2(CConv):
+    """cconv at radius 2, width 16, B = 16 (about 3x cheaper per update than r4/w32; round 2)."""
+    name = "cconv_r2"
+
+    def __init__(self, problem, seed, workdir, **cfg):
+        super().__init__(problem, seed, workdir, **{"B": 16, "r": 2, "cw": 16, **cfg})
