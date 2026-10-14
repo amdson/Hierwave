@@ -277,3 +277,24 @@ The observed dead ends (sandwiches, single violations per world) are rare and lo
 **First test:** replace ckpop_hard_rkl's single least-violation repair with (a), and rerun its 4-seed bench. It fails only on L2 (pooled 3.5e-4 vs 2e-4), so it could become the first accepted own-draws ground row. Watch raw-vs-final agreement: if repair has to touch many cells, the sampler is the problem, not the repair.
 
 > **Annotation (2026-10-14, orchestrator):** recorded from chat. Variant (a) is within the constitution (fixed repair budget). Status: untested.
+
+## 21. Graded (smooth) violation measures (from chat, user, 2026-10-14)
+"it could help a lot to give whatever update we're using a smooth signal ... a violation count signal based on the number of failing columns."
+
+**Idea.** Alongside each hard factor's 0/1 violation indicator, define a graded distance to feasibility d_f(x) ≥ 0, with d_f = 0 exactly when the factor is satisfied. Any update that reacts to violations then sees a slope towards validity instead of a flat landscape: "3 unsupported columns" becomes measurably worse than "1".
+
+**Generic construction (no per-problem code; derived from the tables):**
+- **Count factors** (table over a sum): distance from the current sum to the nearest finite entry.
+- **Pair factors over ordered views:** distance in view value to the nearest feasible partner value.
+- **Unordered domains** (e.g. dimers' directions): the minimal number of cells in the factor's scope that must change to make it feasible (edit distance).
+
+On ground, this gives unsupported columns for support and the full- or occupied-column shortfall for row honour.
+
+**Possible follow-ups** (none prescribed; each states its constitution status when tried):
+- Build d_f in the compiler for every hard factor, and test that d_f = 0 ⇔ H_f = 0 on all suite problems.
+- Diagnostic only: report graded violation mass per level next to violation counts on the bench, to see whether runs that fail the budget are "nearly valid".
+- Compare violation-driven updates (masks, repair, jitter, annealed kernels, training penalties) with the binary and the graded signal, on ground and dimers. Measure violations removed per unit of compute, and distortion via the raw-vs-final stats.
+- Check whether the graded signal changes the level-2 failure of the own-draws arm (rare one-column misses).
+- Use exactopt's enumerable cases to see how a graded penalty changes the optimisation landscape against the binary one.
+
+> **Annotation (2026-10-14, orchestrator):** recorded from chat. Usage is deliberately not prescribed. Using it in the training penalty would change the objective's penalty term (constraint 4) and needs the user's approval; uses inside repair or diagnostics do not. Status: untested.
