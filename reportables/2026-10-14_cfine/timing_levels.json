@@ -1,0 +1,38 @@
+{
+ "l2_window": {
+  "replays": 512,
+  "compile_s": 35.3,
+  "s_min": 0.781,
+  "ms_per_replay": 1.525
+ },
+ "l2_full": {
+  "replays": 512,
+  "compile_s": 44.5,
+  "s_min": 0.7651,
+  "ms_per_replay": 1.494
+ },
+ "l1_window": {
+  "replays": 512,
+  "compile_s": 19.6,
+  "s_min": 0.4297,
+  "ms_per_replay": 0.839
+ },
+ "l1_full": {
+  "replays": 512,
+  "compile_s": 35.1,
+  "s_min": 0.6909,
+  "ms_per_replay": 1.349
+ },
+ "l0_window": {
+  "replays": 512,
+  "compile_s": 7.7,
+  "s_min": 0.0404,
+  "ms_per_replay": 0.079
+ },
+ "l0_full": {
+  "replays": 512,
+  "compile_s": 30.9,
+  "s_min": 0.4911,
+  "ms_per_replay": 0.959
+ }
+}

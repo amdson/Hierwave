@@ -168,3 +168,17 @@ Form: each training world picks a start depth L from a schedule; above L the coa
 Constitution note: the fine parameters' gradient is a differently weighted average over contexts, so it is not the unbiased gradient of J as written (constraint 3), though the optimum is unchanged. **Approved by the user in chat as in scope.**
 
 > **Annotation (2026-10-14, orchestrator):** queued as variant `cstart` for the next free Opus agent; gate = the fast loop and the clamp test. Status: untested.
+
+## 15. Coupled enumeration at the fine levels (from chat / csat agent, 2026-10-14)
+csat's proposal 1: the fine count draws on ground go deterministic and context-blind, and a deterministic policy gets no score-function gradient for actions it never takes. Branch a random subset of non-forced fine draws per world (inverse-inclusion weighted, unbiased), enumerate A when |A| ≤ K with coupled replays scored by the cone, and replay only inside the cone window. Inside the allowed freedoms ("branching at any level, enumerating small candidate sets").
+
+> **Annotation (2026-10-14, cfine agent):** built as variant `cfine` ([report](2026-10-14_cfine/report.md)).
+> - **Tests:** windowed replay bit-identical to the full replay (2/2), gradcheck 7/7.
+> - **Speed and signal:** the windowed replay is ×12 cheaper at level 0 and ×1.6 at level 1, no cheaper at level 2. Fine-level per-world SNR rises ×400–10 000, with means agreeing.
+> - **Ground: no effect.** At 300 updates, with lr 1e-3 for both, the fill-context cost is 1.85 / 2.03 against the cfast estimator's 1.87 / 1.74 (L = 4 / 3). The probe clamp changes 1–6 % of fine draws (cfast 3–6 %), line_match is 0.50, and dirt is 0.92.
+> - **At lr 3e-3** cfine stays more stochastic, but its violations rise to 4–6 %.
+> - **Dimers:** an orientation still dies (vertical instead of diagonal).
+> - **Cost:** 1.1–1.2 s/update against 0.17 s, so the bench was not run.
+> - **Limitation:** in trained states only level 0 (|A| = 2) is fully enumerated. At levels 1–2, |A| > K and LOO samples from a near-deterministic q, so unvisited actions still get little signal.
+> - **Next:** sample candidates uniformly over A with importance weights (unbiased), or K ≥ 5 at level 1. Combine with #12 / #14, because the gradient only acts in visited contexts.
+> - Status: tested, negative on ground.

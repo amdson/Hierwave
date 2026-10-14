@@ -17,6 +17,15 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 02:36 · cfine · finished
+Approach: csat proposal 1 (ideas #15): creplay's coupled enumeration extended to all levels, with non-forced selection (inverse-inclusion weighted) and a windowed (cone-only) replay for fine draws.
+Result: gate 1 passes (windowed replay bit-identical 2/2, gradcheck 7/7). The window is x12 cheaper at level 0, x1.6 at level 1, no cheaper at level 2. Fine-level SNR rises x400-10000 (means agree). Gate 2 fails: dimers loses vertical instead of diagonal (entropy 0.22, same as cfast). On ground at 300 updates, lr 1e-3 for both, the fill-context cost is 1.85/2.03 vs the cfast estimator's 1.87/1.74; the probe clamp changes 1-6 % of fine draws (cfast 3-6 %); line_match 0.50. At lr 3e-3 cfine is more stochastic but unstable (violations 4-6 %). 1.1-1.2 s/update vs 0.17 s. No bench. [Report](2026-10-14_cfine/report.md).
+Next: uniform-over-A candidate sampling with importance weights (levels 1-2 have |A| > K), lower lr with clean gradients, and combine with #12/#14.
+
+## 2026-10-14 02:40 · ccoarse · started
+Approach: ideas #14 source for cstart: generic training-only sampler of target-like coarse states (Gibbs on the designed energy restricted to levels >= L, from the factor tables only). castlegen/variants/_coarse_prior.py; validate vs lifted probes and cfast's own coarse draws on ground; sanity on columns, toy_support.
+Next: report in reportables/2026-10-14_ccoarse/.
+
 ## 2026-10-14 02:36 · ccur · finished
 Approach: ideas #7 as an lr schedule on cfast: levels 3-4 frozen at init while 0-2 train, staged release (L3 35 %, L4 55 %), critic always on, tau as cfast. castlegen/variants/ccur.py (ccur, ccur_diag, ccur_off = cfast + same diagnostics).
 Result: order does not change the outcome. At release the fine levels were worse in fill contexts (fine cost/cell 2.80 vs untrained 2.32 at L=4; 2.64 vs 1.98 at L=3): the frozen coarse draws are 3 nats diverse but not fill-following (line_match 0.50, 88 % dirt). After the L4 release, dirt > 0.95 within 40 updates (cfast: 175 from init); line_match 0.500 throughout. Bench --train 300, 2 seeds, GPU shared: ground ccur 0 final viol, F 1.23, dirt 1.00 / 0.875 (s1 stripes), not accepted (probes, across-seeds); cfast 0 viol, F 0.60, dirt 1.00, not accepted (probes). Columns: ccur worst 3.2e-2, F -0.006, density 0.004 / 0.016; cfast 9.2e-3, F -0.022, density 0.003 / 0.019; both collapse to near-empty. Dimers not run (T = 0: nothing to freeze). Harness files changed during the session (hashes differ between paired runs). Report folder: reportables/2026-10-14_ccur/ (figures in images/; report.md write was blocked for this agent, content in the handoff).
