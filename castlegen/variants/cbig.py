@@ -300,3 +300,4 @@ def _variant(name, **over):
 
 cbig64 = _variant("cbig64", B=64)
 cbig256 = _variant("cbig256", B=256)
+cbig1024 = _variant("cbig1024", B=1024)  # round 4 (cbig2): added for the toy_modes B=1024 run

@@ -17,6 +17,12 @@ Next: what you would try next.
 
 ---
 
+
+## 2026-10-14 csat · started
+Approach: test whether the fine-level learned bias saturates early (deterministic rho draws, never visiting fill contexts) on ground: per-level entropy / forced fraction / |b| logged over training for cfast, then two engineering levers (lr, tau schedule, clipping; allowed freedoms) with the clamp gate from cresid.
+Result: pending.
+Next: see reportables/2026-10-14_csat/report.md.
+
 ## 2026-10-14 cconv (round 2) · started
 Approach: equal-update comparison cconv_r2 / cconv / cfast on toy_support and toy_modes (~300 updates), then cconv_r2 vs cfast equal wall clock (ideas #5).
 Result: pending.
@@ -47,6 +53,11 @@ Next: cut replay cost (K = 2, top level only, larger B), fix the compile-cache m
 Approach: relax cpass.py:256 assert to rtol 1e-2/atol 1 (float32 GPU reduction order), then GPU bench (2 x 150 s, warmed) cpass ground, ctrunc_full ground, cfast columns rerun; regenerate board. Shared GPU, cores 56-63.
 Result: pending.
 Next: report in 2026-10-13_gpu_baselines/report.md.
+
+## 2026-10-14 01:25 · cbig2 · finished
+Approach: batch size alone on toy_modes/toy_support (see started entry), tag r4, shared GPU.
+Result: toy_modes F gap to F*=0.2513: cfast 0.0069/0.0119, cbig64 0.0044/0.0040, cbig256 0.0034/0.0036, cbig1024 0.0056/0.0027 (exact MLP would be 0.0008): 32x batch closes ~half to two thirds, plateaus, B=1024 no better. toy_support cbig256 gap 0.007/0.020 vs cfast 0.027, plateaued; only probes fail. Nothing accepted (probes flagged on all). Report: reportables/2026-10-13_cbig/report.md (round 4).
+Next: 6x6 actor window + LN/SiLU at B=256; probes failure (tail coverage) needs its own diagnostic.
 
 ## 2026-10-14 01:00 · cbig2 · started
 Approach: does B=256/1024 alone close the toy_modes variance gap (exactopt: sampled B=8 KL 0.19/block vs exact 0.013)? Bench cfast, cbig64, cbig256, cbig1024 on toy_modes and cfast, cbig256 on toy_support, 2 seeds x 150 s, shared GPU, tag r4. Added `cbig1024` variant line to cbig.py.

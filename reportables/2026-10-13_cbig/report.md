@@ -109,3 +109,52 @@ All estimates are within noise of zero (negative values are estimator noise): at
 
 - Large B is worthwhile where per-update cost is flat (toy_support); on ground it is GPU-bound beyond B ≈ 64, and collapse is unaffected, supporting the view that the collapse is a representation / sampling-order issue, not a variance one.
 - Redo the SNR with a trained-for-a-while actor and larger M, if the question is still of interest.
+
+
+---
+
+# Round 4 (cbig2, 2026-10-14): does a large batch alone close the toy_modes gap?
+
+Runs tagged `r4` in `results/bench.jsonl`, 2 seeds x 150 s, run two at a time on cores 48-55. **The GPU was shared** (other agents' jobs running throughout), so wall-clock budgets were contended; updates are quoted. cbig's clock starts after compile, cfast's includes it (about 11-19 s of setup here). Only code change: one line `cbig1024 = _variant("cbig1024", B=1024)` appended to `castlegen/variants/cbig.py` (the bench CLI has no cfg override). GPU memory was not measured during the runs (box showed under 1 GB used at launch; B=1024 on toys needs about 1 GB per the earlier speed table).
+
+## Answer
+
+On toy_modes, F* = 0.2513 per cell (16 cells per block, so KL per block is about 16 x the F gap). The F gap on the eval draws (16 worlds per seed, no standard error reported, so treat differences below about 0.001 as noise):
+
+- cfast B=8: 0.0069 / 0.0119 (about 0.11 / 0.19 nats per block)
+- cbig64: 0.0044 / 0.0040
+- cbig256: 0.0034 / 0.0036 (about 0.055 nats per block)
+- cbig1024: 0.0056 / 0.0027
+
+So a 32x batch closes roughly half to two thirds of the gap (cfast average 0.0094 to cbig256 0.0035), but **not most of it**: it plateaus at about 0.0035 per cell (about 0.056 nats per block), against 0.0008 per cell (0.013 per block) for exact-gradient training. B=1024 is no better than 256 (it got only 461 / 576 updates, so it is also less trained). **Nothing is accepted**, on any run, on either problem.
+
+## Table (eval draws)
+
+| run | updates s0 / s1 | F s0 / s1 | gap to F* s0 / s1 | worst final viol (raw) | mode-mass / exact stats | probes flagged (frac above p99) | seeds agree | accepted |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| modes cfast B=8 | 8743 / 10238 | 0.2582 / 0.2632 | 0.0069 / 0.0119 | 0 (0) | mode_other and broken_bonds off exact | yes both (0.81 / 0.75) | no (broken_bonds) | no |
+| modes cbig64 | 2733 / 4444 | 0.2557 / 0.2553 | 0.0044 / 0.0040 | 0 (0) | mode_L/R/T/B and broken_bonds ok; mode_other off | yes both (0.63 / 0.25) | yes | no |
+| modes cbig256 | 1309 / 1447 | 0.2547 / 0.2549 | 0.0034 / 0.0036 | 0 (0) | same as cbig64: only mode_other off | yes both (0.63 / 0.31) | yes | no |
+| modes cbig1024 | 461 / 576 | 0.2569 / 0.2540 | 0.0056 / 0.0027 | 0 (0) | same: only mode_other off | yes both (0.88 / 0.19) | yes | no |
+| support cfast B=8 | 10152 / 10371 | -0.4414 / -0.4413 | 0.0274 / 0.0275 | 1.2e-4 (1.2e-4) | dirt_frac, col_height, flat_block_frac off exact | yes both (1.0 / 1.0) | yes | no |
+| support cbig256 | 1851 / 2848 | -0.4614 / -0.4492 | 0.0074 / 0.0196 | 1.2e-4 (2.4e-4 raw) | all exact stats ok | yes both (0.94 / 1.0) | yes | no |
+
+mode_other is the one stat that still fails the exact comparison for every variant on modes (cbig runs are 0.18-0.24 against the exact value; seed noise at 16 worlds is about 0.015). Finite support and raw-vs-final hold everywhere. Probes are flagged on every run even where F is near F*: the valid probe states still sit above the 99th percentile of the sampler's own draws, so the sampler under-weights states it should produce (a tail/coverage failure that F, a mean, does not show).
+
+On toy_support the acceptance checks that fail for cbig256 are only the probes (violations are under 2e-4 final, exact stats match, seeds agree). Violations are borderline: raw 2.4e-4 on seed 0.
+
+## Curves
+
+![F vs updates](images/r4_F_vs_updates.png)
+
+Training-batch F per cell (cost per world / 512 cells, at tau = 1; solid seed 0, dashed seed 1; `plot_r4.py`). Last-10%-of-run training F (gap to F*): modes cfast 0.0114 / 0.0128, cbig64 0.0048 / 0.0047, cbig256 0.0039 / 0.0038, cbig1024 0.0069 / 0.0048; support cfast 0.0292 / 0.0292, cbig256 0.0100 / 0.0213. Large batches reach a lower plateau than cfast reaches at any point and per update they are far better (cbig256 reached its plateau in about 1300 updates vs cfast's 8700-10200); see the figure for the exact crossing points.
+
+## Support: is cbig256 still closing?
+
+In the 70-80% vs 80-90% windows of the run, training F moved -0.4577 to -0.4585 (seed 0) and -0.4463 to -0.4469 (seed 1), i.e. under 0.001 per 10% of the budget: essentially plateaued, still creeping. The two seeds sit at different plateaus (gap 0.010 vs 0.021), so the remaining gap is not removed by more of the same on this budget; a longer run would gain at most about 0.002.
+
+## Statements
+
+- Large B is the main lever at B=8 (variance), but it plateaus: batch alone does not reach the exact-gradient level, and B=1024 gives nothing over 256 within 150 s. The remaining gap is consistent with the exactopt findings about the 4x4 actor window (information floor 0.012 per block) plus tail coverage, not with variance alone; I did not test that here.
+- The training-F figure uses the training batches (noisy, includes tau annealing); eval F and training F differ by up to 0.005 on cfast (0.2582 eval vs 0.2627 train), so the table uses eval F and the figure only for trends.
+- cbig64 / 256 / 1024 report `within_budget: false` because train_s includes setup and compile (the clock starts after compile by design).
