@@ -236,3 +236,101 @@ class CKernelOwn(CKernel):
 
 
 register(CKernelOwn)
+
+
+POP = dict(phase1_s=0.0, m_flip=0, tt_Ls=(4, 3), tt_tau_hi=2.0, tt_n=16, tt_m=4, refresh=0.1, n_cycles=1, cg_sweeps=0)
+
+
+class CKernelPop(CKernelOwn):
+    """Persistent own-started chains (wave3-explore).  A population of nctx states,
+    initialised from own tau = 1 draws, is kept across iterations: each iteration
+    replaces round(refresh * nctx) members (oldest first) by fresh own draws, applies
+    n_cycles kernel cycles (phase-2 refine of ckernel_own) to the whole population,
+    and fits weighted ML (weights 1) on it.  Every member is an own draw followed by
+    p*-invariant kernels (amendment 2026-10-14); the chain just runs longer."""
+    name = "ckernel_pop"
+
+    def __init__(self, problem, seed, workdir, **cfg):
+        super().__init__(problem, seed, workdir, **{**POP, **cfg})
+
+    def _pop_stats(self, st, v):
+        d = self._ground_stats(st)
+        s, nv, _ = self.E(v)
+        nv = np.asarray(nv)
+        d["valid"] = float((nv == 0).mean())
+        d["viol_per_cell"] = float(nv.mean() / (self.problem.H * st["t"].shape[2]))
+        T = self.problem.T
+        cn = f"cert{T}"
+        if cn in st:
+            Bv = np.asarray(self.problem.chan[cn].views["B"])
+            b = Bv[np.asarray(st[cn])]
+            h = 1 << T
+            d["B_top_row"] = float(b[:, 0].mean() / h)
+            d["B_rows"] = (b.mean((0, 2)) / h).round(3).tolist()
+        return d
+
+    def train(self, budget_s, log):
+        from castlegen.kernels.logq import ml_opt_init
+        t0 = time.time()
+        c, p = self.cfg, self.problem
+        region = Region(c["W_train"] or p.W_train)
+        cells = p.H * region.W
+        self._build(region)
+        self.ctx_seed = 20_000_000 + 1_000_000 * self.seed
+        opt = ml_opt_init(self.params)
+        on = jnp.ones(p.T + 1, jnp.float32)
+        n = c["nctx"]
+        nref = max(1, int(round(c["refresh"] * n)))
+        key = jax.random.PRNGKey(4242 + self.seed)
+        pop = self._own_ctx(n, region)
+        age = np.zeros(n, int)
+        fresh = self._own_ctx(nref, region)                 # warm the refresh shape
+        pop, _, v = self.refine(pop, key, 2)
+        self.E(v)
+        idx = np.arange(c["ml_B"])
+        _ = self.mlstep(self.params, opt, {k: x[idx] for k, x in pop.items()}, jnp.ones(c["ml_B"]), jnp.float32(c["ml_lr"]), on)
+        t_setup = time.time() - t0
+        log({"t": t_setup, "setup_done": True, "start": self.start, "refresh": nref})
+        it = 0
+        while time.time() - t0 < budget_s + t_setup:
+            it += 1
+            ti = time.time()
+            fresh = self._own_ctx(nref, region)
+            rec = {"iter": it, "own_raw": self._pop_stats(fresh, self._to_flat(fresh))}
+            old = np.argsort(-age)[:nref]
+            oj = jnp.asarray(old)
+            pop = {k: x.at[oj].set(fresh[k]) for k, x in pop.items()}
+            age[old] = 0
+            key, sub = jax.random.split(key)
+            kd = {}
+            for _ in range(c["n_cycles"]):
+                sub, s2 = jax.random.split(sub)
+                pop, kd, v = self.refine(pop, s2, 2)
+            if c["cg_sweeps"] > 0:                       # speed-2's colour Gibbs, all levels, lam = kernel_lam
+                from castlegen.kernels import colour_gibbs as cg
+                for _ in range(c["cg_sweeps"]):
+                    sub, s3 = jax.random.split(sub)
+                    pop = cg.sweep_all(self.lay_tr, pop, 1.0, c["kernel_lam"], s3)
+                v = self._to_flat(pop)
+            age += 1
+            rec.update(kd)
+            rec["pop"] = self._pop_stats(pop, v)
+            rec["pop_age_mean"] = float(age.mean())
+            tm = time.time()
+            losses, ninf = [], 0
+            for u in range(c["upi"]):
+                idx = self.rng.choice(n, c["ml_B"], replace=False)
+                self.params, opt, info = self.mlstep(self.params, opt, {k: x[idx] for k, x in pop.items()},
+                                                     jnp.ones(c["ml_B"]), jnp.float32(c["ml_lr"]), on)
+                losses.append(float(info["loss"]) / cells)
+                ninf += int(info["n_infeasible"])
+                self.updates += 1
+            rec.update({"t": time.time() - t0, "t_train": time.time() - t0 - t_setup, "update": self.updates,
+                        "loss_per_cell": float(np.mean(losses)), "infeasible_draws_per_state": ninf / (c["upi"] * c["ml_B"]),
+                        "time_refine": tm - ti, "time_ml": time.time() - tm})
+            log(rec)
+        self.pop = pop
+        self.timing = {"setup": t_setup, "total": time.time() - t0, "iters": it}
+
+
+register(CKernelPop)

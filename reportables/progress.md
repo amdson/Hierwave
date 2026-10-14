@@ -22,6 +22,16 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 10:03 · wave3-explore (persistent own chains, certificate moves) · finished
+Approach: ckernel_pop: persistent population of own-started chains (refresh 10 % / 3 %), kernel cycle (coarse Gibbs, tempered transitions L4/L3, MTM L2, fine Gibbs) +/- 20 colour-Gibbs sweeps (all levels, lam 20), ML on the population; own draws only. Certificate-only (lambda-only) tempered transitions measured per move; lift count of a column-freeing move.
+Result: [report](2026-10-14_wave3_explore/report.md). Own draws leave the dirt state inside the rules: P3 (refresh 3 % + colour Gibbs) own dirt 0.508, line_match 0.645 (64 draws; start 0.851 / 0.507), rows track fill; clamp gate own <= fill (L3 -0.111 vs -0.112, L4 -0.144 vs -0.138); population 98 % valid; own viol 9.4e-4/cell (over budget, not benched). Persistence alone 0.545, sweeps alone 0.574. lambda-only TT 20->5: L4 acc .74-.82, dirt->partial 8-9 %/move. Freeing one column of an L4 block = 46 cells over 5 levels in a tight lift.
+Next: violation pressure (hard final sweeps or lambda-controlled reverse-KL) then bench ckernel_pop at 300 s.
+
+## 2026-10-14 10:10 · wave3-bench (ckernel upper-bound arm) · started
+Approach: (#18; UPPER BOUND, probe-lift contexts, change request #1) ckernel_rkl123 + a weaker separate L4 reverse-KL step (lr x 0.1 / 0.3); pick by lowest worst violation among arms with L3/L4 starvation <= 15 %; bench --seeds 4 --train 300; evaluation noise.
+Result: pending.
+Next: pending.
+
 ## 2026-10-14 10:00 · wave2-bench2 (ckernel upper-bound arm, follow-up) · finished
 Approach: (#18; UPPER BOUND, probe-lift contexts, change request #1) level-split objectives with lambda = inf coarse kernels; bench compile warmed in the bench's own cache dir (/workspace/jax_cache via load_variants); speed-1b's batched kernels.
 Result: [report](2026-10-14_wave2_bench2/report.md). Split (ML L0-2, RKL L2-4) collapses to dirt (0.95, lm 0.50). Bench 300 s x 2, NOT accepted: ckernel_rkl123 (ML all, RKL L0-3) seed 1 within budget (worst 1.8e-4, F -0.098, lm 0.646, starved L3/L4 11/2.8 %), seed 0 L3 7.3e-4; ckernel_rkl32inf (RKL all) worst 4.3e-4 (L2), L3 = 0, but L4 starvation 33-36 %. RKL at L4 is what cleans L3 and what starves L4.
