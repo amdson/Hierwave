@@ -8,6 +8,11 @@ Goals: (1) ground's coarse levels trained by the kernel route; (2) own-draw line
 
 (waves are appended here as they finish)
 
+### Wave 3 (partial): wave2-bench2, closest to an accepted row so far (upper-bound arm, change request #1)
+- Level-split objectives, all with lambda = inf in the coarse kernels (refined coarse states now have zero coarse violations). ML off at L3-4 collapses the line (dirt 0.95): the coarse line-following on this arm comes from ML on the probe contexts, consistent with the own-draw-only failure.
+- `ckernel_rkl123` (ML on all levels, reverse-KL on L0-3): bench 2 seeds, warm compile (setup 254 -> 75 s), speed-1b kernels. Seed 1 within budget at every level: F -0.098, line_match 0.65, rho .38/.81/.58/.82/.60, starved 0/2.8/8.1/10.9/2.8 %. Seed 0 fails at L3 (7.3e-4). `ckernel_rkl32inf` (RKL on L4 too) clears L3 but pushes L4 starvation to 33-36 % and fails across-seed agreement.
+- Remaining violations are 1-4 instances per level in 16 worlds, about seed-to-seed noise. Follow-up launched (wave3-bench): a weaker separate L4 reverse-KL step, then a 4-seed bench of the chosen arm to measure the pass rate and the evaluation's own noise.
+
 ### Wave 3 (partial): dimers-kernel part 2
 - Adding cfast's reverse-KL steps to the dimers kernel loop (N = 32 per iteration, lr 1e-3) restores validity (3.4e-4 per cell, near budget) but the own-draw mix collapses back to cfast's two orientations (diagonal 0.000-0.011); refined states still carry 0.07-0.09 diagonal. ML only keeps three orientations (.36/.32/.32) at 5.6e-2 violations.
 - Ground and dimers now show the same trade-off: ML gives diversity but leaks mass onto violating states; the full reverse-KL mix fixes violations and brings collapse back. Written up as constitution change request #2: ML plus a penalty-only violation term (the λ·E_q[violations] part of reverse KL without the energy and entropy terms). Not built (frozen).
