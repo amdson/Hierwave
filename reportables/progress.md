@@ -17,6 +17,21 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 06:35 · kernel_b (Sweep 1 b) · started
+Approach: generic block-MH kernel with q as proposal (subtree of a level-L cell redrawn by the pass conditioned on the outside; MH / multiple-try ratio; whole-logit tau), castlegen/kernels/block_mh.py; exact invariance on toy_modes / toy_support; per-level acceptance on ground (decision_2026-10-14_kernel_route.md, Sweep 1 b).
+Result: pending.
+Next: pending.
+
+## 2026-10-14 06:52 · kernel-a (Sweep 1 (a)) · started
+Approach: generic exact block-Gibbs kernel (castlegen/kernels/exact_block.py: level-1 blocks = cell + 4 children, enumerated from the declared factors) tested on the toys; ML fit of ground's fine levels 0-2 (LN+SiLU 6x6) to kernel-refined probe-lift / own-draw contexts by teacher forcing (kernel-c's logq.py); clamp gate at L = 3 + parent-awareness (decision_2026-10-14_kernel_route, amendment 2026-10-14).
+Result: pending.
+Next: pending.
+
+## 2026-10-14 07:40 · kernel-c · finished
+Approach: Sweep 1 (c) of the kernel route: castlegen/kernels/logq.py (teacher-forced log q of a given state, jit/grad-able, infeasible count, mask-free fallback) and a weighted-ML Adam update; verify on the enumerable toys by fitting cfast's actor (tanh, ln) to exact p* samples and compare with exact reverse-KL training.
+Result: [report](2026-10-14_kernel_c/report.md). Teacher-forced log q equals generation-time log q to <1e-5 (tanh and ln); tests pass. ML fit to exact p* on one block: support ln fwd KL 0.026 (sampled B=256) / 0.016 (exact weights) vs reverse-KL exact 0.056, F -0.4629 vs F* -0.4688; modes ln fwd KL 0.033 / 0.012 vs 0.014, F 0.2534 / 0.2521 vs 0.2520 (F* 0.2513), mode masses match; no entropy collapse (H/cell at or above H(p*)). Sampled arm noisy (constant lr, one seed).
+Next: Sweep 2 assembly: feed kernel-refined (state, weight) batches to ml_update.
+
 ## 2026-10-14 05:59 · ccombo · finished
 Approach: cstart phase (frac 1, L 3 for 35 %, decaying to full depth by 80 %) + LN+SiLU 6x6 + whole-logit tau 8->1 geometric + lambda ramp 1->20 (ideas #14, #17), ground, one seed, 300 s; fix arm ccombo_floor (clamped share decays to 0.5, not 0).
 Result: [report](2026-10-14_ccombo/report.md). Clamp gate (fill / own, fine cost per cell): ccombo L3 1.17 / 0.20, L4 1.77 / 0.69; ccombo_floor L3 0.110 / 0.71, L4 0.56 / 0.97 (cstart_f1L3_ln6: -0.004 / 1.12, 1.16 / 1.50; cfast 2.23 / 0.34, 1.97 / 0.72). Levels 3-4 collapse to all dirt within ~300 updates of release (tau still 2.5-3); own line_match 0.500 in both. L=3 gate not met, so no bench (per rule).

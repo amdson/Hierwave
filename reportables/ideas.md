@@ -208,3 +208,8 @@ Keep the shared-weight actor soft until it has learned context-dependent structu
 > - Status: tested. It works under exact gradients; it is partial and unconfirmed under sampled gradients; it is negative on ground with the λ ramp. Next: a second seed for cbound_lam on dimers, and whole-logit τ on ground. Report: reportables/2026-10-14_cbound/.
 
 > **Annotation (2026-10-14, ccombo):** on ground combined with #14's clamped phase, whole-logit τ 8→1 (geometric) + λ ramp 1→20 did not keep levels 3-4 soft at their release (deterministic within ~300 updates at τ 2.5-3; all dirt). Report: reportables/2026-10-14_ccombo/.
+
+
+## 18. Kernel route (amortised MCMC, weighted ML) (from chat, 2026-10-14)
+
+> **Annotation (2026-10-14, kernel-c):** log q of a given state by teacher forcing (castlegen/kernels/logq.py) matches generation-time log q to 1e-5, and weighted ML on exact toy samples reaches the reverse-KL free energy and mode masses with no entropy collapse (H/cell at H(p*)). Report: reportables/2026-10-14_kernel_c/.
