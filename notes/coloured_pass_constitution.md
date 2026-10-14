@@ -52,6 +52,19 @@ These are valid without asking, as long as the hard constraints hold.
 
 Each freedom is logged with its measured effect.
 
+## Amendment 2026-10-14: kernel-route training (user decision)
+
+Adopted by the user on 2026-10-14 after the reverse-KL-only route stalled on ground (see `notes/methodology.md` §6 and `notes/decision_2026-10-14_kernel_route.md`). It is frozen for the duration of the two kernel-route sweeps.
+
+Constraints 3 and 4 are relaxed **for training only**, as follows.
+
+- The training update may be the gradient of a weighted maximum-likelihood objective, −Σ_i w_i log q(x_i), over states x_i produced by applying p*-invariant Markov kernels to the sampler's own draws, and over multiple-try candidates with their importance weights. Because KL(qK ‖ p*) ≤ KL(q ‖ p*) for any p*-invariant kernel K, this is an improvement direction for the stated goal without requiring the chain to mix.
+- Admissible kernels: exact block Gibbs on small blocks given their boundary; Metropolis-Hastings subtree resampling with the sampler (optionally tempered) as the proposal, including multiple-try; coarse-cell flips with the sampler redrawing the subtree, with delayed acceptance using the coarse-level factors as a screen; perturbation of the sampler's latent noise; annealed block proposals. Each kernel must be defined only from the declared factors, the hierarchy and the sampler itself: no problem-specific moves (constraint 1 applies unchanged).
+- Hard violations inside a kernel's acceptance ratio are priced at a fixed λ ≤ 20 or treated as infeasible; the choice is logged.
+- Generation is unchanged: the fixed-step local pass, never a chain (constraint 2 applies unchanged). Constraints 5, 6 and 7, and all invariants, apply unchanged.
+- Reverse-KL training remains valid and may be mixed with the above; which objective produced a result is stated in every report.
+- New diagnostics are admitted as evidence: per-kernel, per-level acceptance rates, and where the kernels move mass in the sampler's own draws.
+
 ## Invariants checked in code
 
 These are asserted or tested on every change. A failure blocks all experiments until it is fixed.
