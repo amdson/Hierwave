@@ -144,3 +144,12 @@ I tested cresid's hypothesis that the fine-level bias saturates early, so traini
 > - τ is a weak lever because it tempers only the soft term, not b (b spread 15–60 nats). Exploration at higher τ (#12) must temper the whole logit.
 >
 > Status: tried, no effect. A proposal (per-candidate enumeration at fine count draws, plus whole-logit tempering for #12) is in the [report](2026-10-14_csat/report.md).
+
+## 14. Fine levels trained on arbitrary parent states, mixed start depth (from chat, user, 2026-10-14)
+The user's argument: reverse KL splits into a coarse term plus the fine conditional KL averaged over coarse states; for any coarse state the optimal fine conditional is the target's, so training the fine levels on parent states from any full-support distribution (target-like lifts of probe states, the fill line plus the count prior, or the model's own draws) has the same minimiser as the stated objective. It also removes the collapse mechanism: the coarse levels minimise the free energy of their own fine levels, which is inflated exactly where the fine levels are bad, so they avoid those states; a fine conditional trained everywhere removes the inflation.
+
+Form: each training world picks a start depth L from a schedule; above L the coarse state comes from a mixture of own draws and target-like states; below L the pass samples as usual with its normal cone-return gradients; full-depth worlds keep training the coarse levels. Generation unchanged.
+
+Constitution note: the fine parameters' gradient is a differently weighted average over contexts, so it is not the unbiased gradient of J as written (constraint 3), though the optimum is unchanged. **Approved by the user in chat as in scope.**
+
+> **Annotation (2026-10-14, orchestrator):** queued as variant `cstart` for the next free Opus agent; gate = the fast loop and the clamp test. Status: untested.
