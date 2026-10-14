@@ -554,4 +554,9 @@ _variant("ckernel_rkl4w3f", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, coarse_lam=fl
          fast=True)
 _variant("ckernel_rkl4w3f_l12x2", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, coarse_lam=float("inf"),
          rkl_level_scale={1: 2.0, 2: 2.0, 4: 0.3}, fast=True)
+# wave5-bench: RKL step scaled at L2 only (L1 within budget, L3/L4 at zero)
+_variant("ckernel_rkl4w3f_l2x2", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, coarse_lam=float("inf"),
+         rkl_level_scale={2: 2.0, 4: 0.3}, fast=True)
+_variant("ckernel_rkl4w3f_l2x3", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, coarse_lam=float("inf"),
+         rkl_level_scale={2: 3.0, 4: 0.3}, fast=True)
 _variant("ckernel_inf", ml_wlam=20.0, kernel_lam=float("inf"))

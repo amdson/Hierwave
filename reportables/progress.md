@@ -23,6 +23,11 @@ Next: what you would try next.
 ## 2026-10-14 · regress (full test suite) · finished
 Ran tests/ in pieces (CPU 64-71): ~570 passed, 1 persistent failure (variants/test_exactopt.py::test_full_history_table_reaches_target, kl 0.047 vs <0.01), 2 errors (legacy/test_exchain.py, missing cache/exemplar-cliffs npy), 2 transient XLA compile aborts that passed on rerun. No code changed. Report: reportables/2026-10-14_regress/report.md
 
+## 2026-10-14 12:30 · wave5-bench (ckernel_rkl4w3f + L2-only RKL scale; UPPER-BOUND arm, change request #1) · finished
+Approach: (#18) RKL step at L2 scaled x2 / x3 (L4 0.3), 300 s arms back to back; chose l2x2 (L2 1.5e-4 vs 5.5e-4, line_match 0.63, L3 starved 13 %); 4-seed bench.
+Result: [report](2026-10-14_wave5_bench/report.md). Bench ckernel_rkl4w3f_l2x2 300 s x 4: NOT accepted, 1/4 pass (seed 1). Seeds 0-1 (1344/920 updates) have L2 at 2 violations each (within budget); seed 0 fails at L3 by 1. Seeds 2-3 got 344/288 updates (GPU contention) and fail L2/L3, line_match 0.57, across-seed check fails. Pooled L2 2.3e-4 [1.3,3.8]e-4 (s=1: 2.9e-4), L3 now 3/16384 (s=1: 0), L1 1.5e-4. Mean F -0.061.
+Next: uncontended re-bench; L2 scale ~1.5 to keep L3 at zero.
+
 ## 2026-10-14 11:50 · wave5-bench (ckernel_rkl4w3f + L2-only RKL scale; UPPER-BOUND arm, change request #1) · started
 Approach: (#18) RKL step at L2 scaled x2 and x3 (L1, L3 unchanged; L4 0.3), 300 s arms back to back, select by pooled L2 with line_match >= 0.60 and L3 starvation <= 17 %, 4-seed bench.
 Result: pending, [report](2026-10-14_wave5_bench/report.md).

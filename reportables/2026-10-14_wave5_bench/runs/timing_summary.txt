@@ -1,0 +1,2 @@
+runs/arm_l2x2: setup 116.5 s | iters 99 in 183.8 s = 1.857 s/iter | ctx 0.079 (wait 0.002) refine 0.224 diag 0.159 ML 0.170 RKL 1.238 | ML upd 792 RKL upd 3168 | ML upd/s 4.31 RKL upd/s 17.23
+runs/arm_l2x3: setup 120.7 s | iters 83 in 179.0 s = 2.157 s/iter | ctx 0.088 (wait 0.002) refine 0.254 diag 0.128 ML 0.216 RKL 1.492 | ML upd 664 RKL upd 2656 | ML upd/s 3.71 RKL upd/s 14.84

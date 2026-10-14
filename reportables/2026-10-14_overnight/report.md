@@ -6,7 +6,7 @@ Goals: (1) ground's coarse levels trained by the kernel route; (2) own-draw line
 
 ## What the night established (read this first)
 
-**Headline.** Inside the frozen constitution, with the sampler's own draws as the only training contexts, ground's own draws left the all-dirt state for the first time: `ckpop_hard_rkl` (persistent chain populations + colour-Gibbs sweeps + hard final sweeps + reverse-KL on levels 0-3) reaches own-draw line_match 0.60-0.65 with the dirt per row tracking the fill, free energy about -0.09 per cell against cfast's 0.774, and probe starvation at the fine levels of 0-10 % against cfast's 76-100 %. It does NOT pass the bench: L2 violations sit at a pooled 3.5e-4 against the 2e-4 budget (0 of 4 seeds), and the coarse levels are still 18-38 % starved. The labelled upper-bound arm (probe-lift contexts, outside the frozen rules) gets to 1 of 4 seeds with only L2 failing (pooled 2.9e-4) and mean F -0.11.
+**Headline.** Inside the frozen constitution, with the sampler's own draws as the only training contexts, ground's own draws left the all-dirt state for the first time: `ckpop_hard_rkl` (persistent chain populations + colour-Gibbs sweeps + hard final sweeps + reverse-KL on levels 0-3) reaches own-draw line_match 0.60-0.65 with the dirt per row tracking the fill, free energy about -0.09 per cell against cfast's 0.774, and probe starvation at the fine levels of 0-10 % against cfast's 76-100 %. It does NOT pass the bench: L2 violations sit at a pooled 3.5e-4 against the 2e-4 budget (0 of 4 seeds), and the coarse levels are still 18-38 % starved. The labelled upper-bound arm (probe-lift contexts, outside the frozen rules) gets to 1 of 4 seeds with only L2 failing (pooled 2.9e-4, mean F -0.11); a stronger L2 step (wave5_bench) brings L2 inside the budget on well-trained seeds but pushes single violations up to L3, and two of its seeds were training-starved by GPU contention.
 
 **The mechanism, now measured end to end.**
 - Fine levels fit fast and well by maximum likelihood on exact-Gibbs-refined states (kernel_a, sweep2a): clamped completions follow the hill instead of terraces, and the fine conditional's equilibrium energy is 0.13 per cell, not the probe's 0.014.
@@ -27,6 +27,9 @@ Goals: (1) ground's coarse levels trained by the kernel route; (2) own-draw line
 ## Wave log (newest first)
 
 (waves are appended here as they finish)
+
+### Wave 7 (last): wave5-bench, L2-only reverse-KL scale on the upper-bound arm (not accepted, 1 of 4)
+- Scale 2 at L2 (`ckernel_rkl4w3f_l2x2`): on the two well-trained seeds (920-1344 updates) L2 is fixed (2 violations each, 3 allowed) and one of them passes everything (seed 1: F -0.117, line_match 0.645); the other fails L3 by a single violation. Seeds 2-3 got only 288-344 updates (GPU loaded by wave6-pop's bench during their training) and fail L2, L3 and line_match, so the row is partly training-starved. Pooled L2 2.3e-4 [1.3, 3.8]e-4 (from 2.9e-4); L3 1.8e-4 (3 events, 0 in both earlier 4-seed benches; consistent with the stronger L2 step pushing violations up a level). Scale 3 is worse. Next: re-run on a quiet GPU and a scale around 1.5.
 
 ### Wave 6: wave6-pop, own-draws-only arm, 4-seed pass rate (not accepted)
 - `ckpop_hard_rkl`, 4 seeds, warm (setup 1-3 s, 700-900 ML + 2800-3600 RKL updates per seed): 0 of 4 accepted. Pooled final rates: L0 5.5e-5 and L1 1.1e-4 under budget; L2 3.5e-4 [2.2e-4, 5.3e-4] over, the binding level (each seed needs about half its L2 violations); L3 1.8e-4 and L4 0 straddle. Closest seed is over by one L2 instance. Mean F -0.090 (cfast 0.774), line_match 0.60-0.63, rho .33-.39 / .73-.82 / .57-.73 / .25-.57 / <0, L3/L4 starvation 18-38 %. Also fails across-seed roughness (one seed) and the old probe flag.

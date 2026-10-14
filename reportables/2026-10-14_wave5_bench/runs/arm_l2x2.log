@@ -1,0 +1,3 @@
+cache dir /workspace/jax_cache
+train done 301.7 updates 792 rkl 3168 {'setup': 116.54509973526001, 'total': 301.6502888202667, 'iters': 99}
+saved
