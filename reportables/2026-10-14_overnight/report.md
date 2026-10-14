@@ -8,6 +8,11 @@ Goals: (1) ground's coarse levels trained by the kernel route; (2) own-draw line
 
 (waves are appended here as they finish)
 
+### Wave 4: wave4-pop, violation pressure on the own-draws-only arm (not accepted yet)
+- Hard final colour-Gibbs sweeps (lambda = inf) keep the chain population 100 % valid and own-draw line_match at 0.636, but own-draw violations stay at 2.8e-4..1.1e-3 per level: plain ML still leaks. Adding cfast's reverse-KL on levels 0-3 (lr 1e-3) cuts violations 2-5x at a cost of about 0.025 line_match.
+- Bench `ckpop_hard_rkl` (own draws only, inside the frozen rules), 2 seeds, 300 s: NOT accepted. Seed 0 lost 171 s to compiling despite the warm-up and ends with 5.9e-3 at L4; seed 1 (52 s setup, 608 ML + 2433 RKL updates) fails only at L2 (7.9e-4) with F -0.091, line_match 0.62. Mean F -0.047 vs cfast 0.774. L3-4 probe starvation 21-33 % (rho <= 0.31 there): L4 has no violation pressure and the coarse levels are still partly starved.
+- Wave 5 launched (wave5-pop, fresh agent): fix the compile budget (single batch shape, warm-up with the bench's exact shapes), add scaled L4 reverse-KL pressure, bench 2 seeds.
+
 ### Wave 3: wave3-explore, own draws leave the dirt state INSIDE the frozen rules (main result so far)
 - `ckernel_pop` (castlegen/variants/ckernel_own.py): persistent chain populations (3 % refreshed from fresh own draws each iteration) plus 20 colour-Gibbs sweeps per iteration, kernels applied to own draws only, no probe contexts anywhere in training. One seed, 300 s: own-draw line_match 0.507 -> 0.645, dirt 0.851 -> 0.508, own-draw dirt per L4 row 0.00 / 0.12 / 0.91 / 1.00 against the fill's 0.00 / 0.12 / 0.88 / 1.00. Clamp gap closed at L3 and L4 (fill / own: -0.112 / -0.111 and -0.138 / -0.144), slightly better than the probe-context arm.
 - Both ingredients matter: persistence alone 0.545, sweeps alone 0.574, together 0.645. The win is accumulation of the 1-2.5 % accepted dirt->partial moves over a persistent population, not any single big move.
