@@ -17,6 +17,11 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 07:22 · kernel-a (Sweep 1 (a)) · finished
+Approach: generic exact block-Gibbs kernel (castlegen/kernels/exact_block.py; level-1 cell + 4 children, 480 joint values on ground; level-2 cell alone) verified on the toys (tests/kernels/test_exact_block.py, 9 pass); ML fit (kernel-c's logq.py) of ground's levels 0-2, LN+SiLU 6x6, on 320 states from 2 exact-Gibbs cycles of probe lifts (75 %) and cstart2 own draws (25 %), 300 s.
+Result: [report](2026-10-14_kernel_a/report.md). L=3 clamp gate: fill cost -0.107 (cstart2 LN6 -0.004), soft 0.128 (0.194), own 0.46 (1.12), L=4 fill 0.71 (1.16); line_match under clamp 0.770 (0.59; probe 0.876). Parent awareness rho2/rho1/t 0.037/0.028/0.013 (cstart2 0.028/0.016/0.015; probes 0.079/0.037/0.016). Warm start from cstart2 ends at the same point. One seed, GPU shared.
+Next: Sweep 2 loop with refreshed, longer chains and own draws; joint (2, d) blocks; then train levels 3-4 and bench.
+
 ## 2026-10-14 06:35 · kernel_b (Sweep 1 b) · started
 Approach: generic block-MH kernel with q as proposal (subtree of a level-L cell redrawn by the pass conditioned on the outside; MH / multiple-try ratio; whole-logit tau), castlegen/kernels/block_mh.py; exact invariance on toy_modes / toy_support; per-level acceptance on ground (decision_2026-10-14_kernel_route.md, Sweep 1 b).
 Result: pending.

@@ -213,3 +213,5 @@ Keep the shared-weight actor soft until it has learned context-dependent structu
 ## 18. Kernel route (amortised MCMC, weighted ML) (from chat, 2026-10-14)
 
 > **Annotation (2026-10-14, kernel-c):** log q of a given state by teacher forcing (castlegen/kernels/logq.py) matches generation-time log q to 1e-5, and weighted ML on exact toy samples reaches the reverse-KL free energy and mode masses with no entropy collapse (H/cell at H(p*)). Report: reportables/2026-10-14_kernel_c/.
+
+> **Annotation (2026-10-14, kernel-a):** exact block-Gibbs refined contexts + ML fit of ground's fine levels (LN+SiLU 6x6, 300 s) leave reverse KL's terrace plateau: clamped line_match 0.77 (cstart2 0.59, probe 0.88), L=3 fill soft 0.128 (0.194), own 0.46 (1.12); rho2/rho1 change 0.037/0.028 (probes 0.079/0.037). Kernel: castlegen/kernels/exact_block.py. Report: reportables/2026-10-14_kernel_a/report.md.

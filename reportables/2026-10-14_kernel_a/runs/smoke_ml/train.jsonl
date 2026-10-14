@@ -1,0 +1,4 @@
+{"t": 6.973645210266113, "update": 50, "loss_per_cell": 0.45245376229286194, "n_feasible": 8, "n_infeasible": 0}
+{"t": 13.3912992477417, "update": 100, "loss_per_cell": 0.37146133184432983, "n_feasible": 8, "n_infeasible": 0}
+{"t": 22.276444911956787, "update": 150, "loss_per_cell": 0.33958059549331665, "n_feasible": 8, "n_infeasible": 0}
+{"t": 29.417913675308228, "update": 200, "loss_per_cell": 0.31921637058258057, "n_feasible": 8, "n_infeasible": 0}
