@@ -17,6 +17,15 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 03:20 · v2board · finished
+Approach: bench v2 block check at 300 s, 2 seeds, for cbig256 (toy_modes, toy_support), cfast (ground, toy_modes), creplay (ground); other v2 300 s rows reused. Gate proposal.
+Result: toy_modes cbig256/cfast gap +0.002/+0.011-0.014, rho L0 0.86-0.87 (ideal 0.87), starved 0-0.3 %. toy_support cbig256 starved 0-1.5 %, cfast/chot 5-9 % (F gap +0.02). Ground cfast/creplay/cstart: probe blocks 100 % starved at L2-L4 (L1 53-100 %), rho_probe L0 0.78 even when collapsed. Proposed gate: starved <= max(3 %, null+2pp) at every level (subtree weight) plus rho_probe thresholds; separates all passing from failing rows. [Report](2026-10-14_v2board/report.md).
+Next: calibrate toy_support / ground ideal rho; range-overlap rule for ground starvation; resolve dimers (43 % starved, unclear).
+
+
+## 2026-10-14 03:09 · cstart2 · started
+Approach: ideas #14 isolated. cstart with f = 1.0, L = 3 fixed (levels 0-2 train only in probe-lifted fill contexts), 300 s one seed each: tanh MLP, LN+SiLU, LN+SiLU 6x6, tanh + count residuals. Gate: fill cost at L = 3/4 vs probe 0.014, draw-change fraction, images, end-of-training per-level gradient SNR.
+
 ## 2026-10-14 03:06 · cstart · finished
 Approach: ideas #14. cstart on cfast: per batch 4 of 8 worlds clamped (levels >= L taken from a probe lift, problem.probes, jitter uniform), L uniform on 1..4; clamped draws masked from actor, critic and returns; full-depth worlds = cfast. tests/variants/test_cstart.py 11 passed (frac 0 bit-identical to cfast's update; clamped world = clamped_pass; params at levels >= L untouched); cone/gradient tests 17 passed.
 Result: gate not moved at the default mixture. Clamp gate fill vs own per fine cell, 300 s: cstart 2.04 vs 1.19 (L4), 2.05 vs 0.65 (L3); cfast 1.99 vs 1.12, 2.13 vs 0.66. 120 s concurrent pair: cstart 2.24 vs 2.31, 2.07 vs 1.81 (gap closed only because own stayed high); cstart_off 1.99 vs 0.77, 2.43 vs 0.48. Collapse delayed (dirt 0.74 at update 200 vs 0.97) but still by ~450. Diagnostic arm cstart_f9L4 (90 % clamped at L=4, 5007 updates): fill 1.16 (L4), 1.25 (L3), own 0.90/0.71; fine levels draw block staircases with teeth, clamped line_match 0.55/0.62 (= untrained). Bench v2 300 s x2 (shared GPU, 2907/5421 updates): not accepted, worst final viol 7.8e-3 (seed 0), F 1.63, line_match 0.50, dirt 0.95-0.99, starvation 1.0 at levels 2-4. Dimers: identical to cfast by construction (T=0, test). Report content handed to the orchestrator (report.md write was blocked for this agent); figures and runs in reportables/2026-10-14_cstart/.

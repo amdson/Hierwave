@@ -1,0 +1,30 @@
+| problem | variant | seed | max starved% (sub) | worst level | max own null % | min rho_probe (levels w/ rho) | min rho_probe L0 | gate A starv<=max(3,null+2) | gate B rho_probe>=0.4 all levels | A and B |
+|---|---|---|---|---|---|---|---|---|---|---|
+| columns | ccur (b300) | 0 | 100.0 | L4 | 0.0 | 0.03 | 0.05 | FAIL | FAIL | FAIL |
+| columns | ccur (b300) | 1 | 100.0 | L4 | 0.0 | 0.09 | 0.09 | FAIL | FAIL | FAIL |
+| columns | cfast (b300_ccurpair) | 0 | 100.0 | L4 | 0.2 | -0.04 | 0.03 | FAIL | FAIL | FAIL |
+| columns | cfast (b300_ccurpair) | 1 | 100.0 | L4 | 0.0 | 0.07 | 0.11 | FAIL | FAIL | FAIL |
+| columns | cfast (cc3_r3) | 0 | 100.0 | L4 | 0.0 | -0.05 | 0.23 | FAIL | FAIL | FAIL |
+| columns | cfast (cc3_r3) | 1 | 100.0 | L4 | 0.3 | -0.04 | -0.04 | FAIL | FAIL | FAIL |
+| dimers | cfast (b300) | 0 | 43.4 | L0 | 0.1 | n/a | n/a | FAIL | n/a | FAIL |
+| dimers | cfast (b300) | 1 | 44.4 | L0 | 0.0 | n/a | n/a | FAIL | n/a | FAIL |
+| ground | cfast (v2board) | 0 | 100.0 | L4 | 0.0 | 0.24 | 0.78 | FAIL | FAIL | FAIL |
+| ground | cfast (v2board) | 1 | 100.0 | L4 | 6.5 | 0.16 | 0.78 | FAIL | FAIL | FAIL |
+| ground | creplay (v2board) | 0 | 100.0 | L4 | 0.8 | 0.28 | 0.77 | FAIL | FAIL | FAIL |
+| ground | creplay (v2board) | 1 | 100.0 | L4 | 1.7 | 0.24 | 0.78 | FAIL | FAIL | FAIL |
+| ground | cstart (cstart) | 0 | 100.0 | L4 | 0.5 | 0.32 | 0.78 | FAIL | FAIL | FAIL |
+| ground | cstart (cstart) | 1 | 100.0 | L4 | 1.2 | 0.01 | 0.78 | FAIL | FAIL | FAIL |
+| toy_modes | cbig256 (b300) | 0 | 0.0 | L2 | 0.0 | 0.87 | 0.87 | pass | pass | pass |
+| toy_modes | cbig256 (b300) | 1 | 0.0 | L2 | 0.0 | 0.88 | 0.88 | pass | pass | pass |
+| toy_modes | cbig256 (v2board) | 0 | 0.0 | L2 | 0.0 | 0.87 | 0.87 | pass | pass | pass |
+| toy_modes | cbig256 (v2board) | 1 | 0.0 | L2 | 0.0 | 0.88 | 0.88 | pass | pass | pass |
+| toy_modes | cfast (v2board) | 0 | 0.0 | L0 | 0.0 | 0.87 | 0.87 | pass | pass | pass |
+| toy_modes | cfast (v2board) | 1 | 0.3 | L1 | 0.0 | 0.87 | 0.87 | pass | pass | pass |
+| toy_support | cbig256 (b300) | 0 | 0.2 | L1 | 0.0 | 0.57 | 0.71 | pass | pass | pass |
+| toy_support | cbig256 (b300) | 1 | 0.3 | L2 | 0.2 | 0.44 | 0.71 | pass | pass | pass |
+| toy_support | cbig256 (v2board) | 0 | 0.0 | L2 | 0.1 | 0.52 | 0.71 | pass | pass | pass |
+| toy_support | cbig256 (v2board) | 1 | 1.5 | L1 | 0.2 | 0.56 | 0.71 | pass | pass | pass |
+| toy_support | cfast (chot_gate3) | 0 | 5.4 | L2 | 0.0 | 0.61 | 0.72 | FAIL | pass | FAIL |
+| toy_support | cfast (chot_gate3) | 1 | 7.5 | L1 | 0.2 | 0.68 | 0.71 | FAIL | pass | FAIL |
+| toy_support | chot (chot_gate3) | 0 | 8.6 | L1 | 0.1 | 0.68 | 0.72 | FAIL | pass | FAIL |
+| toy_support | chot (chot_gate3) | 1 | 8.2 | L1 | 0.1 | 0.70 | 0.71 | FAIL | pass | FAIL |
