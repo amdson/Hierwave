@@ -1,0 +1,1 @@
+[{"tag": "greedy", "update": null, "t": null, "ent_per_cell": null, "raw": [0.3637, 0.318, 0.3183], "final": [0.3637, 0.318, 0.3183]}, {"tag": "cfast_lr0", "update": null, "t": null, "ent_per_cell": 0.780972845852375, "raw": [0.3637, 0.318, 0.3183], "final": [0.3607, 0.3214, 0.318]}]

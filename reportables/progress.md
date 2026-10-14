@@ -17,6 +17,21 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 01:20 · creplay2 · started
+Approach: make creplay cheap enough to compare with cfast at equal wall clock (engineering only): profile one update, cut replay count/cost, fix the compile-cache miss, then GPU bench vs cfast (ground, toy_support) and an equal-update (300) comparison on ground.
+Result: -
+Next: -
+
+## 2026-10-14 probes · finished
+Approach: scored 512 toy_modes probes with a retrained cbig256 (60 s) against exact log p; tracked dimers orientation fractions untrained and through cfast training.
+Result: toy_modes: 0/512 probes unreachable, no scoring bug; flag is a genuine, very powerful world-level test (shift 4.06 nats = KL(q||p)+KL(p||q) at F gap 0.0035/cell; flag needs gap under ~0.0005/cell) plus a 16-vs-16 sample-size weakness (exchangeable draws flag 53%). dimers: diagonal is present untrained (0.318), lost within ~20 updates in step with entropy collapse (0.78 to 0.21 nats/cell); not structural.
+Next: relabelled-diagonal test to see if the loser follows geometry or label.
+
+## 2026-10-14 probes · started
+Approach: diagnose toy_modes probe flags (reachability/target mass/scoring) and dimers missing diagonal orientation (untrained vs trained).
+Result: pending.
+Next: see reportables/2026-10-14_probes/report.md.
+
 
 ## 2026-10-14 csat · started
 Approach: test whether the fine-level learned bias saturates early (deterministic rho draws, never visiting fill contexts) on ground: per-level entropy / forced fraction / |b| logged over training for cfast, then two engineering levers (lr, tau schedule, clipping; allowed freedoms) with the clamp gate from cresid.
