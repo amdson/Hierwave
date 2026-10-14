@@ -1,0 +1,72 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0 -- /venv/main/bin/python
+cachedir: .pytest_cache
+rootdir: /workspace/hierwave_git
+configfile: pyproject.toml
+plugins: anyio-4.15.1
+collecting ... collected 27 items
+
+tests/variants/test_cstart.py::test_full_depth_pass_is_cfast[toy_support] PASSED [  3%]
+tests/variants/test_cstart.py::test_full_depth_pass_is_cfast[ground] PASSED [  7%]
+tests/variants/test_cstart.py::test_off_update_is_cfast[toy_support] PASSED [ 11%]
+tests/variants/test_cstart.py::test_off_update_is_cfast[ground] PASSED   [ 14%]
+tests/variants/test_cstart.py::test_clamped_world_matches_clamped_pass[1] PASSED [ 18%]
+tests/variants/test_cstart.py::test_clamped_world_matches_clamped_pass[2] PASSED [ 22%]
+tests/variants/test_cstart.py::test_clamped_world_matches_clamped_pass[3] PASSED [ 25%]
+tests/variants/test_cstart.py::test_clamped_world_matches_clamped_pass[4] PASSED [ 29%]
+tests/variants/test_cstart.py::test_loss_only_below_L[1] PASSED          [ 33%]
+tests/variants/test_cstart.py::test_loss_only_below_L[3] PASSED          [ 37%]
+tests/variants/test_cstart.py::test_no_hierarchy_no_clamp PASSED         [ 40%]
+tests/variants/test_ctemp.py::test_pass_matches_cpass_at_tau1 PASSED     [ 44%]
+tests/variants/test_ctemp.py::test_tau_schedules_end_at_one PASSED       [ 48%]
+tests/variants/test_ctemp.py::test_tau_cond_generates_and_scores PASSED  [ 51%]
+tests/variants/test_ctrunc.py::test_box_and_down PASSED                  [ 55%]
+tests/variants/test_ctrunc.py::test_chain_matches_generator_and_totals PASSED [ 59%]
+tests/variants/test_ctrunc.py::test_full_depth_downstream_is_realised PASSED [ 62%]
+tests/variants/test_ctrunc.py::test_returns_local_and_later_only PASSED  [ 66%]
+tests/variants/test_exactopt.py::test_logq_matches_forced_pass PASSED    [ 70%]
+tests/variants/test_exactopt.py::test_normalised[mlp] PASSED             [ 74%]
+tests/variants/test_exactopt.py::test_normalised[table_feat] PASSED      [ 77%]
+tests/variants/test_exactopt.py::test_normalised[table_hist] PASSED      [ 81%]
+tests/variants/test_exactopt.py::test_gradient_finite_difference PASSED  [ 85%]
+tests/variants/test_exactopt.py::test_full_history_table_reaches_target FAILED [ 88%]
+tests/test_bitgibbs.py::test_sample_matches_exact_distribution PASSED    [ 92%]
+tests/test_bitgibbs.py::test_no_legal_tile_returns_minus_one PASSED      [ 96%]
+tests/test_bitgibbs.py::test_pair_tables_orientation PASSED              [100%]
+
+=================================== FAILURES ===================================
+____________________ test_full_history_table_reaches_target ____________________
+
+setup = (Problem(name='gradcheck_tiny', T=1, H=2, chans=[Chan(name='c', level=1, D=2, views={'id': array([0, 1])}, designed=No....42261302,  0.2041306 ,  0.00134012,
+        0.31385484,  0.38053793, -0.24475026,  0.1479468 ], dtype=float32), ...}})
+
+    def test_full_history_table_reaches_target(setup):
+        """With one free logit vector per full history the order can express any
+        distribution on the reachable set: exact training drives KL to ~0."""
+        problem, var, enum, params = setup
+        p = enum.init_params("table_hist")
+        _, curve = eo.train_exact(enum, "table_hist", p, 2000, 1e-1, enum.lam, 2000, None, tau0=1.0, log=lambda s: None)
+>       assert curve[0]["kl"] > 0.1 and curve[-1]["kl"] < 0.01, (curve[0]["kl"], curve[-1]["kl"])
+E       AssertionError: (3.4965625424907465, 0.047006224127150276)
+E       assert (3.4965625424907465 > 0.1 and 0.047006224127150276 < 0.01)
+
+tests/variants/test_exactopt.py:64: AssertionError
+============================= slowest 15 durations =============================
+69.22s setup    tests/variants/test_exactopt.py::test_logq_matches_forced_pass
+52.05s call     tests/variants/test_cstart.py::test_full_depth_pass_is_cfast[ground]
+31.97s call     tests/variants/test_cstart.py::test_full_depth_pass_is_cfast[toy_support]
+23.19s call     tests/variants/test_cstart.py::test_off_update_is_cfast[ground]
+21.19s call     tests/variants/test_exactopt.py::test_full_history_table_reaches_target
+11.27s call     tests/variants/test_cstart.py::test_loss_only_below_L[1]
+10.73s call     tests/variants/test_ctrunc.py::test_chain_matches_generator_and_totals
+9.39s call     tests/variants/test_ctemp.py::test_pass_matches_cpass_at_tau1
+7.72s call     tests/variants/test_cstart.py::test_clamped_world_matches_clamped_pass[2]
+7.46s call     tests/variants/test_cstart.py::test_clamped_world_matches_clamped_pass[1]
+7.11s call     tests/variants/test_cstart.py::test_clamped_world_matches_clamped_pass[4]
+7.10s call     tests/variants/test_cstart.py::test_clamped_world_matches_clamped_pass[3]
+5.49s call     tests/variants/test_cstart.py::test_off_update_is_cfast[toy_support]
+3.54s call     tests/variants/test_ctrunc.py::test_full_depth_downstream_is_realised
+3.25s call     tests/test_bitgibbs.py::test_sample_matches_exact_distribution
+=========================== short test summary info ============================
+FAILED tests/variants/test_exactopt.py::test_full_history_table_reaches_target
+=================== 1 failed, 26 passed in 287.04s (0:04:47) ===================

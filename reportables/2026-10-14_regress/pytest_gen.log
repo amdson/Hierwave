@@ -1,0 +1,16 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0 -- /venv/main/bin/python
+cachedir: .pytest_cache
+rootdir: /workspace/hierwave_git
+configfile: pyproject.toml
+plugins: anyio-4.15.1
+collecting ... collected 6 items
+
+tests/variants/test_gen_speed.py::test_generation_equal[toy_support-16-True-0] PASSED [ 16%]
+tests/variants/test_gen_speed.py::test_generation_equal[toy_support-24-False-8] PASSED [ 33%]
+tests/variants/test_gen_speed.py::test_generation_equal[toy_modes-16-True-0] PASSED [ 50%]
+tests/variants/test_gen_speed.py::test_generation_equal[dimers-16-True-0] PASSED [ 66%]
+tests/variants/test_gen_speed.py::test_generation_equal[ground-64-True-0] PASSED [ 83%]
+tests/variants/test_gen_speed.py::test_generation_equal[ground-48-False-16] PASSED [100%]
+
+======================== 6 passed in 321.93s (0:05:21) =========================

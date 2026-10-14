@@ -20,6 +20,13 @@ free energy), or why it stopped.
 Next: what you would try next.
 ```
 
+## 2026-10-14 · regress (full test suite) · finished
+Ran tests/ in pieces (CPU 64-71): ~570 passed, 1 persistent failure (variants/test_exactopt.py::test_full_history_table_reaches_target, kl 0.047 vs <0.01), 2 errors (legacy/test_exchain.py, missing cache/exemplar-cliffs npy), 2 transient XLA compile aborts that passed on rerun. No code changed. Report: reportables/2026-10-14_regress/report.md
+
+## 2026-10-14 11:50 · wave5-bench (ckernel_rkl4w3f + L2-only RKL scale; UPPER-BOUND arm, change request #1) · started
+Approach: (#18) RKL step at L2 scaled x2 and x3 (L1, L3 unchanged; L4 0.3), 300 s arms back to back, select by pooled L2 with line_match >= 0.60 and L3 starvation <= 17 %, 4-seed bench.
+Result: pending, [report](2026-10-14_wave5_bench/report.md).
+
 ## 2026-10-14 11:45 · wave4-bench (ckernel_rkl4w3 throughput + L1-L2 pressure; UPPER-BOUND arm, change request #1) · finished
 Approach: (#18) fused RKL scan (32 steps, lambda control on device) + fused ML multi-update + host-prep thread in ckernel.py (cfg fast; equivalence: RKL params within 1.3e-5, ML bit-identical; tests/kernels 73 pass); arms rkl4w3f vs + L1/L2 RKL step x2; bench of rkl4w3f.
 Result: [report](2026-10-14_wave4_bench/report.md). No net throughput gain under GPU contention (RKL is 65-75 % of an iteration and GPU-latency bound; bench ML updates 832-1256 vs 816-1248). x2 L1-L2 arm: pooled L1-L2 2.9e-4 vs 3.1e-4, line_match 0.57, L3 starved 21 % (rejected). Bench ckernel_rkl4w3f 300 s x 4: NOT accepted, 1/4 seeds pass (seed 2); L2 fails on 3 seeds (5-7 of 16384); pooled L1 1.2e-4 [0.8,1.7], L2 2.9e-4 [1.75,4.5], L3/L4 0; F -0.109, line_match 0.60-0.67, L3 starvation 13.5-16.4 %.

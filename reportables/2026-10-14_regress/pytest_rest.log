@@ -1,0 +1,44 @@
+.s.......xxxxx.........................................................E [ 34%]
+E..............x........................................................ [ 68%]
+.................................xxx........................x......      [100%]
+==================================== ERRORS ====================================
+_________ ERROR at setup of test_incremental_energy_matches_recompute __________
+
+    @pytest.fixture(scope="module")
+    def setup():
+        ts = tileset.load("cliffs")
+>       E = np.load(sorted(glob.glob("cache/exemplar-cliffs-*.npy"))[0])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests/legacy/test_exchain.py:14: IndexError
+__________________ ERROR at setup of test_chain_keeps_support __________________
+
+    @pytest.fixture(scope="module")
+    def setup():
+        ts = tileset.load("cliffs")
+>       E = np.load(sorted(glob.glob("cache/exemplar-cliffs-*.npy"))[0])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests/legacy/test_exchain.py:14: IndexError
+============================= slowest 15 durations =============================
+179.90s call     tests/legacy/test_generic.py::test_mh_batch_keeps_pibar_invariant
+115.25s call     tests/kernels/test_speed_coarse.py::test_compact_equals_reference[toy_support-2]
+114.22s call     tests/kernels/test_speed_coarse.py::test_compact_equals_reference[toy_modes-1]
+114.21s call     tests/legacy/test_generic.py::test_mh_keeps_pibar_invariant
+60.90s setup    tests/legacy/test_promise.py::test_end_to_end
+54.40s call     tests/legacy/test_refsampler.py::test_matches_exact_enumeration
+30.37s call     tests/kernels/test_speed_ml.py::test_score_levels_gradients
+29.41s call     tests/legacy/test_flow.py::test_refine_matches_brute_force
+29.15s call     tests/legacy/test_refheights.py::test_conditioned_is_exact
+27.73s call     tests/legacy/test_refheights.py::test_heat_bath_is_exact[True]
+26.91s call     tests/legacy/test_hier.py::test_timing_against_legacy
+26.26s call     tests/legacy/test_flow.py::test_exemplar_keeps_the_flow_rule
+22.48s call     tests/legacy/test_promise.py::test_determinism
+20.12s call     tests/legacy/test_macroobj.py::test_sweeps_keep_footprints_disjoint_and_end_hard
+17.11s call     tests/legacy/test_objects.py::test_map_sweep_keeps_and_draws_objects
+=========================== short test summary info ============================
+ERROR tests/legacy/test_exchain.py::test_incremental_energy_matches_recompute
+ERROR tests/legacy/test_exchain.py::test_chain_keeps_support - IndexError: li...
+198 passed, 1 skipped, 10 xfailed, 2 errors in 1144.11s (0:19:04)
