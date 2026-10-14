@@ -1,0 +1,4 @@
+runs/thr_old: setup 90.4 s | iters 20 in 59.9 s = 2.993 s/iter | ctx 0.149 (wait 0.000) refine 0.374 diag 0.000 ML 0.441 RKL 2.096 | ML upd 160 RKL upd 641 | ML upd/s 2.67 RKL upd/s 10.71
+runs/thr_fast: setup 144.2 s | iters 2 in 4.5 s = 2.275 s/iter | ctx 0.641 (wait 0.090) refine 0.212 diag 0.119 ML 0.243 RKL 1.860 | ML upd 16 RKL upd 64 | ML upd/s 3.52 RKL upd/s 14.07
+runs/arm_f: setup 83.5 s | iters 63 in 217.3 s = 3.449 s/iter | ctx 0.137 (wait 0.003) refine 0.398 diag 0.122 ML 0.404 RKL 2.426 | ML upd 504 RKL upd 2016 | ML upd/s 2.32 RKL upd/s 9.28
+runs/arm_l12x2: setup 136.8 s | iters 40 in 161.7 s = 4.042 s/iter | ctx 0.184 (wait 0.006) refine 0.442 diag 0.129 ML 0.479 RKL 2.878 | ML upd 320 RKL upd 1280 | ML upd/s 1.98 RKL upd/s 7.92

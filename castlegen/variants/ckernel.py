@@ -53,7 +53,12 @@ CK = dict(net="ln", win=(-2, 3), init=S2A_INIT, nctx=32, own_frac=0.5, upi=8, ml
           diag_every=2,
           rkl_levels=None,    # levels whose parameters the RKL step may change (None: all); others are restored
           coarse_lam=None,
-          rkl_level_scale=None)  # {level: s}: that level's RKL parameter step is scaled by s (Adam: lr x s)    # lam of the coarse kernels (flips L3/L4, coarse Gibbs); None: kernel_lam; inf = infeasible
+          rkl_level_scale=None,  # {level: s}: that level's RKL parameter step is scaled by s (Adam: lr x s)    # lam of the coarse kernels (flips L3/L4, coarse Gibbs); None: kernel_lam; inf = infeasible
+          # wave4-bench throughput (same objective, same kernels): the rkl_n reverse-KL steps and the upi ML
+          # updates of an iteration each run as ONE jitted lax.scan (lambda control on device), and the host-side
+          # contexts (probe lifts, designed values of own draws and of the RKL seeds) are built one iteration
+          # ahead in a worker thread.  False = the original per-step Python loops.
+          fast=False)
 
 
 class CKernel(CFast):
@@ -182,6 +187,118 @@ class CKernel(CFast):
             out.append(hf)
         return np.mean(out, 0)
 
+    # ------------------------------------------------------------------ fast path (wave4-bench)
+    def _rkl_scan_build(self):
+        """jit: n of `_rkl_steps`' updates under one lax.scan.  Per step exactly the old body: cfast's fused
+        update (tau 1, own draws of that step's seeds, the step's lambda), the rkl_levels restore and the
+        rkl_level_scale step scaling, then cfast's lambda control from that step's raw violations (in
+        float32 on device instead of float64 on the host).  Same rkey for every step of a call, as the old
+        loop (it keys on self.updates, which does not change inside the loop)."""
+        cfg, fused = self.cfg, self.fn["fused"]
+        nhard = jnp.asarray(self.nhard, jnp.float32)
+        eps = jnp.asarray(self.eps, jnp.float32)
+        alpha, eta, lam_max = float(cfg["alpha"]), float(cfg["eta"]), float(cfg["lam_max"])
+        lv = lambda k: int(k[1:k.index("_")])
+        keep = None if cfg.get("rkl_levels") is None else set(int(l) for l in cfg["rkl_levels"])
+        sc = {int(l): float(x) for l, x in (cfg.get("rkl_level_scale") or {}).items()}
+
+        @jax.jit
+        def run(params, cparams, opt, copt, gs, seeds, des, lam, vbar, lr, lrc, clip, rkey):
+            def body(carry, x):
+                params, cparams, opt, copt, lam, vbar = carry
+                sd, d = x
+                res = fused(params, cparams, opt, copt, gs, sd, d, jnp.float32(1.0), lam, lr, lrc, clip, rkey)
+                p_old = params
+                _, params, cparams, opt, copt, loss, closs, viol, tot, _ = res
+                if keep is not None:
+                    params = {k: (v if lv(k) in keep else p_old[k]) for k, v in params.items()}
+                if sc:
+                    params = {k: (jax.tree_util.tree_map(lambda a, b, s=sc[lv(k)]: b + s * (a - b), v, p_old[k])
+                                  if lv(k) in sc else v) for k, v in params.items()}
+                hf = jnp.where(nhard > 0, viol / jnp.maximum(nhard, 1), 0.0)
+                vbar = (1 - alpha) * vbar + alpha * hf
+                step = eta * jnp.clip(vbar / eps - 1, -1, 1)
+                lam = jnp.where(nhard > 0, jnp.clip(lam + step, 0, lam_max), 0.0)
+                return (params, cparams, opt, copt, lam, vbar), hf
+            carry, hfs = jax.lax.scan(body, (params, cparams, opt, copt, lam, vbar), (seeds, des))
+            return carry, hfs
+        return run
+
+    def _rkl_steps_fast(self, n, seeds, des, warm=False):
+        """n reverse-KL steps in one call; seeds (n, B) int32, des {k: (n, B, ...)} (prefetched)."""
+        cfg = self.cfg
+        if not hasattr(self, "_rkl_scan"):
+            self._rkl_scan = self._rkl_scan_build()
+        carry, hfs = self._rkl_scan(self.params, self.cparams, self.opt, self.copt, self.gs, jnp.asarray(seeds, jnp.int32),
+                                    {k: jnp.asarray(v) for k, v in des.items()}, jnp.asarray(self.lam, jnp.float32),
+                                    jnp.asarray(self.vbar, jnp.float32), jnp.float32(cfg["rkl_lr"]),
+                                    jnp.float32(cfg["lr_critic"]), jnp.float32(cfg["clip"]),
+                                    jax.random.PRNGKey(self.updates + 7919 * self.seed + 1))
+        hfs = np.asarray(hfs)
+        if warm:                    # compile + one execution, results discarded
+            return hfs.mean(0)
+        self.params, self.cparams, self.opt, self.copt, lam, vbar = carry
+        self.lam, self.vbar = np.asarray(lam, float), np.asarray(vbar, float)
+        self.rkl_updates += n
+        return hfs.mean(0)
+
+    def _ml_multi_build(self):
+        """jit: the upi ML updates of an iteration under one lax.scan; update u is exactly
+        mlstep(params, opt, states[idx[u]], w[u], lr, on)."""
+        step = self.mlstep
+
+        @jax.jit
+        def multi(params, opt, states, idx, w, lr, on):
+            def body(carry, x):
+                p, o = carry
+                ix, wi = x
+                p, o, info = step(p, o, {k: v[ix] for k, v in states.items()}, wi, lr, on)
+                return (p, o), info
+            (params, opt), infos = jax.lax.scan(body, (params, opt), (idx, w))
+            return params, opt, infos
+        return multi
+
+    def _host_prep(self, ctx_seed, ks, n_own, rkl_seed0, n_rkl, B, region):
+        """Host numpy work of one iteration (run in the worker thread): probe lifts with jitter index ks[i]
+        and seeds ctx_seed + i, designed values of the own-draw seeds, designed values of the RKL seeds."""
+        p, out = self.problem, {}
+        n_prb = len(ks)
+        if n_prb:
+            xs = [{**p.probes(ctx_seed + i, region, n=int(k) + 1)[int(k)], **p.designed_values(ctx_seed + i, region)}
+                  for i, k in enumerate(ks)]
+            out["probe"] = {ch.name: np.stack([x[ch.name] for x in xs]).astype(np.int32) for ch in p.chans}
+        if n_own:
+            ss = np.arange(ctx_seed + n_prb, ctx_seed + n_prb + n_own)
+            ds = [p.designed_values(int(s), region) for s in ss]
+            out["own_seeds"] = ss.astype(np.int32)
+            out["own_des"] = {k: np.stack([d[k] for d in ds]).astype(np.int32) for k in ds[0]}
+        if n_rkl:
+            rs = np.arange(rkl_seed0, rkl_seed0 + n_rkl * B)
+            ds = [p.designed_values(int(s), region) for s in rs]
+            out["rkl_seeds"] = rs.reshape(n_rkl, B).astype(np.int32)
+            out["rkl_des"] = {k: np.stack([d[k] for d in ds]).astype(np.int32).reshape((n_rkl, B) + ds[0][k].shape)
+                              for k in ds[0]}
+        return out
+
+    def _submit_prep(self, pool, n_prb, n_own, region):
+        """Reserve the next iteration's seeds (main thread, same counters as the slow path) and submit."""
+        c = self.cfg
+        ks = [int(self.rng.integers(4)) for _ in range(n_prb)]
+        cs = self.ctx_seed; self.ctx_seed += n_prb + n_own
+        n_rkl = int(c["rkl_n"])
+        rs = self.train_seed; self.train_seed += n_rkl * c["B"]
+        return pool.submit(self._host_prep, cs, ks, n_own, rs, n_rkl, c["B"], region)
+
+    def _ctx_from_prep(self, h, n_prb, n_own):
+        p, parts = self.problem, []
+        if n_prb:
+            parts.append({k: jnp.asarray(v) for k, v in h["probe"].items()})
+        if n_own:
+            dj = {k: jnp.asarray(v) for k, v in h["own_des"].items()}
+            st = self.gen(self.params, jnp.asarray(h["own_seeds"]), dj)
+            parts.append({ch.name: jnp.asarray(st[ch.name] if ch.name in st else dj[ch.name], jnp.int32) for ch in p.chans})
+        return parts
+
     def refine(self, st, key):
         """One kernel cycle on a batch of states (dict).  Returns (states, diagnostics)."""
         c, d = self.cfg, {}
@@ -217,6 +334,8 @@ class CKernel(CFast):
 
     # ------------------------------------------------------------------ training
     def train(self, budget_s, log):
+        if self.cfg.get("fast"):
+            return self._train_fast(budget_s, log)
         from castlegen.kernels.logq import ml_opt_init
         t0 = time.time()
         c, p = self.cfg, self.problem
@@ -298,6 +417,109 @@ class CKernel(CFast):
             log(rec)
         self.timing = {"setup": t_setup, "total": time.time() - t0, "iters": it}
 
+    def _train_fast(self, budget_s, log):
+        """`train` with the fused RKL scan, the fused ML multi-update and the host-prep worker thread.
+        Same contexts (probe lifts / own draws, half each), same kernel cycle, same ML objective and
+        minibatch weights, same reverse-KL steps and lambda control, same diagnostics."""
+        from concurrent.futures import ThreadPoolExecutor
+        from castlegen.kernels.logq import ml_opt_init
+        t0 = time.time()
+        c, p = self.cfg, self.problem
+        region = Region(c["W_train"] or p.W_train)
+        cells = p.H * region.W
+        self._build(region)
+        t_build = time.time() - t0
+        self.ctx_seed = 20_000_000 + 1_000_000 * self.seed
+        opt = ml_opt_init(self.params)
+        on = jnp.asarray(c["level_on"] or [1.0] * (p.T + 1), jnp.float32)
+        n_own = int(round(c["nctx"] * c["own_frac"]))
+        n_prb = c["nctx"] - n_own
+        U, Bm = int(c["upi"]), int(c["ml_B"])
+        key = jax.random.PRNGKey(4242 + self.seed)
+        self.rkl_updates = 0
+        if c["rkl_n"] > 0:
+            self._rkl_setup(log)
+        pool = ThreadPoolExecutor(1)
+        try:
+            # warm compiles (same shapes as the loop; results discarded)
+            h = self._submit_prep(pool, n_prb, n_own, region).result()
+            parts = self._ctx_from_prep(h, n_prb, n_own)
+            st = {k: jnp.concatenate([q[k] for q in parts]) for k in parts[0]}
+            t_ctx = time.time() - t0
+            st2, _, v = self.refine(st, key)
+            self.E(v)
+            t_ref = time.time() - t0
+            self._ml_multi = self._ml_multi_build()
+            idx = np.tile(np.arange(Bm), (U, 1))
+            jax.block_until_ready(self._ml_multi(self.params, opt, st2, jnp.asarray(idx, jnp.int32),
+                                                 jnp.ones((U, Bm), jnp.float32), jnp.float32(c["ml_lr"]), on))
+            if c["rkl_n"] > 0:
+                self._rkl_steps_fast(c["rkl_n"], h["rkl_seeds"], h["rkl_des"], warm=True)
+            t_setup = time.time() - t0
+            log({"t": t_setup, "setup_done": True, "start": self.start, "t_build": t_build, "t_ctx": t_ctx,
+                 "t_refine_compiled": t_ref, "fast": True})
+            fut = self._submit_prep(pool, n_prb, n_own, region)
+            it = 0
+            while time.time() - t0 < budget_s:
+                it += 1
+                ti = time.time()
+                h = fut.result()
+                tw = time.time()
+                fut = self._submit_prep(pool, n_prb, n_own, region)      # next iteration's host work, overlapped
+                parts = self._ctx_from_prep(h, n_prb, n_own)
+                st = {k: jnp.concatenate([q[k] for q in parts]) for k in parts[0]}
+                v0 = self._to_flat(st)
+                s0, nv0, _ = self.E(v0)
+                rec = {"iter": it, "own_raw": self._ground_stats({k: x[n_prb:] for k, x in st.items()})}
+                key, sub = jax.random.split(key)
+                tr = time.time()
+                st, kd, v = self.refine(st, sub)
+                s1, nv1, _ = self.E(v)
+                s0, s1, nv0, nv1 = (np.asarray(x) / cells for x in (s0, s1, nv0, nv1))
+                rec.update(kd)
+                rec["own_refined"] = self._ground_stats({k: x[n_prb:] for k, x in st.items()})
+                rec["soft_own"], rec["soft_own_refined"] = float(s0[n_prb:].mean()), float(s1[n_prb:].mean())
+                if n_prb:
+                    rec["soft_probe"], rec["soft_probe_refined"] = float(s0[:n_prb].mean()), float(s1[:n_prb].mean())
+                rec["viol_own"], rec["viol_own_refined"] = float(nv0[n_prb:].mean()), float(nv1[n_prb:].mean())
+                td = time.time()
+                if c["diag_every"] and it % c["diag_every"] == 1 % c["diag_every"]:
+                    st0 = {k: jnp.concatenate([q[k] for q in parts]) for k in parts[0]}
+                    rec["lv_own_raw"] = self._level_viol(st0, n_prb, c["nctx"], region)
+                    rec["lv_own_refined"] = self._level_viol(st, n_prb, c["nctx"], region)
+                    if n_prb:
+                        rec["lv_probe_refined"] = self._level_viol(st, 0, n_prb, region)
+                nvw = np.asarray(nv1) * cells
+                tm = time.time()
+                idxs, ws, wl = [], [], []
+                for u in range(U):
+                    ix = self.rng.choice(c["nctx"], Bm, replace=False)
+                    vw = nvw[ix]
+                    w = np.exp(-c["ml_wlam"] * (vw - vw.min()))
+                    w = w / w.sum() * Bm
+                    wl.append(float((w ** 2).sum() and w.sum() ** 2 / (w ** 2).sum()))
+                    idxs.append(ix); ws.append(w)
+                self.params, opt, infos = self._ml_multi(self.params, opt, st, jnp.asarray(np.stack(idxs), jnp.int32),
+                                                         jnp.asarray(np.stack(ws), jnp.float32), jnp.float32(c["ml_lr"]), on)
+                infos = jax.device_get(infos)
+                self.updates += U
+                rec.update({"t": time.time() - t0, "update": self.updates,
+                            "loss_per_cell": float(np.mean(np.asarray(infos["loss"]) / cells)),
+                            "infeasible_draws_per_state": int(np.sum(infos["n_infeasible"])) / (U * Bm),
+                            "feasible_state_frac": int(np.sum(infos["n_feasible"])) / (U * Bm),
+                            "time_ctx": tr - ti, "time_ctx_wait": tw - ti, "time_refine": td - tr, "time_diag": tm - td,
+                            "time_ml": time.time() - tm,
+                            "ml_ess": float(np.mean(wl)), "refined_viol_states_frac": float((nvw > 0).mean())})
+                if c["rkl_n"] > 0:
+                    tk = time.time()
+                    rec["rkl_raw_viol"] = self._rkl_steps_fast(c["rkl_n"], h["rkl_seeds"], h["rkl_des"]).tolist()
+                    rec["lam"] = self.lam.tolist(); rec["rkl_updates"] = self.rkl_updates
+                    rec["time_rkl"] = time.time() - tk
+                log(rec)
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
+        self.timing = {"setup": t_setup, "total": time.time() - t0, "iters": it}
+
     def info(self):
         return {**super().info(), "start": self.start, "rkl_updates": getattr(self, "rkl_updates", 0)}
 
@@ -327,4 +549,9 @@ _variant("ckernel_rkl123", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, rkl_levels=[0,
 # wave3-bench: RKL on L0-3 at lr 1e-3 plus a weaker L4 RKL step (scale s = lr_L4 / 1e-3)
 _variant("ckernel_rkl4w1", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, coarse_lam=float("inf"), rkl_level_scale={4: 0.1})
 _variant("ckernel_rkl4w3", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, coarse_lam=float("inf"), rkl_level_scale={4: 0.3})
+# wave4-bench: the same arms on the fused / prefetched loop (fast=True), and L1-L2 reverse-KL pressure
+_variant("ckernel_rkl4w3f", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, coarse_lam=float("inf"), rkl_level_scale={4: 0.3},
+         fast=True)
+_variant("ckernel_rkl4w3f_l12x2", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, coarse_lam=float("inf"),
+         rkl_level_scale={1: 2.0, 2: 2.0, 4: 0.3}, fast=True)
 _variant("ckernel_inf", ml_wlam=20.0, kernel_lam=float("inf"))

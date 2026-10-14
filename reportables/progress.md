@@ -20,11 +20,21 @@ free energy), or why it stopped.
 Next: what you would try next.
 ```
 
+## 2026-10-14 11:45 · wave4-bench (ckernel_rkl4w3 throughput + L1-L2 pressure; UPPER-BOUND arm, change request #1) · finished
+Approach: (#18) fused RKL scan (32 steps, lambda control on device) + fused ML multi-update + host-prep thread in ckernel.py (cfg fast; equivalence: RKL params within 1.3e-5, ML bit-identical; tests/kernels 73 pass); arms rkl4w3f vs + L1/L2 RKL step x2; bench of rkl4w3f.
+Result: [report](2026-10-14_wave4_bench/report.md). No net throughput gain under GPU contention (RKL is 65-75 % of an iteration and GPU-latency bound; bench ML updates 832-1256 vs 816-1248). x2 L1-L2 arm: pooled L1-L2 2.9e-4 vs 3.1e-4, line_match 0.57, L3 starved 21 % (rejected). Bench ckernel_rkl4w3f 300 s x 4: NOT accepted, 1/4 seeds pass (seed 2); L2 fails on 3 seeds (5-7 of 16384); pooled L1 1.2e-4 [0.8,1.7], L2 2.9e-4 [1.75,4.5], L3/L4 0; F -0.109, line_match 0.60-0.67, L3 starvation 13.5-16.4 %.
+Next: L2-only RKL scale; fewer larger RKL batches (B 16 x 16 steps) for more updates.
+
 ## 2026-10-14 10:40 · wave4-bench (ckernel_rkl4w3 throughput + L1-L2 pressure; UPPER-BOUND arm, change request #1) · started
 Approach: fuse ckernel's 32 reverse-KL steps and 8 ML updates into scans, prefetch host contexts in a thread; then 1-2 arms with rkl_level_scale > 1 at L1-L2; 4-seed bench of the chosen arm.
 Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
+
+## 2026-10-14 11:18 · wave6-pop (ckpop: L1-L3 pressure, 4-seed bench) · started
+Approach: (#18; own draws only, inside the frozen constitution) rkl_level_scale 2 at L1-L3, with 20 or 40 colour-Gibbs sweeps; two 300 s arms back to back; 4-seed 300 s bench of the chosen arm via the warm wrapper.
+Result: pending, [report](2026-10-14_wave6_pop/report.md).
+Next: -
 
 ## 2026-10-14 11:20 · wave5-pop (ckpop_hard_rkl: compile budget, L4 pressure, bench) · finished
 Approach: (#18; own draws only, inside the frozen constitution) setup was Python re-tracing (340 compile requests, ~85 s quiet / 171 s contended; seed 1 re-traced because every instance built new jits): per-process memo of built kernels + all loop shapes warmed + persist sub-1 s compiles + a warm-up wrapper (scripts/bench_warm.py; harness untouched). L4 arms: reverse-KL on L0-4 with L4 step x0.3 / x0.1.
