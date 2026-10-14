@@ -8,6 +8,12 @@ Goals: (1) ground's coarse levels trained by the kernel route; (2) own-draw line
 
 (waves are appended here as they finish)
 
+### Wave 3: wave3-explore, own draws leave the dirt state INSIDE the frozen rules (main result so far)
+- `ckernel_pop` (castlegen/variants/ckernel_own.py): persistent chain populations (3 % refreshed from fresh own draws each iteration) plus 20 colour-Gibbs sweeps per iteration, kernels applied to own draws only, no probe contexts anywhere in training. One seed, 300 s: own-draw line_match 0.507 -> 0.645, dirt 0.851 -> 0.508, own-draw dirt per L4 row 0.00 / 0.12 / 0.91 / 1.00 against the fill's 0.00 / 0.12 / 0.88 / 1.00. Clamp gap closed at L3 and L4 (fill / own: -0.112 / -0.111 and -0.138 / -0.144), slightly better than the probe-context arm.
+- Both ingredients matter: persistence alone 0.545, sweeps alone 0.574, together 0.645. The win is accumulation of the 1-2.5 % accepted dirt->partial moves over a persistent population, not any single big move.
+- Not bench-ready: own-draw violations 9.4e-4 per cell (cfast 1.9e-5), only 3 % of draws valid; plain ML has no violation pressure. Wave 4 launched (wave4-pop): hard final sweeps so the ML targets are valid states, and/or the reverse-KL-on-L0-3 recipe, then a 2-seed bench.
+- Certificate-aware moves: lambda-only tempered transitions (20 -> 5) accept 0.74-0.82 at L4 with 8-9 % dirt->partial per move; 20 -> 2 is rejected (violations survive the cooling). Freeing one column of an L4 block consistently changes 46 cells across 5 levels (16 / 16 / 8 / 4 / 2). The bottom-up certificate proposal was not built.
+
 ### Wave 3 (partial): wave2-bench2, closest to an accepted row so far (upper-bound arm, change request #1)
 - Level-split objectives, all with lambda = inf in the coarse kernels (refined coarse states now have zero coarse violations). ML off at L3-4 collapses the line (dirt 0.95): the coarse line-following on this arm comes from ML on the probe contexts, consistent with the own-draw-only failure.
 - `ckernel_rkl123` (ML on all levels, reverse-KL on L0-3): bench 2 seeds, warm compile (setup 254 -> 75 s), speed-1b kernels. Seed 1 within budget at every level: F -0.098, line_match 0.65, rho .38/.81/.58/.82/.60, starved 0/2.8/8.1/10.9/2.8 %. Seed 0 fails at L3 (7.3e-4). `ckernel_rkl32inf` (RKL on L4 too) clears L3 but pushes L4 starvation to 33-36 % and fails across-seed agreement.
