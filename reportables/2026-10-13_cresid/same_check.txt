@@ -1,0 +1,17 @@
+rho4 equal frac 0.012 own mean 126.05 clamped mean 126.83
+cert4 equal frac 0.344 own mean 151.75 clamped mean 87.69
+rho3 equal frac 0.973 own mean 43.68 clamped mean 43.66
+cert3 equal frac 0.564 own mean 44.0 clamped mean 26.31
+rho2 equal frac 1.0 own mean 12.55 clamped mean 12.54
+cert2 equal frac 0.566 own mean 14.0 clamped mean 8.36
+rho1 equal frac 0.999 own mean 3.54 clamped mean 3.54
+cert1 equal frac 0.59 own mean 5.0 clamped mean 3.0
+t equal frac 0.601 own mean 1.0 clamped mean 0.6
+probe rho3 mean 31.7080078125 probe rho4 126.83203125
+rho3 row means [41.  20.7 41.2 20.5 57.6 50.4 59.  59.1] std across worlds+cols per row [ 0.  20.8  2.  20.5  5.1 17.2  0.   0.8]
+rho1 row means [3.61 3.53 3.65 3.53 3.62 3.53 3.58 3.16 3.65 3.54 3.64 3.51 3.64 3.47
+ 3.59 3.18 3.63 3.55 3.58 3.49 3.61 3.51 3.6  3.44 3.58 3.58 3.61 3.53
+ 3.62 3.51 3.61 3.53]
+untrained rho3 equal frac own vs clamped 0.984
+untrained rho2 equal frac own vs clamped 0.998
+untrained rho1 equal frac own vs clamped 1.0

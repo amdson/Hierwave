@@ -42,6 +42,7 @@ from castlegen.bench.variant import register
 from . import _cpass_core as core
 from ._cfast_cone import Cone
 from ._cfast_core import train_pass
+from ._cln_core import hidden1
 from .cpass import CPass, adam_init, adam_step, clip_by_level
 
 jax.config.update("jax_compilation_cache_dir", os.path.expanduser("~/.cache/jax_cfast"))
@@ -49,7 +50,8 @@ jax.config.update("jax_compilation_cache_dir", os.path.expanduser("~/.cache/jax_
 _LAYS = {}
 CFG = dict(B=8, K=0, width=64, lr=3e-3, lr_critic=1e-3, lam0=10.0, lam_max=20.0, eta=0.01,
            alpha=0.05, tau0=2.0, tau1=1.0, anneal=0.2, clip=10.0, W_train=None,
-           cone=True, critic="h1", sub=64)
+           cone=True, critic="h1", sub=64,
+           net="tanh", win=None)          # actor network (tanh | ln) and window (None: 4 x 4 | (lo, hi)), cln
 
 
 @register
@@ -65,7 +67,7 @@ class CFast(CPass):
         for l in range(T + 1):
             for c in lay.chans[l]:
                 key, k2 = jax.random.split(key)
-                din = self.cfg["width"] if self.cfg["critic"] == "h1" else lay.feat_dim(l, core.ACTOR_WIN)
+                din = self.cfg["width"] if self.cfg["critic"] == "h1" else lay.feat_dim(l, lay.actor_win)
                 self.cparams[core.key_of(l, c.name)] = core.mlp_init(k2, din + n_extra, c.D, self.cfg["width"])
         self.copt = adam_init(self.cparams)
         self.gs = None
@@ -76,13 +78,17 @@ class CFast(CPass):
         on the same problem and region: a second training seed in the same
         process reuses the traced and compiled functions."""
         key = (self.problem.name, self.problem.version, region.W, region.periodic, region.x0)
+        if self.cfg.get("resid", False):
+            key = key + ("resid",)
+        if self.cfg.get("win") is not None:
+            key = key + ("win", tuple(self.cfg["win"]))
         if key not in _LAYS:
             self.lays = {}
             _LAYS[key] = CPass.layout(self, region)
         return _LAYS[key]
 
     def train_fns(self, lay):
-        key = (self.cfg["K"], self.cfg["cone"], self.cfg["critic"], self.cfg["sub"])
+        key = (self.cfg["K"], self.cfg["cone"], self.cfg["critic"], self.cfg["sub"], self.cfg.get("net", "tanh"))
         if not hasattr(lay, "cfast_fns"):
             lay.cfast_fns = {}
         if key not in lay.cfast_fns:
@@ -100,7 +106,7 @@ class CFast(CPass):
         for l in levels:
             cnt = sum(int(np.asarray(lay.sites(l, k)[2]).sum()) for k in range(core.NCOL))
             nval[l] = cnt * len(lay.chans[l])
-        cone = Cone(lay, core.ACTOR_WIN)
+        cone = Cone(lay, lay.actor_win)
         idx = {k: jnp.asarray(v) for k, v in cone.idx.items()}
         idx_top = jnp.stack([idx[k] for k in topkeys])                  # (ntop, 16, n, S, 4)
         sfrac = {}
@@ -162,7 +168,7 @@ class CFast(CPass):
             f = r["feat"]
             if critic_h1:                     # the actor's first hidden layer, fixed for this update
                 p = params[key]
-                f = jax.lax.stop_gradient(jnp.tanh(f @ p["W1"] + p["b1"]))
+                f = jax.lax.stop_gradient(hidden1(p, f))
             ex = jnp.concatenate([jnp.atleast_1d(tau), lam]).astype(jnp.float32)
             ex = jnp.broadcast_to(ex, f.shape[:-1] + ex.shape)
             sf = jnp.broadcast_to(sfrac[key][None, :, None, None], f.shape[:-1] + (1,))
@@ -453,3 +459,6 @@ _variant("cfast_k4", K=4)                 # with cpass's coupled replays
 _variant("cfast_full", cone=False)        # all later draws as returns (cpass's returns), cfast otherwise
 _variant("cfast_s64", lr=1e-3)            # development runs: lr 1e-3 (cpass's)
 _variant("cfast_s64_lr3")                 # development runs: the default
+_variant("cresid", resid=True)            # count-residual features for every declared count factor
+_variant("cln", net="ln")                 # LayerNorm + SiLU actor 64 x 2, 4 x 4 window (exactopt)
+_variant("cln6", net="ln", win=(-2, 3))   # LayerNorm + SiLU actor, 6 x 6 same-level window

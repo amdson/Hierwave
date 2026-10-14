@@ -121,3 +121,8 @@ On the enumerable hierarchy, optimise the objective with exact expectations, and
 ---
 
 > cconv outcome (2026-10-14, [report](2026-10-13_cconv/report.md)): first GPU bench, 2 x 150 s on a shared GPU. Worse than cfast on all four problems (toy_support F -0.395 vs -0.416; toy_modes 0.29-0.33 vs 0.268; ground violations 0.7-7.6% with no fill line; columns 18% violations), with 5-10x fewer updates (cold compile 130-240 s, 0.6 s/update at B=64). Probably undertrained, not shown to be a worse representation.
+
+## 11. Parent-count residual features for the learned bias (from chat / clamp agent, 2026-10-14)
+From the clamp diagnostic: give every child draw, for each declared count factor, the parent's value minus its known siblings' sum and the number of siblings still unknown (allowed freedom "more information to learned parts").
+
+> **Annotation (2026-10-14, cresid):** built as variant `cresid` (generic, off by default elsewhere; tests and finite support pass). It doesn't help at 150 s: fine cost in fill contexts is 2.02 vs 0.74 own at L = 4 (cfast 1.97 vs 0.72), and the rho draws are still context-blind and deterministic. Ground bench: cresid meets the violation budget (6.1e-5) but F is 1.41 vs cfast 0.86, and both are all dirt. Likely cause: the bias saturates (deterministic rho) and training never visits fill contexts. Status: tried, no effect on the gate. [Report](2026-10-13_cresid/report.md)

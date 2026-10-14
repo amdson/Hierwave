@@ -62,8 +62,10 @@ CRITIC_WIN = Window(same=tuple((dy, dx) for dy in range(-3, 5) for dx in range(-
 class Layout:
     """Static schedule and feature layout for one region shape."""
 
-    def __init__(self, problem, W, periodic, x0=0):
+    def __init__(self, problem, W, periodic, x0=0, resid=False, win=None):
         self.p, self.W, self.periodic, self.x0 = problem, W, periodic, x0
+        self.resid = bool(resid)
+        self._win = win                    # actor window (cln); None: ACTOR_WIN
         T = problem.T
         self.T = T
         self.levels = list(range(T, -1, -1))
@@ -81,6 +83,23 @@ class Layout:
             s += NCOL * len(self.chans[l])
         self.nsteps = s
         self.cond = CondJax(problem, W, periodic)
+        # count-residual features (resid=True): one entry per declared count
+        # factor whose child side lives at level l
+        self.counts = {l: [] for l in range(T + 1)}
+        for f in problem.factors:
+            if f.kind != "count":
+                continue
+            ca, cb = problem.chan[f.a[0]], problem.chan[f.b[0]]
+            va = jnp.asarray(ca.views[f.a[1]], jnp.int32)
+            vb = jnp.asarray(cb.views[f.b[1]], jnp.int32)
+            n = len(f.subset)
+            smax = max(n * (ca.nview(f.a[1]) - 1), 1)
+            self.counts[ca.level].append((f.a[0], va, f.b[0], vb, tuple(f.subset), smax,
+                                          max(ca.nview(f.a[1]) - 1, 1)))
+
+    @property
+    def actor_win(self):
+        return self._win if self._win is not None else ACTOR_WIN
 
     def step(self, l, k, ci):
         return self.base[l] + k * len(self.chans[l]) + ci
@@ -126,6 +145,38 @@ class Layout:
         f = jnp.concatenate(out, -1)
         return f.reshape(f.shape[0], -1)
 
+    def _resid_feats(self, state, l, Y, X):
+        """(n, 6 * #count factors homed at l): for each declared count factor
+        E[vb(parent), sum_{k in subset} va(child_k)] whose children live at
+        level l, read at the site's parent and its block: site in the subset,
+        parent unknown, (vb - sum of known children's va) / max sum, unknown
+        children of the subset / |subset|, the residual per unknown child /
+        (Va - 1) (clipped to [-2, 2]), and the parent value / max sum.
+        Reads only the parent and the 2 x 2 block: inside ACTOR_WIN."""
+        out = []
+        by, bx = 2 * (Y >> 1), 2 * (X >> 1)
+        pos = 2 * (Y & 1) + (X & 1)
+        for an, va, bn, vb, sub, smax, vmax in self.counts[l]:
+            pv, pok = self._read(state, bn, l + 1, Y >> 1, X >> 1)
+            pknown = pok & (pv >= 0)
+            pval = jnp.where(pknown, vb[jnp.maximum(pv, 0)], 0).astype(jnp.float32)
+            ssum = jnp.zeros(Y.shape, jnp.float32)
+            nunk = jnp.zeros(Y.shape, jnp.float32)
+            insub = jnp.zeros(Y.shape, bool)
+            for k in sub:
+                cv, cok = self._read(state, an, l, by + (k >> 1), bx + (k & 1))
+                kn = cok & (cv >= 0)
+                ssum = ssum + jnp.where(kn, va[jnp.maximum(cv, 0)], 0).astype(jnp.float32)
+                nunk = nunk + (cok & ~kn).astype(jnp.float32)
+                insub = insub | (pos == k)
+            r = jnp.where(pknown, pval - ssum, 0.0)
+            per = jnp.clip(r / jnp.maximum(nunk, 1.0) / vmax, -2.0, 2.0)
+            out.append(jnp.stack([insub.astype(jnp.float32), (~pknown).astype(jnp.float32), r / smax,
+                                  nunk / len(sub), per, pval / smax], -1))
+        if not out:
+            return None
+        return jnp.concatenate(out, -1)
+
     def features(self, state, l, Y, X, win: Window, extra=None):
         h, _ = self.hw[l]
         by, bx = 2 * (Y >> 1), 2 * (X >> 1)
@@ -136,6 +187,10 @@ class Layout:
             pdy = jnp.array([d[0] for d in win.parent])
             pdx = jnp.array([d[1] for d in win.parent])
             f.append(self._enc_cells(state, l + 1, (Y >> 1)[:, None] + pdy, (X >> 1)[:, None] + pdx))
+        if self.resid:
+            rf = self._resid_feats(state, l, Y, X)
+            if rf is not None:
+                f.append(rf)
         pos = 2 * (Y & 1) + (X & 1)
         f.append(jax.nn.one_hot(pos, 4))
         f.append((Y / max(h - 1, 1))[:, None].astype(jnp.float32))
@@ -158,6 +213,9 @@ def mlp_init(key, din, dout, width=64):
 
 
 def mlp(p, x):
+    if "g1" in p:                          # LayerNorm + SiLU actor (cln)
+        from ._cln_core import ln_mlp
+        return ln_mlp(p, x)
     h = jnp.tanh(x @ p["W1"] + p["b1"])
     h = jnp.tanh(h @ p["W2"] + p["b2"])
     return h @ p["W3"] + p["b3"]
@@ -196,7 +254,7 @@ def coloured_pass(lay: Layout, params, seed, designed, tau, lam, forced=None, ov
                 v = nv + look
                 vmin = jnp.min(v, axis=1, keepdims=True)
                 mask = (v == vmin) | ~valid[:, None]
-                feat = lay.features(state, l, Y, X, ACTOR_WIN)
+                feat = lay.features(state, l, Y, X, lay.actor_win)
                 b = mlp(params[key_of(l, c.name)], feat)
                 logits = jnp.where(mask, -soft / tau - b, -jnp.inf)
                 logq = jax.nn.log_softmax(logits, axis=1)
@@ -264,10 +322,15 @@ def repair(lay: Layout, state, seed):
     return state
 
 
-def margin(problem):
+def margin(problem, win=None):
     """Fine cells of padding that bound the dependency radius of pass + repair:
-    per level 16 colour steps each reading at most 3 cells away (context
-    window, parent, factors, lookahead) plus a repair round reading 2."""
-    m = sum((NCOL * 3 + NCOL * 2 + 8) << l for l in range(problem.T + 1))
+    per level 16 colour steps each reading at most r = 3 cells away (context
+    window, parent, factors, lookahead; r grows with a wider actor window
+    `win`, cln) plus a repair round reading 2."""
+    r = 3
+    if win is not None:
+        from ._cln_core import win_reach
+        r = max(r, win_reach(win))
+    m = sum((NCOL * r + NCOL * 2 + 8) << l for l in range(problem.T + 1))
     step = P << problem.T
     return -(-m // step) * step

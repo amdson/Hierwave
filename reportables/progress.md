@@ -17,6 +17,11 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 cconv (round 2) · started
+Approach: equal-update comparison cconv_r2 / cconv / cfast on toy_support and toy_modes (~300 updates), then cconv_r2 vs cfast equal wall clock (ideas #5).
+Result: pending.
+Next: see report.
+
 ## 2026-10-14 01:05 · cconv · finished
 Approach: first GPU bench of cconv (ideas #5) vs cfast, 2 seeds x 150 s, shared GPU.
 Result: cconv worse than cfast everywhere and 5-10x fewer updates. toy_support F -0.395 vs -0.416 (F* -0.4688), worst final viol 1.8e-2 vs 2e-3; toy_modes F 0.29-0.33 vs 0.268 (F* 0.2513); ground (B=16 after B=64 OOM) viol 7.6e-2, streaky dirt, no fill line, one seed 0 updates (cold compile 240 s); columns viol 0.18 vs 3e-2. None accepted. [Report](2026-10-13_cconv/report.md).
@@ -56,6 +61,11 @@ Next: bench cln6 / cln / cfast back to back on toy_support, toy_modes, ground.
 Approach: ideas.md #10 round 3, exact gradients on enumerable blocks (CPU): collected the toy_support / tiny runs, then a representation study (LN+SiLU, width/depth, lr, schedule) and an information study (actor window; same-colour independence).
 Result: variance dominates at B = 8 (sampled 0.18 vs exact 0.013 on modes; 1.56 vs 0.30 / 0.012 on support). The tanh MLP's support plateau (0.30) is optimisation, not capacity: lr 1e-2 gives 0.012 and LN+SiLU 64x2 gives 0.0084 (table 0.0074). The modes 0.012 floor is the 4x4 actor window: 6x6 gives table 0 and MLP 0.0009. On tiny, the history table floors at 0.037 from same-colour independence (the chain-rule diagnostic gives 0.002); the 8-wide window takes table_feat from 0.32 to 0.07. Report: reportables/2026-10-13_exactopt/report.md.
 Next: LN+SiLU with a 6x6 window as the actor default, then sampled training at large B to close the variance gap.
+
+## 2026-10-14 01:10 · cresid · finished
+Approach: generic count-residual features (parent view minus known siblings' sum, unknown siblings, parent-unknown flag, per declared count factor), variant cresid = cfast + features; clamp eval as gate.
+Result: gate failed. Fine cost in fill contexts 2.02 vs 0.74 own (L=4; cfast 1.97 vs 0.72), 2.45 vs 0.38 (L=3; cfast 2.23 vs 0.34); rho3/2/1 still 97-100 % identical across contexts, deterministic (log q ~ 0). Bench ground 2x150 s (shared GPU): cresid worst final 6.1e-5 (in budget), F 1.41, 477/707 updates; cfast 2.4e-4 (misses), F 0.86, 803/765 updates; both all dirt, not accepted. Tests pass (new test_cresid, test_cfast_cone, finite support 0). Report: reportables/2026-10-13_cresid/report.md.
+Next: check whether bias saturation (deterministic rho early) blocks learning; lower actor lr / slower tau anneal; residual in cconv's candidate head.
 
 ## 2026-10-14 00:40 · cresid · started
 Approach: per declared count factor, a feature for the children: parent view minus known siblings' view sum, unknown siblings in the subset, parent-unknown flag (generic, from declarations; "more information to learned parts"). Variant cresid = cfast + these features. Gate: clamp eval at L=4/3.

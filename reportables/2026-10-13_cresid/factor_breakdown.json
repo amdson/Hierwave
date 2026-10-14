@@ -1,0 +1,97 @@
+{
+ "untrained/own": {
+  "soft_by_factor": {
+   "noise4": 0.0018,
+   "smooth4": 0.0015,
+   "prior4": 0.4525,
+   "smooth3": 0.018,
+   "prior3": 0.3047,
+   "smooth2": 0.0417,
+   "prior2": 0.3226,
+   "smooth1": 0.0942,
+   "prior1": 1.4527,
+   "smooth0": 0.0487
+  },
+  "rho4_minus_256f_mean_abs": 4.34375,
+  "rho4_mean": 126.9453125,
+  "256f_mean": 126.75,
+  "cert4_A_mean": 11.9765625,
+  "cert4_B_mean": 14.0234375,
+  "rho3_frac_mean": 0.4961700439453125,
+  "rho2_frac_mean": 0.5011444091796875,
+  "rho1_frac_mean": 0.4997711181640625,
+  "dirt_frac": 0.891571044921875
+ },
+ "untrained/probe_L4": {
+  "soft_by_factor": {
+   "smooth4": 0.0013,
+   "prior4": 0.4827,
+   "smooth3": 0.0179,
+   "prior3": 0.3045,
+   "smooth2": 0.0417,
+   "prior2": 0.323,
+   "smooth1": 0.0942,
+   "prior1": 1.4721,
+   "smooth0": 0.0328
+  }
+ },
+ "untrained/probe_L3": {
+  "soft_by_factor": {
+   "smooth4": 0.0013,
+   "smooth3": 0.0014,
+   "prior3": 0.5167,
+   "smooth2": 0.0409,
+   "prior2": 0.3535,
+   "smooth1": 0.0946,
+   "prior1": 1.3952,
+   "smooth0": 0.0183
+  }
+ },
+ "trained/own": {
+  "soft_by_factor": {
+   "noise4": 0.0081,
+   "smooth4": 0.0012,
+   "prior4": 0.3525,
+   "smooth3": 0.0125,
+   "prior3": 0.2718,
+   "smooth2": 0.007,
+   "prior2": 0.1099,
+   "smooth1": 0.0304,
+   "prior1": 0.1326
+  },
+  "rho4_minus_256f_mean_abs": 10.296875,
+  "rho4_mean": 126.046875,
+  "256f_mean": 126.75,
+  "cert4_A_mean": 15.75,
+  "cert4_B_mean": 16.0,
+  "rho3_frac_mean": 0.6825103759765625,
+  "rho2_frac_mean": 0.784332275390625,
+  "rho1_frac_mean": 0.885955810546875,
+  "dirt_frac": 1.0
+ },
+ "trained/probe_L4": {
+  "soft_by_factor": {
+   "smooth4": 0.0013,
+   "prior4": 0.4042,
+   "smooth3": 0.0124,
+   "prior3": 0.2738,
+   "smooth2": 0.0071,
+   "prior2": 0.1108,
+   "smooth1": 0.0305,
+   "prior1": 1.3285,
+   "smooth0": 0.0157
+  }
+ },
+ "trained/probe_L3": {
+  "soft_by_factor": {
+   "smooth4": 0.0013,
+   "smooth3": 0.0014,
+   "prior3": 0.7611,
+   "smooth2": 0.0256,
+   "prior2": 0.2947,
+   "smooth1": 0.0374,
+   "prior1": 1.4959,
+   "smooth0": 0.0298
+  }
+ }
+}
