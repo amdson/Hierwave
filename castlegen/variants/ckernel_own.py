@@ -426,3 +426,6 @@ _pop_variant("ckpop_rkl123x2_cg40", hard_sweeps=2, rkl_n=32, rkl_lr=1e-3, rkl_la
 # levels and lambda control).  Own draws only.  ckpop_pen_all also prices L4 (harmless now: no entropy pull there).
 _pop_variant("ckpop_hard_pen", hard_sweeps=2, rkl_n=32, rkl_lr=1e-3, rkl_lam0=10.0, rkl_levels=[0, 1, 2, 3], pen_only=True)
 _pop_variant("ckpop_pen_all", hard_sweeps=2, rkl_n=32, rkl_lr=1e-3, rkl_lam0=10.0, rkl_levels=[0, 1, 2, 3, 4], pen_only=True)
+# cr2-penalty follow-ups: less penalty pressure (half the steps; half the lr) to recover line_match inside the budget
+_pop_variant("ckpop_pen16", hard_sweeps=2, rkl_n=16, rkl_lr=1e-3, rkl_lam0=10.0, rkl_levels=[0, 1, 2, 3], pen_only=True)
+_pop_variant("ckpop_pen_lr5", hard_sweeps=2, rkl_n=32, rkl_lr=5e-4, rkl_lam0=10.0, rkl_levels=[0, 1, 2, 3], pen_only=True)

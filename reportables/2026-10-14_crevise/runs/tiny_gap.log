@@ -1,0 +1,16 @@
+{"J_path": 6.85330067761802, "rkl_x0": 3.291359144484646, "gap": 3.5619415331333744, "masked_logD": 4.852029263193535, "n_traj": 12531, "n_final": 1508, "sum_q": 0.9999997910032292, "ident_max": 8.296966552023832e-06, "E_mean": 8.689535293767257, "H_logq_traj": 6.68826431043782, "H_x0": 5.398176149282612, "case": "flat", "mask_seed": 1, "n_masked": 7, "params": "init (b = 0)"}
+{"J_path": 5.61162126144843, "rkl_x0": 1.5672006022297735, "gap": 4.044420659218657, "masked_logD": 5.545176437165161, "n_traj": 27370, "n_final": 1155, "sum_q": 0.9999998155962286, "ident_max": 1.1444091796875e-05, "E_mean": 6.550941156997068, "H_logq_traj": 6.484496353797733, "H_x0": 4.9837405547672935, "case": "flat", "mask_seed": 2, "n_masked": 8, "params": "init (b = 0)"}
+{"J_path": 3.2755486990554465, "rkl_x0": 0.15111790551928128, "gap": 3.124430793536165, "masked_logD": 4.15888238134625, "n_traj": 10502, "n_final": 998, "sum_q": 0.9999998284536182, "ident_max": 1.0108947755327335e-05, "E_mean": 4.956095413473789, "H_logq_traj": 5.8394290149431916, "H_x0": 4.804977507954508, "case": "flat", "mask_seed": 3, "n_masked": 6, "params": "init (b = 0)"}
+{"J_path": 2.4225277522881092, "rkl_x0": -2.4294300750909104, "gap": 4.851957827379019, "masked_logD": 4.8520305899777, "n_traj": 12531, "n_final": 1508, "sum_q": 1.0000000644525042, "ident_max": 2.3555755618076546e-05, "E_mean": -2.397956337267902, "H_logq_traj": 0.031546307284653276, "H_x0": 0.031473737823008295, "case": "flat", "mask_seed": 1, "n_masked": 7, "params": "random"}
+{"J_path": 3.1651570510904294, "rkl_x0": -2.3750130815271473, "gap": 5.540170132617577, "masked_logD": 5.545177689814691, "n_traj": 27370, "n_final": 1155, "sum_q": 1.0000000414951367, "ident_max": 2.5177001958809342e-05, "E_mean": -2.3500808049820727, "H_logq_traj": 0.029939526851236797, "H_x0": 0.024932276545074284, "case": "flat", "mask_seed": 2, "n_masked": 8, "params": "random"}
+{"J_path": 1.7798947665356426, "rkl_x0": -2.3789573379441844, "gap": 4.158852104479827, "masked_logD": 4.158883237581047, "n_traj": 10502, "n_final": 998, "sum_q": 1.0000000343345667, "ident_max": 2.0408630376778092e-05, "E_mean": -2.3499045665079987, "H_logq_traj": 0.02908383993359106, "H_x0": 0.02905277143618558, "case": "flat", "mask_seed": 3, "n_masked": 6, "params": "random"}
+Traceback (most recent call last):
+  File "/workspace/Hierwave/reportables/2026-10-14_crevise/scripts/tiny_gap.py", line 22, in <module>
+    r = ex.reverse_kl_parts(var.params, tau=1.0)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/Hierwave/castlegen/variants/_crevise_gradcheck.py", line 162, in reverse_kl_parts
+    keys = np.stack([self.final[c.name].reshape(self.N, -1) for c in p.sampled()], 1).reshape(self.N, -1)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/main/lib/python3.12/site-packages/numpy/_core/shape_base.py", line 458, in stack
+    raise ValueError('all input arrays must have the same shape')
+ValueError: all input arrays must have the same shape

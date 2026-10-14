@@ -36,6 +36,36 @@ Tiny enumerable two-level problem (spec test 5 machinery), τ = 1.5, λ = (2, 3)
 
 ## 3. Ground: own-draws-only arm `ckpop_hard_pen` (inside the rules)
 
+`ckpop_hard_rkl` (wave4-6: persistent population, 20 colour-Gibbs sweeps, 2 hard final sweeps, ML on all levels) with its 32 reverse-KL steps per iteration replaced by 32 **penalty-only** steps (lr 1e-3, levels 0-3, λ restarted at 10, cfast's λ control). Own draws only; no probe contexts anywhere in training.
+
+### 3.1 Instrumented arm, seed 0, 300 s, GPU 0 alone (`runs/arm_ckpop_hard_pen_s0/`)
+
+1136 ML + 4545 penalty updates (setup 1.0 s after a 350 s cold warm-up). Bench-style eval on 16 held-out worlds: **final violations within budget at every level** (L0 1.1e-5, L1 3.1e-5, L2 1.8e-4, L3 0, L4 0), F +0.038, line_match 0.552, dirt 0.43, ρ .30/.78/.72/.52/−.02, starved 0/3.7/9.6/25/25 %. Trajectory (`loop.jsonl`): the population leaves the dirt state as in ckpop_hard_rkl (population line_match 0.64-0.65, 94-100 % valid from iteration 33 on), own-draw line_match plateaus at 0.55-0.57 from update ~400; λ_1..λ_3 saturate at 20 (raw own-draw rates at those levels stay above the controller's 1e-4 target), λ_0 decays to 4. Reference (wave5-pop arm A, same recipe with reverse KL, throttled 3090): line_match 0.57, F −0.026, L1-L2 final 5.3e-4 / 9.2e-4, L4 2e-3.
+
+### 3.2 Bench, 4 seeds × 300 s, GPU 0 alone (run 20261014-193641_ckpop_hard_pen_ground_warm): NOT accepted, 3 of 4 seeds within the violation budget
+
+Warm (setup 1.0-1.1 s), 1176-1184 ML + 4705-4737 penalty updates per seed; SM clock 1560 MHz, no throttling.
+
+| seed | final violated instances L0/1/2/3/4 (of 262144 / 65536 / 16384 / 4096 / 512) | worst | viol budget | F/cell | line_match | dirt | rough | valid raw worlds | ρ 0-4 | starved % 0-4 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | 6 / 2 / 0 / 0 / 0 | 3.1e-5 | **pass** | +0.038 | 0.557 | 0.44 | 0.95 | 9 / 16 | .31/.79/.78/.46/−.17 | 0/4.3/13.2/23.3/22.9 |
+| 1 | 0 / 1 / 1 / 0 / 0 | 6.1e-5 | **pass** | +0.114 | 0.561 | 0.41 | 1.17 | 13 / 16 | .30/.75/.48/.33/−.17 | 0/5.5/10.9/26.2/28.1 |
+| 2 | 13 / 6 / 1 / **1** / 0 | 2.4e-4 (L3) | fail | +0.025 | 0.559 | 0.46 | 1.21 | 5 / 16 | .30/.80/.75/.37/−.10 | 0/4.2/8.9/24.0/22.8 |
+| 3 | 6 / 5 / 3 / 0 / 0 | 1.8e-4 | **pass** | −0.039 | 0.585 | 0.50 | 1.13 | 3 / 16 | .34/.81/.70/.70/−.15 | 0/4.8/9.4/21.2/31.6 |
+
+Pooled final rates (Clopper-Pearson 95 %): L0 2.4e-5; L1 5.3e-5 [2.9, 9.0]e-5; **L2 7.6e-5 [2.5e-5, 1.8e-4], the whole interval under budget** (ckpop_hard_rkl in wave6: 3.5e-4 [2.2, 5.3]e-4, interval entirely over); L3 6.1e-5 (one event; wave6: 1.8e-4); L4 0.
+
+Verdict fields: final violations fail (seed 2's single L3 instance; zero are allowed per seed), **across-seed agreement passes on every statistic** (first ckpop bench to do so; wave5/6 failed on roughness), raw vs final agree, finite support holds, the old probe flag fires (uninformative; 3-13 valid raw worlds of 16). Mean F +0.034.
+
+### 3.3 Reading
+
+- **The penalty-only term does what it was adopted for: it separates validity from the energy/entropy collapse pressure.** Own draws of the in-rules arm are inside the budget at L0-L2 with margin (L2 at 0.4x the budget, against 1.75x for the reverse-KL mix) and L4 stays at zero without any L4 term; the one miss is a single L3 instance on one seed, at the level where one instance is already 2.4e-4.
+- **It costs structure.** Against the reverse-KL mix (wave6, 4 seeds): line_match 0.56-0.59 vs 0.60-0.63, F +0.03 vs −0.09, coarse ρ at L3 0.33-0.70 vs 0.25-0.57 (similar), L4 ρ ≈ −0.15 vs < 0, L3/L4 starvation 21-26 / 23-32 % vs 18-38 %. The dirt fraction per seed (0.41-0.50) and the population's line_match (0.64) are unchanged, so the loss is in how well the pass reproduces its own kernel-refined population under the extra pressure: with λ_1..3 pinned at 20, 32 penalty steps per 8 ML steps pull the fine conditionals toward the locally safe (flatter) completions. Images: `images/bench/ckpop_hard_pen_ground_s*.png`: flat terrain at the fill's mean height with isolated one-cell spikes and no hill-following, the same picture as the own-draws reverse-KL arms in `reportables/2026-10-14_best_samples/`; the accepted probe-context seeds (`images/bench/ckernel_rkl4w3f_l2x2_ground_s0.png`) follow the hills.
+- **Dimers showed the same trade in its pure form** (section 2): valid, but the penalty alone keeps the diagonal out of own draws and makes the h/v split unstable.
+- **Follow-ups queued (section 3.4):** less penalty pressure (16 steps; lr 5e-4) to see whether line_match recovers while L2 stays under budget.
+
+### 3.4 Lower-pressure arms
+
 (pending)
 
 ## 4. Ground: upper-bound arm `ckernel_pen4w3f` (probe-lift contexts, change request #1)
@@ -64,9 +94,21 @@ Pooled final rates (Clopper-Pearson 95 %): L0 5.6e-5 [4.3, 7.3]e-5; L1 1.1e-4 [0
 - Across-seed agreement fails on roughness (0.93-1.50 across seeds), as in every ckernel bench so far; the old probe flag fires.
 - So the wave5 conclusion stands in a cleaner form: the L2 scale-2 step fixes L2 on about half the seeds and the rest miss by 2-4 instances; nothing here is budget-starved any more.
 
-### 5.2 `ckernel_rkl4w3f_l2x15` (L2 scale 1.5)
+### 5.2 `ckernel_rkl4w3f_l2x15` (L2 scale 1.5): NOT accepted, 1 of 4 seeds pass
 
-(pending)
+Run 20261014-195125_ckernel_rkl4w3f_l2x15_ground_cr2, 1824-1984 ML updates per seed, GPU 1 alone.
+
+| seed | final violated instances L0/1/2/3/4 | worst | viol budget | F/cell | line_match | ρ 0-4 | starved % 0-4 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | 15 / 5 / 2 / 0 / 0 | 1.2e-4 | **pass** | −0.135 | 0.672 | .42/.86/.60/.82/.59 | 0/2.8/7.6/10.9/7.0 |
+| 1 | 17 / 9 / **7** / **2** / 0 | 4.9e-4 (L3) | fail | −0.114 | 0.672 | .39/.76/.83/.81/.57 | 0/2.6/8.5/13.8/9.4 |
+| 2 | 8 / 3 / 2 / **3** / 0 | 7.3e-4 (L3) | fail | −0.133 | 0.713 | .44/.76/.67/.76/.57 | 0/2.3/7.3/12.5/5.6 |
+| 3 | 11 / 6 / **5** / 0 / 0 | 3.1e-4 (L2) | fail | −0.141 | 0.708 | .41/.80/.76/.71/.55 | 0/2.2/6.4/10.0/9.5 |
+
+Pooled: L0 4.9e-5; L1 8.8e-5; L2 2.4e-4 [1.4, 4.0]e-4 (same as scale 2); **L3 3.1e-4 [1.0, 7.1]e-4 (5 events)**; L4 0. Mean F −0.131, line_match 0.67-0.71, across-seed roughness fails.
+
+- Scale 1.5 does not keep L3 at zero: 5 L3 events against 1 at scale 2 and 0 at scale 1 (wave3/4). So the hoped-for "scale between 1 and 2 that keeps L3 clean" is not there; L3 events look seed-driven rather than scale-driven.
+- Both reruns together (8 seeds, ~1900 updates each): the upper-bound arm with the reverse-KL mix sits at pooled L2 2.4e-4 and passes 3 of 8 seeds. The wave5 numbers were indeed training-starved, and the clean picture is: F −0.13, line_match 0.66-0.71, L2 at the budget edge, occasional L3 singles.
 
 ## Verdict
 

@@ -298,3 +298,5 @@ On ground, this gives unsupported columns for support and the full- or occupied-
 - Use exactopt's enumerable cases to see how a graded penalty changes the optimisation landscape against the binary one.
 
 > **Annotation (2026-10-14, orchestrator):** recorded from chat. Usage is deliberately not prescribed. Using it in the training penalty would change the objective's penalty term (constraint 4) and needs the user's approval; uses inside repair or diagnostics do not. Status: untested.
+
+> **Annotation (2026-10-14 evening, coordinator):** the user approved a first test of the graded mass in the training penalty (constitution addendum (c)), and asked for the signal to guide repeated updates: as an input feature of #19's revising steps (allowed freedom) and as the driver of a guided revising step (agent redirected from #20's repair). Draw-K search (#20 b) is not wanted. Agents: graded module + diagnostics + graded-penalty first test (reportables/2026-10-14_graded/), guided step (reportables/2026-10-14_guided_step/), revising sampler (reportables/2026-10-14_crevise/). Status: in progress.

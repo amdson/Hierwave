@@ -1,0 +1,54 @@
+[seed 0] train 300s  final viol {'0': 5.7220458984375e-05, '1': 7.62939453125e-05, '2': 0.0001220703125, '3': 0.0, '4': 0.0}  F -0.13534126058220863  support 0
+[seed 1] train 300s  final viol {'0': 6.4849853515625e-05, '1': 0.0001373291015625, '2': 0.00042724609375, '3': 0.00048828125, '4': 0.0}  F -0.11382857337594032  support 0
+[seed 2] train 300s  final viol {'0': 3.0517578125e-05, '1': 4.57763671875e-05, '2': 0.0001220703125, '3': 0.000732421875, '4': 0.0}  F -0.13256970420479774  support 0
+[seed 3] train 301s  final viol {'0': 4.1961669921875e-05, '1': 9.1552734375e-05, '2': 0.00030517578125, '3': 0.0, '4': 0.0}  F -0.14079595915973186  support 0
+{
+ "final_violations": {
+  "worst_frac": 0.000732421875,
+  "ok": false
+ },
+ "raw_violations_worst": 0.000732421875,
+ "exact_stats": {
+  "per_stat": {},
+  "ok": null
+ },
+ "raw_vs_final": {
+  "per_stat": {
+   "dirt_frac": true,
+   "dirt_excess": true,
+   "roughness": true,
+   "line_match": true,
+   "floating": true,
+   "fill_err": true
+  },
+  "ok": true
+ },
+ "across_seeds": {
+  "per_stat": {
+   "dirt_frac": true,
+   "dirt_excess": true,
+   "roughness": false,
+   "line_match": true,
+   "floating": true,
+   "fill_err": true
+  },
+  "ok": false
+ },
+ "probes": {
+  "flagged": [
+   true,
+   true,
+   true,
+   true
+  ],
+  "ok": false
+ },
+ "finite_support": {
+  "worst_mismatch": 0.0,
+  "ok": true
+ },
+ "free_energy": -0.13063387433066964,
+ "within_budget": true,
+ "accepted": false
+}
+BENCH_DONE ckernel_rkl4w3f_l2x15

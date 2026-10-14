@@ -1,0 +1,37 @@
+[32mActivated conda/uv virtual environment at [36m/venv/main[0m
+Jax plugin configuration error: Exception when calling jax_plugins.xla_cuda13.initialize()
+Traceback (most recent call last):
+  File "/venv/main/lib/python3.12/site-packages/jax/_src/xla_bridge.py", line 496, in discover_pjrt_plugins
+    plugin_module.initialize()
+  File "/venv/main/lib/python3.12/site-packages/jax_plugins/xla_cuda13/__init__.py", line 369, in initialize
+    _check_cuda_versions(raise_on_first_error = True)
+  File "/venv/main/lib/python3.12/site-packages/jax_plugins/xla_cuda13/__init__.py", line 273, in _check_cuda_versions
+    for d in range(cuda_versions.cuda_device_count())
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: jaxlib/cuda/versions_helpers.cc:135: operation cuInit(0) failed: CUDA_ERROR_NO_DEVICE
+An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is not installed. Falling back to cpu.
+warm-up: gen 3.0s repair 2.0s jitter1 33.8s jitter2 65.8s guided8 68.5s
+world 0: raw [0, 0, 1, 0, 0] rep [0, 0, 0, 0, 0] g8 [0, 0, 0, 0, 0] changed/step [53, 0, 0, 0, 0, 0, 0, 0]
+world 1: raw [0, 1, 1, 0, 0] rep [0, 1, 0, 0, 0] g8 [0, 0, 0, 0, 0] changed/step [77, 0, 0, 0, 0, 0, 0, 0]
+kind             viol L0..L4                  mass L0..L4                  changed/world L0..L4 valid line_match dirt rough float fill_err
+raw              [0, 1, 1, 0, 0]              [0, 1, 3, 0, 0]              [0.0, 0.0, 0.0, 0.0, 0.0]            0 0.595 0.407 1.43 0.0 0.0281
+repair           [0, 1, 0, 0, 0]              [0, 1, 0, 0, 0]              [0.0, 0.5, 0.5, 0.0, 0.0]            1 0.595 0.407 1.43 0.0 0.0281
+jitter1          [0, 0, 0, 0, 0]              [0, 0, 0, 0, 0]              [1.0, 2.0, 0.5, 0.0, 0.0]            2 0.595 0.407 1.43 0.0 0.0281
+jitter2          [0, 0, 0, 0, 0]              [0, 0, 0, 0, 0]              [1.0, 2.0, 0.5, 0.0, 0.0]            2 0.595 0.407 1.43 0.0 0.0281
+guided1          [0, 0, 0, 0, 0]              [0, 0, 0, 0, 0]              [22.5, 31.5, 11.0, 0.0, 0.0]         2 0.592 0.406 1.39 0.0 0.0281
+guided2          [0, 0, 0, 0, 0]              [0, 0, 0, 0, 0]              [22.5, 31.5, 11.0, 0.0, 0.0]         2 0.592 0.406 1.39 0.0 0.0281
+guided3          [0, 0, 0, 0, 0]              [0, 0, 0, 0, 0]              [22.5, 31.5, 11.0, 0.0, 0.0]         2 0.592 0.406 1.39 0.0 0.0281
+guided4          [0, 0, 0, 0, 0]              [0, 0, 0, 0, 0]              [22.5, 31.5, 11.0, 0.0, 0.0]         2 0.592 0.406 1.39 0.0 0.0281
+guided5          [0, 0, 0, 0, 0]              [0, 0, 0, 0, 0]              [22.5, 31.5, 11.0, 0.0, 0.0]         2 0.592 0.406 1.39 0.0 0.0281
+guided6          [0, 0, 0, 0, 0]              [0, 0, 0, 0, 0]              [22.5, 31.5, 11.0, 0.0, 0.0]         2 0.592 0.406 1.39 0.0 0.0281
+guided7          [0, 0, 0, 0, 0]              [0, 0, 0, 0, 0]              [22.5, 31.5, 11.0, 0.0, 0.0]         2 0.592 0.406 1.39 0.0 0.0281
+guided8          [0, 0, 0, 0, 0]              [0, 0, 0, 0, 0]              [22.5, 31.5, 11.0, 0.0, 0.0]         2 0.592 0.406 1.39 0.0 0.0281
+guided1+repair   [0, 0, 0, 0, 0]              [0, 0, 0, 0, 0]              [22.5, 31.5, 11.0, 0.0, 0.0]         2 0.592 0.406 1.39 0.0 0.0281
+guided2+repair   [0, 0, 0, 0, 0]              [0, 0, 0, 0, 0]              [22.5, 31.5, 11.0, 0.0, 0.0]         2 0.592 0.406 1.39 0.0 0.0281
+guided3+repair   [0, 0, 0, 0, 0]              [0, 0, 0, 0, 0]              [22.5, 31.5, 11.0, 0.0, 0.0]         2 0.592 0.406 1.39 0.0 0.0281
+guided4+repair   [0, 0, 0, 0, 0]              [0, 0, 0, 0, 0]              [22.5, 31.5, 11.0, 0.0, 0.0]         2 0.592 0.406 1.39 0.0 0.0281
+guided5+repair   [0, 0, 0, 0, 0]              [0, 0, 0, 0, 0]              [22.5, 31.5, 11.0, 0.0, 0.0]         2 0.592 0.406 1.39 0.0 0.0281
+guided6+repair   [0, 0, 0, 0, 0]              [0, 0, 0, 0, 0]              [22.5, 31.5, 11.0, 0.0, 0.0]         2 0.592 0.406 1.39 0.0 0.0281
+guided7+repair   [0, 0, 0, 0, 0]              [0, 0, 0, 0, 0]              [22.5, 31.5, 11.0, 0.0, 0.0]         2 0.592 0.406 1.39 0.0 0.0281
+guided8+repair   [0, 0, 0, 0, 0]              [0, 0, 0, 0, 0]              [22.5, 31.5, 11.0, 0.0, 0.0]         2 0.592 0.406 1.39 0.0 0.0281
+time/world {'gen': 0.037, 'repair': 0.007, 'jitter1': 0.023, 'jitter2': 0.041, 'guided': 0.302} changed/step [65.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]

@@ -1,3 +1,32 @@
+# Handoff: state at pause, 2026-10-14 evening session (new box)
+
+**Paused because the user ran out of usage.** Read this section first; the sections below are the earlier sessions' handoffs (still valid for context).
+
+## Box
+A different Vast instance from the 3090 box: 2x RTX A4000 16 GB, 24 cores, pid cap 1792, no volume (recycle wipes it). Repo = real git clone at `/workspace/Hierwave`, branch `coloured-pass`; `/venv/main` has jax[cuda13] 0.11.2. Rules and flags: `notes/box_rules_2026-10-14.md` (last section), `reportables/2026-10-14_cr2_penalty/scripts/env.sh`.
+
+## Decisions taken by the user this session (recorded in `notes/coloured_pass_constitution.md` addenda and `reportables/ideas.md`)
+- Change request #2 ADOPTED (addendum): ML + penalty-only term. Built and tested: `reportables/2026-10-14_cr2_penalty/report.md`.
+- Ideas #19 (revising sampler, path KL; amendment (b) pushed by the user), #20 (jitter), #21 (graded violation distances) pulled. User direction: guided, repeated updates with the graded signal, NOT draw-K search; repair line dropped. Graded mass in the training penalty approved for a first test (addendum (c)).
+
+## Results this session (details and tables in `reportables/2026-10-14_cr2_penalty/report.md`)
+- Penalty-only estimator unbiased (tests/variants/test_cpen.py; 1800-batch diagnostic).
+- Own-draws arm `ckpop_hard_pen` (in the rules), 4-seed bench: pooled L2 7.6e-5 (interval entirely under budget), 3 of 4 seeds within budget (the miss = one L3 instance), across-seed agreement passes; NOT accepted (that instance + the old probe flag). Cost: line_match 0.56-0.59 (vs 0.60-0.63), F +0.03 (vs -0.09).
+- Dimers: penalty-only keeps draws valid (7.9e-5) but no diagonal; h/v split unstable.
+- Wave5 reruns on a cool GPU (reverse-KL mix, probe-context arm): l2x2 2 of 4, l2x15 1 of 4; pooled L2 2.4e-4 both; L3 singles seed-driven. ~1900 updates per 300 s here.
+- Upper-bound penalty arm `ckernel_pen4w3f` bench: seeds 0-2 within budget (F -0.02..-0.05), seed 3 was running at pause.
+
+## Running / queued at pause (no tokens needed; results land in files)
+- GPU 1 queue: `reportables/2026-10-14_cr2_penalty/runs/`: `ub_pen/bench_ckernel_pen4w3f.log` (4-seed bench; row appended to results/bench.jsonl), then `arm_ckpop_pen16_s0/` and `arm_ckpop_pen_lr5_s0/` (lower-pressure own-draws arms, eval.json each); `gpu1_followup.nohup` prints FOLLOWUP_DONE at the end. Summaries: `scripts/pool.py results/bench.jsonl` (last row), `scripts/summarize.py <armdir>`, `scripts/rho.py <eval.json>`.
+- Agents (paused with state written in their report.md; they may have launched detached jobs, see their reports): `reportables/2026-10-14_crevise/` (idea #19, GPU 0), `reportables/2026-10-14_guided_step/` (guided revising step, was #20), `reportables/2026-10-14_graded/` (idea #21 + approved graded-penalty test).
+
+## What to do first next session
+1. Read the three agent reports and the pending sections 3.4 / 4 of the cr2_penalty report; fill them from the run files above (bench rows via pool.py; arm evals via summarize.py), regenerate `results/board.md` (`python -m castlegen.bench board`), commit, push.
+2. Decisions still pending for the user: change request #1 (probe-lift contexts), #3 (post-repair pricing), the v2 acceptance gate / dropping the old probe flag, eval size (one L3 instance in 16 worlds = 2.4e-4).
+3. Recommended lines (coordinator's view, in the cr2 report's verdict and the chat): guided revising steps with the graded field (#19 + #21), graded penalty first test, lambda ramp in the penalty mix, deeper (one level) lookahead on certificates.
+
+---
+
 # Handoff: coloured-pass research loop (2026-10-13, evening)
 
 For a Claude session continuing this work, e.g. running on the Vast GPU box. Read this file, then the documents listed in `notes/coloured_pass_constitution.md`'s start-here section.

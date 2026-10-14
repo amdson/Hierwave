@@ -1,0 +1,156 @@
+.zero l0_t {'proj_z': -0.946, 'rand_z': -0.21, 'hotelling_p': 0.641, 'proj_ratio': 0.827, 'rel_noise': 0.187}
+.wrong l0_t {'proj_z': -0.929, 'rand_z': -0.248, 'hotelling_p': 0.649, 'proj_ratio': 0.731, 'rel_noise': 0.298}
+.{'l0_t': (0.56243764, -0.85)}
+F{'J_path': 1.7355742364852564, 'rkl_x0': -2.4232778679931535, 'gap': 4.1588521044784095, 'masked_logD': 4.158883237581047, 'n_traj': 10502, 'n_final': 998, 'sum_q': 1.0000000343345667, 'ident_max': 2.079010009481408e-05, 'E_mean': -2.394225096556967, 'H_logq_traj': 0.02908383993359106, 'H_x0': 0.02905277143618558}
+.two_level l0_t {'proj_z': -0.83, 'rand_z': -1.36, 'hotelling_p': 0.234, 'proj_ratio': 0.964, 'rel_noise': 0.046}
+two_level l1_c {'proj_z': -0.751, 'rand_z': -1.068, 'hotelling_p': 0.107, 'proj_ratio': 0.973, 'rel_noise': 0.049}
+F
+=================================== FAILURES ===================================
+__________________________ test_flat_negative_control __________________________
+
+flat = (<castlegen.variants.crevise.CRevise object at 0x7df3c9d4a240>, <castlegen.variants._crevise_gradcheck.ExactPath objec...nmask': array([4.158883, 4.158883, 4.158883, ..., 4.158883, 4.158883, 4.158883],
+      shape=(10502,), dtype=float32)})
+
+    def test_flat_negative_control(flat):
+        """Returns that drop the revising steps' costs are a biased estimator: rejected."""
+        var, ex, J, g, info = flat
+        est, _ = _estimate(var, var.cparams, 300, 16, 60_000, 3, TAU, LAM[:1], neg=True)
+        zs = {k: gc.ztest(est[:, s], gc.flat(g)[s], 16) for k, s in gc.block_slices(g).items()}
+        print({k: (round(z["hotelling_p"], 8), round(z["proj_z"], 2)) for k, z in zs.items()})
+>       assert any(z["hotelling_p"] < 1e-6 or abs(z["proj_z"]) > 6 for z in zs.values()), zs
+E       AssertionError: {'l0_t': {'hotelling_p': 0.5624376427187366, 'hotelling_F': 0.5765877542525015, 'hotelling_k': 2, 'unseen_frac': 1.4321455366898747e-06, ...}}
+E       assert False
+E        +  where False = any(<generator object test_flat_negative_control.<locals>.<genexpr> at 0x7df28f0a4120>)
+
+tests/variants/test_crevise.py:171: AssertionError
+___________________________ test_two_level_unbiased ____________________________
+
+        assert abs(r["sum_q"] - 1) < 1e-4
+    
+    
+    def test_two_level_unbiased():
+        """Hierarchy: gradcheck's two-level problem, one revising step at the coarse level (one erased cell)."""
+        p = gc.tiny_problem()
+        var = CRevise(p, 0, "/tmp/crv_gc2", R=[0, 1], rho=0.5)
+        var.params = gc.randomize(var.params, jax.random.PRNGKey(1))
+        var.cparams = gc.zero_critic(var.cparams)
+        lay = var.layout(Region(8))
+        forced, final, masks = enumerate_trajectories(var.sched(lay), 0.5, 2)
+        assert sum(int(m.sum()) for m in masks.values()) == 1
+        ex = ExactPath(var, TAU, LAM, 2, forced, final)
+        J, g, info = ex.J_and_grad(var.params)
+        assert abs(info["sum_q"] - 1) < 1e-4
+        est, cost = _estimate(var, var.cparams, 200, 16, 30_000, 2, TAU, LAM)
+        assert abs(cost.mean() - J) < 4 * cost.std() / np.sqrt(len(cost)), (cost.mean(), J)
+        gf = gc.flat(g)
+        for k, s in gc.block_slices(g).items():
+            z = gc.ztest(est[:, s], gf[s], 16)
+>           print("two_level", k, {x: round(z[x], 3) for x in ("proj_z", "rand_z", "hotelling_p", "proj_ratio", "rel_noise")})
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/variants/test_crevise.py:204: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+castlegen/variants/_crevise_gradcheck.py:162: in reverse_kl_parts
+    keys = np.stack([self.final[c.name].reshape(self.N, -1) for c in p.sampled()], 1).reshape(self.N, -1)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+arrays = [array([[0, 0, 0, 0],
+       [0, 0, 0, 0],
+       [0, 0, 0, 0],
+       ...,
+       [2, 1, 2, 1],
+       [2, 1, 2, 1],
+...0, 1, ..., 0, 0, 1],
+       [1, 0, 1, ..., 0, 1, 0],
+       [1, 0, 1, ..., 0, 1, 0]], shape=(119814, 16), dtype=int32)]
+axis = 1, out = None, dtype = None, casting = 'same_kind'
+
+    @array_function_dispatch(_stack_dispatcher)
+    def stack(arrays, axis=0, out=None, *, dtype=None, casting="same_kind"):
+        """
+        Join a sequence of arrays along a new axis.
+    
+        The ``axis`` parameter specifies the index of the new axis in the
+        dimensions of the result. For example, if ``axis=0`` it will be the first
+        dimension and if ``axis=-1`` it will be the last dimension.
+    
+        Parameters
+        ----------
+        arrays : sequence of ndarrays
+            Each array must have the same shape. In the case of a single ndarray
+            array_like input, it will be treated as a sequence of arrays; i.e.,
+            each element along the zeroth axis is treated as a separate array.
+    
+        axis : int, optional
+            The axis in the result array along which the input arrays are stacked.
+    
+        out : ndarray, optional
+            If provided, the destination to place the result. The shape must be
+            correct, matching that of what stack would have returned if no
+            out argument were specified.
+    
+        dtype : str or dtype
+            If provided, the destination array will have this dtype. Cannot be
+            provided together with `out`.
+    
+            .. versionadded:: 1.24
+    
+        casting : {'no', 'equiv', 'safe', 'same_kind', 'unsafe'}, optional
+            Controls what kind of data casting may occur. Defaults to 'same_kind'.
+    
+            .. versionadded:: 1.24
+    
+    
+        Returns
+        -------
+        stacked : ndarray
+            The stacked array has one more dimension than the input arrays.
+    
+        See Also
+        --------
+        concatenate : Join a sequence of arrays along an existing axis.
+        block : Assemble an nd-array from nested lists of blocks.
+        split : Split array into a list of multiple sub-arrays of equal size.
+        unstack : Split an array into a tuple of sub-arrays along an axis.
+    
+        Examples
+        --------
+        >>> import numpy as np
+        >>> rng = np.random.default_rng()
+        >>> arrays = [rng.normal(size=(3,4)) for _ in range(10)]
+        >>> np.stack(arrays, axis=0).shape
+        (10, 3, 4)
+    
+        >>> np.stack(arrays, axis=1).shape
+        (3, 10, 4)
+    
+        >>> np.stack(arrays, axis=2).shape
+        (3, 4, 10)
+    
+        >>> a = np.array([1, 2, 3])
+        >>> b = np.array([4, 5, 6])
+        >>> np.stack((a, b))
+        array([[1, 2, 3],
+               [4, 5, 6]])
+    
+        >>> np.stack((a, b), axis=-1)
+        array([[1, 4],
+               [2, 5],
+               [3, 6]])
+    
+        """
+        arrays = [asanyarray(arr) for arr in arrays]
+        if not arrays:
+            raise ValueError('need at least one array to stack')
+    
+        shapes = {arr.shape for arr in arrays}
+        if len(shapes) != 1:
+>           raise ValueError('all input arrays must have the same shape')
+E           ValueError: all input arrays must have the same shape
+
+/venv/main/lib/python3.12/site-packages/numpy/_core/shape_base.py:458: ValueError
+=========================== short test summary info ============================
+FAILED tests/variants/test_crevise.py::test_flat_negative_control - Assertion...
+FAILED tests/variants/test_crevise.py::test_two_level_unbiased - ValueError: ...
+2 failed, 4 passed, 9 deselected in 140.60s (0:02:20)

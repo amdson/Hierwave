@@ -78,6 +78,8 @@ Authorised by the user on 2026-10-14 (ideas.md #19). It applies alongside the ke
   - This upper-bounds the reverse KL of goal 2 and equals it when the sampler never revises. Constraint 3 (unbiased gradient) applies to this objective, and constraint 4 is read with the path KL in place of the per-draw reverse KL.
 - **Reporting:** reports state the objective used and, where measurable, the bound's gap. On enumerable cases, compare against the exact reverse KL of x_0.
 
+**Addendum 2026-10-14 (c) (evening; user decision in chat; not yet pasted into the doc):** for a first test, the penalty term may use the graded violation mass Σ_l λ_l D_l (ideas #21: per-instance distance to feasibility, generic from the tables, D = 0 iff H = 0) in place of the binary count H_l, in training only, with the same λ control and the same unbiased estimator; generation unchanged. The user's direction for ideas #19-#21 together: guided, repeated updates (revising steps that read the graded violation field) rather than draw-K random search, which is placement (b) of #20 and stays unapproved.
+
 ## Invariants checked in code
 
 These are asserted or tested on every change. A failure blocks all experiments until it is fixed.
