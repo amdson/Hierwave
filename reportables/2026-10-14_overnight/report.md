@@ -8,6 +8,11 @@ Goals: (1) ground's coarse levels trained by the kernel route; (2) own-draw line
 
 (waves are appended here as they finish)
 
+### Wave 2 (partial): dimers-kernel
+- Generic k x k fine-block Gibbs for T = 0 problems (`castlegen/kernels/fine_block.py`, 7 tests exact on 4x8 periodic). On dimers, k = 2 blocks can only do square flips and never change the diagonal count; k = 3 blocks contain every rhombus and do: pure kernel chains take cfast's collapsed draws (.47/.53/0) to .38/.39/.23 in 600 cycles, though two different starts had not met yet (not equilibrated). k = 4 is too large for the GPU path on the bench region (2.9e6 completions).
+- So local block moves CAN move the orientation mix on dimers, which answers the open question from the kernel-route discussion, given a big enough block.
+- The ML loop on dimers lost validity (own-draw violations rise from 2e-4 to ~0.05 per cell within 50 updates, both with hard-priced blocks and with exp(-20V) weights), so there is no trained orientation result yet. Same disease as ground's 3.2e-3: plain ML has no violation pressure. Waiting for wave2-bench's violation fix before a dimers rerun.
+
 ### Wave 2 (partial): speed-1, fine loop 3.7-6x faster
 - Factored block energy (internal part once + per-world field; bit-identical Gibbs states, 13x on the (1,1) sweep), teacher forcing over all 16 colour steps at once (4.4x on the ML step), level skipping for frozen levels, cycles and updates fused under lax.scan, context prefetch. Arm B: 0.24-0.43 s/iteration against 1.61; 134 states/s against 20; 16.8 updates/s against 2.5. Gradients within 2.4e-3 of the old code (float32 summation order; test_logq tolerance 1e-5 -> 1e-4).
 - 300 s gate unchanged within noise (L3 fill -0.114, soft 0.129, line_match 0.743, L4 fill 0.60). Own-draw line_match 0.508: the fine loop alone still does not move own draws. 26 tests pass.
