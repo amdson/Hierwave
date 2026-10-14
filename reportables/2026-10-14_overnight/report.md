@@ -8,6 +8,11 @@ Goals: (1) ground's coarse levels trained by the kernel route; (2) own-draw line
 
 (waves are appended here as they finish)
 
+### Wave 3 (partial): speed-1b, coarse kernels batched
+- Block-only passes, K + 1 candidates scored in one batch, factored coarse Gibbs: ckernel iteration 7.1 s -> 0.50 s (the 7.1 was contended; a fair range is 4-14x). Flips 63 -> 2180 moves/s, L2 multiple-try 32 -> 3630, updates 1.1 -> 16.1 per s. Acceptance decisions identical to the old code on the same keys; log ratios within 5e-3.
+- A 300 s ckernel run (upper-bound arm) now gets 2312 updates against 440, own-draw line_match 0.70 against 0.63, L4 fill -0.146 against -0.125. Remaining cost is the ML step and context generation inside ckernel.py.
+- Speed summary for the night so far: fine loop 3.7-6x (speed-1), coarse cycle ~4-14x (speed-1b), colour Gibbs sweeps at 1.4e8 cells/s and annealed blocks at 670 blocks/s (speed-2).
+
 ### Wave 2: wave2-explore, own draws only (negative, with a diagnosis)
 - Five arms (bottom-up curriculum + coarse flips K = 16; + annealed L4 blocks; tempered transitions tau <= 2 and <= 6; hot-end lambda 1), one seed, 300 s each, no probe contexts: own-draw line_match stays at 0.50 in all five; dirt 0.84-0.90. The clamp-gate gap closes in every arm (own contexts fit), but that is the fine levels fitting own contexts, not exploration.
 - Diagnosis: rho is NOT what is stuck (rho4 in the top row already follows the fill, 0.02 vs 0.00). The stuck channel is the B certificate (occupied columns, 0.66 in the top row); the hard support and honour constraints make the tiles follow it, and freeing a column means lowering B consistently bottom-up through four levels. Flips redraw certificates high from q; tempered transitions at lambda 20 do not cross; lowering lambda at the hot end leaves violations that get rejected (median log acceptance -756). The ~5 % accepted dirt->partial moves are lost because contexts are redrawn fresh every iteration.
