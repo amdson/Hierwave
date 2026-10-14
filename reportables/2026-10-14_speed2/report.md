@@ -58,3 +58,53 @@ Comparison (different kernels, so per update they are not like for like):
 ## Files
 
 Created: `castlegen/kernels/colour_gibbs.py`, `tests/kernels/test_colour_gibbs.py`, `reportables/2026-10-14_speed2/{report.md, scripts/throughput.py, scripts/test_numbers.py, scripts/anneal_quality.py, runs/throughput.json, runs/test_numbers.json, runs/anneal_quality.json}`. Modified: `reportables/progress.md` (entry at top). `images/` is empty: no figure was needed.
+
+# Part 2: valid annealed blocks
+
+New file `castlegen/kernels/anneal.py`: `anneal_block_valid(lay, state, mask, key, tau_hi, n_steps, lam_kind, lam_end, final, n_hard, joint, joint_sweeps)` returns `(state, logw, valid, info)`. Scripts `scripts/valid_blocks.py`; runs `runs/valid_blocks.json` (const / ramp), `valid_blocks2.json` (const / geo, hard final), `valid_blocks2_joint.json`. Tests added to `tests/kernels/test_colour_gibbs.py` (27 pass in total).
+
+**Weight with a lambda schedule.** Target at step j: f_j(x) = exp(-beta_j (S(x) + lam_j N(x))), beta_j = 1/tau_j (tau 8 -> 1 geometrically), S soft energy, N violations of the instances touching the mask. x_j is one masked sweep invariant for f_j. The AIS weight is
+
+log w = sum_{j=1..n} [log f_j(x_{j-1}) - log f_{j-1}(x_{j-1})] = - sum_j [ beta_j (S_{j-1} + lam_j N_{j-1}) - beta_{j-1} (S_{j-1} + lam_{j-1} N_{j-1}) ],
+
+with S, N of x_{j-1} tracked exactly. Hard final phase (lam -> inf): f_hard = exp(-beta_n S) 1[N=0], so f_hard/f_n = 1[N=0]: log w is -inf for blocks with N > 0 and unchanged otherwise; further hard sweeps leave f_hard invariant. Exact only if x_0 ~ f_0 (toy tests); from probe or q starts the weights are heuristic.
+
+**Toy check.** lam ramps 0 -> 2 (linear) and 0.5 -> 2 (geometric), tau 4 -> 1, 64 steps, 4000 runs, exact starts: log-mean-exp of log w equals the exact log Z(beta=1, lam=2) - log Z(beta0, lam0) within 4 bootstrap SE (or 0.02), toy_modes and toy_support, both schedules: 4 tests pass. A further test checks that hard-final weights are finite only for valid blocks.
+
+**Ground table** (W = 64, 64 blocks, tau 8 -> 1, lam_end = 20, GPU shared). "const" = lam 20 throughout (tau annealing only); "geo" = lam 0.5 -> 20 geometric, "ramp" = 0 -> 20 linear (ramp rows from the first run, hard final adds nothing to the lam rows). Validity = 0 violations touching the block. ESS is over all 64 weights (lam final; with hard final the invalid blocks get weight 0). Changed = fraction of the block's cells (all channels) differing from the start. Pure->part = fraction of blocks that start all-dirt or all-air in t and end partially filled.
+
+| level | steps | start | lam | valid | ESS/64 | changed | dirt start -> end | pure->part | s/64 blocks |
+|---|---|---|---|---|---|---|---|---|---|
+| 3 | 32 | random | const | 0.00 | 0.0 | 0.60 | .50 -> .48 | 0 | 0.10 |
+| 3 | 32 | probe | const | **1.00** | **15.7** | 0.10 | .45 -> .45 | 0 | 0.10 |
+| 3 | 32 | probe | geo | 0.16 | 1.1 | 0.28 | .45 -> .47 | 0.72 | 0.10 |
+| 3 | 32 | probe | ramp | 0.17 | 1.9 | 0.30 | .45 -> .47 | 0.73 | 0.10 |
+| 3 | 32 | q draw | const | **0.98** | 1.5 | 0.21 | 1.00 -> .92 | 0.17 | 0.10 |
+| 3 | 32 | q draw | geo | 0.17 | 1.0 | 0.50 | 1.00 -> .64 | 0.94 | 0.10 |
+| 3 | 128 | random | const | 0.02 | 1.0 | 0.63 | .50 -> .48 | 0 | 0.44 |
+| 3 | 128 | probe | const | **0.98** | **17.5** | 0.10 | .45 -> .45 | 0.02 | 0.37 |
+| 3 | 128 | probe | geo | 0.81 | 2.9 | 0.12 | .45 -> .45 | 0.14 | 0.37 |
+| 3 | 128 | probe | ramp | 0.88 | 1.1 | 0.12 | .45 -> .45 | 0.09 | 0.36 |
+| 3 | 128 | q draw | const | **1.00** | 2.0 | 0.24 | 1.00 -> .88 | 0.16 | 0.37 |
+| 3 | 128 | q draw | geo | 0.55 | 1.7 | 0.47 | 1.00 -> .65 | 0.61 | 0.38 |
+| 4 | 32 | random | const | 0.00 | 0.0 | 0.60 | .50 -> .49 | 0 | 0.12 |
+| 4 | 32 | probe | const | 1.00 | 1.0 | 0.10 | .45 -> .46 | 0.02 | 0.12 |
+| 4 | 32 | probe | geo | 0.00 | 0.0 | 0.38 | .45 -> .47 | 0.72 | 0.12 |
+| 4 | 32 | q draw | const | 0.98 | 1.0 | 0.18 | 1.00 -> .95 | 0.25 | 0.12 |
+| 4 | 128 | random | const | 0.00 | 0.0 | 0.62 | .50 -> .49 | 0 | 0.46 |
+| 4 | 128 | probe | const | 0.92 | 5.6 | 0.11 | .45 -> .46 | 0.08 | 0.44 |
+| 4 | 128 | probe | geo | 0.08 | 1.0 | 0.24 | .45 -> .47 | 0.70 | 0.44 |
+| 4 | 128 | q draw | const | 0.89 | 3.6 | 0.24 | 1.00 -> .88 | 0.34 | 0.57 |
+| 4 | 128 | q draw | geo | 0.05 | 1.0 | 0.52 | 1.00 -> .61 | 0.98 | 0.44 |
+
+Starts are valid in 100% of blocks for probe and q draws (the q draws of the trained cfast ground model have 0 violations touching these blocks), and 0% for random.
+
+**Reading.**
+- Valid starts with tau-only annealing and lam fixed at 20 give valid states: 98-100% at level 3 (92%/89% at level 4, 128 steps), at 670 blocks/s (32 steps) or 170 blocks/s (128 steps). With probe starts the ESS is 16-17 of 64 at level 3, so the weights are usable there; q-draw starts give ESS 1.5-3.6.
+- The lam ramp from 0 does not help: lam = 0 at the start erases the valid start, and the ramp needs ~128 steps to recover (81-88% at level 3, 5-8% at level 4). It makes bigger changes (the all-dirt q-draw blocks become partially filled in 61-98% of blocks, dirt 1.00 -> 0.65) but only 16-55% of those are valid. Random starts never become valid with any lam schedule (level 3: 0-2% at 128 steps; 9-12 violations left at 32 steps, 21-34 at level 4), and the hard final phase does not repair them (n_hard = 2 sweeps).
+- So the useful setting is the tempered perturbation of a valid start (const lam 20). The perturbation is local: 10% of cells change from a probe, 20-25% from a q draw. A dirt block can become partially filled: from q draws (all-dirt blocks) 16-17% of blocks do at level 3 (dirt 1.00 -> 0.88-0.92) and 25-34% at level 4; from probes 0-2% (probe blocks are mostly already partly filled; 83% of level-3 blocks were pure, and ~0% of those changed).
+- Weights from probe/q starts are not exact AIS weights (the start is not pi_beta0), so ESS describes the weight spread only.
+
+**Joint fine-block moves** (kernel-a `ExactBlockGibbs(p, Region(64), level=1, lam=20)`, imported unmodified). Its API has no tau and runs numpy over the whole region, one world at a time, so it is applied once after the anneal (tau = 1 target, p*-invariant, weight unchanged). Cost: about 20 s for 64 worlds (68 s with its pruned-enumeration cache cold) versus 0.1 s for the anneal. Level 3, 32 steps, hard final: validity random 0.00 -> 0.00 (mean violations 11.1 -> 8.6), probe/const 1.00 -> 1.00, q draw/const 0.98 -> 0.98, probe/geo 0.16 -> 0.23, q draw/geo 0.17 -> 0.20. It barely helps and is 200x slower than the anneal; a GPU version with tau would be needed to interleave it, which I did not build (edit of exact_block.py is not mine).
+
+**Recommendation.** Use `anneal_block_valid(..., lam_kind="const", lam_end=20, final="hard")` from probe or q-draw starts at tau_hi = 8, 32 steps for level 3 (100%/98% valid, 0.1 s per 64 blocks), 128 steps for level 4 (89-92%). It cannot generate valid blocks from random starts.

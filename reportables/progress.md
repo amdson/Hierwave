@@ -17,6 +17,16 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 10:30 · speed-2 (part 2: valid annealed blocks) · finished
+Approach: lam-annealed AIS with hard final phase (castlegen/kernels/anneal.py, anneal_block_valid); valid starts (probe, q draw); optional kernel-a joint sweep at the end.
+Result: lam fixed at 20, tau 8->1 from valid starts: 98-100% valid blocks at level 3 (32 steps, 0.1 s/64 blocks), 89-92% at level 4 (128 steps); ESS 16-17/64 from probe starts. Lam ramp from 0 and random starts do not reach validity (0-17% / 0%). Joint kernel-a move adds ~nothing, 200x slower. Toy lam-ramp AIS log Z ratios match exact. Report: reportables/2026-10-14_speed2/report.md (Part 2).
+Next: GPU joint level-1 block move with tau; use probe-start annealed blocks as training data.
+
+## 2026-10-14 08:40 · wave2-bench (ckernel upper-bound arm) · started
+Approach: violation pressure for ckernel (ideas #18; probe-lift contexts = labelled diagnostic upper bound, change request #1): (a) exp(-20 V) weights on refined states + per-level violations of refined states; (b) cfast's lambda-controlled reverse-KL step on own draws mixed with ML (amendment: "may be mixed"); (c) raw vs final violation attribution by level/factor. Then v2 bench at 300 s, 2 seeds.
+Result: pending.
+Next: pending.
+
 ## 2026-10-14 08:38 · sweep2b (Sweep 2, coarse half) · finished
 Approach: kernel route on all levels (ideas #18): acceptance with kernel-a params; generic coarse-flip MH + exact single-cell coarse Gibbs (castlegen/kernels/coarse_flip.py); variant `ckernel` = probe + own contexts -> flips L3-4, Gibbs L4/L3, MTM L2 K=8, fine Gibbs -> weighted ML on levels 0-4; start sweep2a arm B.
 Result: [report](2026-10-14_sweep2b/report.md). Probe-lift acceptance with kernel-a params: L2 0.79 (K8 0.92), L3 0.44 (K8 0.80), L4 0.03 (K8 0.16); cfast 0 at L>=2. Own-draw line_match 0.50 -> 0.62, dirt 0.83 -> 0.52 in 300 s (first variant above 0.5); clamp gate own ~ fill (L3 -0.084 vs -0.110, L4 -0.107 vs -0.125). Bench ckernel ground 300 s, 1 seed: NOT accepted, final viol worst 3.2e-3 (L3); F -0.112 (cfast 0.774); line_match 0.609; rho 0.38/0.82/0.86/0.86/0.58, starved 0/0.5/5/10/3.5 %. Ablation own-only: stays dirt 0.90 / line_match 0.50, so the gain comes from probe contexts at coarse levels (outside the amendment's q-started argument: proposal).

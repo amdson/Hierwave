@@ -258,3 +258,40 @@ def test_ais_partition_ratio(name):
     # tracked energy equals recomputed energy
     s1, n1 = info["soft_end"], info["nv_end"]
     np.testing.assert_allclose(np.asarray(info["E_end"]), np.asarray(s1 + lam * n1), atol=5e-2)
+
+
+# ------------------------------------------------------------------ part 2: lambda-annealed AIS
+@pytest.mark.parametrize("name", ["toy_modes", "toy_support"])
+@pytest.mark.parametrize("kind", ["ramp", "geo"])
+def test_ais_lambda_ramp(name, kind):
+    from castlegen.kernels import anneal as an
+    lam_end, tau_hi, n_steps, B = 2.0, 4.0, 64, 4000
+    p, lay = _lay(name)
+    lam0 = float(an.lam_schedule(kind, n_steps, lam_end)[0])
+    ex0 = toy_exact(name, lam0, 1.0 / tau_hi)
+    ex1 = toy_exact(name, lam_end, 1.0)
+    true = ex1["logZ"] - ex0["logZ"]
+    rng = np.random.default_rng(0)
+    st = exact_samples(ex0, rng, B)
+    mask = cg.subtree_mask(lay, 2, np.zeros((B, 2), np.int32))
+    st2, logw, valid, info = an.anneal_block_valid(lay, st, mask, jax.random.PRNGKey(0), tau_hi, n_steps,
+                                                   kind, lam_end, final="lam")
+    lw = np.asarray(logw, np.float64)
+    m = lw.max()
+    lme = lambda a: np.log(np.mean(np.exp(a - m))) + m
+    se = np.std([lme(lw[i]) for i in rng.integers(0, B, (200, B))])
+    assert abs(lme(lw) - true) < max(4 * se, 0.02), (lme(lw), true, se)
+    np.testing.assert_array_equal(np.asarray(valid), np.asarray(info["N_end"]) == 0)
+
+
+def test_hard_final_weights_inf_iff_violating():
+    from castlegen.kernels import anneal as an
+    p, lay = _lay("toy_modes")
+    B = 64
+    st = _random_state(p, lay, B, 1)
+    mask = cg.subtree_mask(lay, 2, np.zeros((B, 2), np.int32))
+    st2, logw, valid, info = an.anneal_block_valid(lay, st, mask, jax.random.PRNGKey(0), 4.0, 8, "ramp", 2.0,
+                                                   final="hard", n_hard=1)
+    s, nv = cg.state_energy(lay, st2, mask)
+    np.testing.assert_array_equal(np.asarray(valid), np.asarray(nv) == 0)
+    assert (np.isfinite(np.asarray(logw)) <= np.asarray(valid)).all()
