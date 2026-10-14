@@ -10,7 +10,7 @@ import jax.numpy as jnp
 
 from castlegen.bench import noise
 
-from ._cpass_core import ACTOR_WIN, NCOL, key_of, mlp
+from ._cpass_core import NCOL, key_of, mlp
 
 
 def train_pass(lay, params, seed, designed, tau, lam, override=None, record=True):
@@ -36,7 +36,7 @@ def train_pass(lay, params, seed, designed, tau, lam, override=None, record=True
                 v = nv + look
                 vmin = jnp.min(v, axis=1, keepdims=True)
                 mask = (v == vmin) | ~valid[:, None]
-                feat = lay.features(state, l, Y, X, ACTOR_WIN)
+                feat = lay.features(state, l, Y, X, lay.actor_win)
                 b = mlp(params[key_of(l, c.name)], feat)
                 logits = jnp.where(mask, -soft / tau - b, -jnp.inf)
                 logq = jax.nn.log_softmax(logits, axis=1)
