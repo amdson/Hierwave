@@ -8,6 +8,11 @@ Goals: (1) ground's coarse levels trained by the kernel route; (2) own-draw line
 
 (waves are appended here as they finish)
 
+### Wave 4 (partial): speed-3, the generation pass
+- Hoisted per-colour geometry and Gumbel noise, per-level encoded image in the scan carry: bit-identical worlds, but only about 1.1x on ground (B = 32: 8.0 -> 7.3 ms per 32 worlds; B = 128: 17.2 -> 15.7 ms), within the contention noise. The pass is launch-bound at small batches and bandwidth-bound at large ones; window gather + MLP is 75 % of it. Toys unchanged.
+- The real lead: the host-side `designed_values` costs about 0.6 ms per world on ground, as much as the device pass itself; it lives in the bench harness (frozen) and was not touched. Batching it, or moving it onto the context prefetch thread, is the next candidate. 50 tests pass (6 new); test files must run in separate processes on CPU (a CPU-JIT "Failed to materialize symbols" error appears when run together).
+- Judgement: the 1.1x is not worth much by itself; the change is kept because it is bit-identical and tested, and can be reverted in one commit if the parallel code path is unwanted.
+
 ### Wave 4 (partial): wave3-bench, 4-seed pass rate on the upper-bound arm (change request #1)
 - A weaker separate L4 reverse-KL step (lr 3e-4, `ckernel_rkl4w3`) zeroes L3 and L4 violations on all 4 seeds with L3/L4 starvation <= 15 %. The 4-seed bench (warm, run alone): 1 of 4 seeds accepted (seed 2: worst 1.4e-4, F -0.123, line_match 0.665, rho .40/.80/.85/.85/.56, starved 0/2.0/6.6/12.2/12.4 %). The other three miss at L2 (2.4e-4..7.9e-4) and one at L1.
 - Evaluation noise quantified: 16 held-out worlds per seed; one violation is 6.1e-5 at L2, 2.4e-4 at L3, 2e-3 at L4; a model at half the budget everywhere passes a seed about 57 % of the time. Pooled over 4 seeds L2 is 3.7e-4 (95 % interval 2.4e-4..5.5e-4), a real miss; L1 1.9e-4, borderline; L3 consistent with passing. Fewer updates -> more violations (seed 0: fewest updates, most violations).
