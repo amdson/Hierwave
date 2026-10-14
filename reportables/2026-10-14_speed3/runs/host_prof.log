@@ -1,0 +1,5 @@
+ground 128 16 designed_values ms 11.1  stack+transfer ms 1.9  device pass ms 17.0
+ground 128 32 designed_values ms 19.1  stack+transfer ms 1.4  device pass ms 27.0
+ground 64 32 designed_values ms 21.7  stack+transfer ms 2.5  device pass ms 37.3
+ground 64 128 designed_values ms 56.8  stack+transfer ms 2.7  device pass ms 150.5
+toy_support 64 32 designed_values ms 0.1  stack+transfer ms 0.6  device pass ms 10.0

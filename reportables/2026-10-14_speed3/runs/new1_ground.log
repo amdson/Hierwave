@@ -1,0 +1,2 @@
+{"problem": "ground", "W": 64, "B": 32, "which": "new", "compile_s": 6.1, "s": 0.0317, "worlds_per_s": 1010.5}
+{"problem": "ground", "W": 64, "B": 128, "which": "new", "compile_s": 18.1, "s": 0.2266, "worlds_per_s": 564.9}

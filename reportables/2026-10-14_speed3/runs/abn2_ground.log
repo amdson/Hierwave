@@ -1,0 +1,8 @@
+{"problem": "ground", "W": 64, "B": 32, "version": "core_old", "diff_vs_first": 0, "min_ms": 8.4, "p10_ms": 14.6, "med_ms": 16.1, "worlds_per_s_at_min": 3802}
+{"problem": "ground", "W": 64, "B": 32, "version": "core_v1", "diff_vs_first": 0, "min_ms": 7.4, "p10_ms": 12.5, "med_ms": 13.7, "worlds_per_s_at_min": 4332}
+{"problem": "ground", "W": 64, "B": 32, "version": "core_v2", "diff_vs_first": 0, "min_ms": 7.6, "p10_ms": 12.5, "med_ms": 13.4, "worlds_per_s_at_min": 4188}
+{"problem": "ground", "W": 64, "B": 32, "version": "core_v2b", "diff_vs_first": 0, "min_ms": 8.2, "p10_ms": 13.1, "med_ms": 14.0, "worlds_per_s_at_min": 3911}
+{"problem": "ground", "W": 64, "B": 128, "version": "core_old", "diff_vs_first": 0, "min_ms": 20.2, "p10_ms": 70.0, "med_ms": 78.7, "worlds_per_s_at_min": 6325}
+{"problem": "ground", "W": 64, "B": 128, "version": "core_v1", "diff_vs_first": 0, "min_ms": 20.2, "p10_ms": 64.6, "med_ms": 74.7, "worlds_per_s_at_min": 6346}
+{"problem": "ground", "W": 64, "B": 128, "version": "core_v2", "diff_vs_first": 0, "min_ms": 18.6, "p10_ms": 71.2, "med_ms": 76.6, "worlds_per_s_at_min": 6888}
+{"problem": "ground", "W": 64, "B": 128, "version": "core_v2b", "diff_vs_first": 0, "min_ms": 19.2, "p10_ms": 72.2, "med_ms": 79.2, "worlds_per_s_at_min": 6660}

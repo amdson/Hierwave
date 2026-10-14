@@ -1,0 +1,8 @@
+{"problem": "ground", "W": 64, "B": 32, "version": "core_old", "diff_vs_first": 0, "min_ms": 11.8, "p10_ms": 16.1, "med_ms": 29.0, "worlds_per_s_at_min": 2712}
+{"problem": "ground", "W": 64, "B": 32, "version": "core_final", "diff_vs_first": 0, "min_ms": 10.6, "p10_ms": 15.4, "med_ms": 25.7, "worlds_per_s_at_min": 3022}
+{"problem": "ground", "W": 64, "B": 128, "version": "core_old", "diff_vs_first": 0, "min_ms": 43.9, "p10_ms": 64.3, "med_ms": 81.6, "worlds_per_s_at_min": 2914}
+{"problem": "ground", "W": 64, "B": 128, "version": "core_final", "diff_vs_first": 0, "min_ms": 33.6, "p10_ms": 62.9, "med_ms": 78.8, "worlds_per_s_at_min": 3810}
+{"problem": "toy_support", "W": 64, "B": 32, "version": "core_old", "diff_vs_first": 0, "min_ms": 1.9, "p10_ms": 2.0, "med_ms": 3.5, "worlds_per_s_at_min": 17148}
+{"problem": "toy_support", "W": 64, "B": 32, "version": "core_final", "diff_vs_first": 0, "min_ms": 2.0, "p10_ms": 2.1, "med_ms": 3.3, "worlds_per_s_at_min": 15974}
+{"problem": "toy_support", "W": 64, "B": 128, "version": "core_old", "diff_vs_first": 0, "min_ms": 2.4, "p10_ms": 2.8, "med_ms": 3.3, "worlds_per_s_at_min": 53119}
+{"problem": "toy_support", "W": 64, "B": 128, "version": "core_final", "diff_vs_first": 0, "min_ms": 2.1, "p10_ms": 2.4, "med_ms": 2.6, "worlds_per_s_at_min": 60329}

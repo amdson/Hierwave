@@ -1,0 +1,2 @@
+ground 64 generate() ms/world (min, median): {'old': (9.6, 15.2), 'new': (10.4, 12.1)}
+toy_support 64 generate() ms/world (min, median): {'old': (3.3, 4.3), 'new': (2.8, 3.3)}

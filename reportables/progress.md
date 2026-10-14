@@ -20,7 +20,16 @@ free energy), or why it stopped.
 Next: what you would try next.
 ```
 
+## 2026-10-14 10:40 · wave4-bench (ckernel_rkl4w3 throughput + L1-L2 pressure; UPPER-BOUND arm, change request #1) · started
+Approach: fuse ckernel's 32 reverse-KL steps and 8 ML updates into scans, prefetch host contexts in a thread; then 1-2 arms with rkl_level_scale > 1 at L1-L2; 4-seed bench of the chosen arm.
+Result: pending. Report: 2026-10-14_wave4_bench/report.md.
+
 ---
+
+## 2026-10-14 · speed-3 (generation speed) · finished
+Approach: profiled the vmapped own-draw pass (train_pass record=False) and coloured_pass on ground/toys; hoisted per-colour geometry and Gumbel noise out of the scan, encoded context images in the scan carry (one gather per window).
+Result: [report](2026-10-14_speed3/report.md). Draws bit-identical to the old code (tests/variants/test_gen_speed.py, 6 layouts; GPU 160 worlds). Only ~1.1x on ground (B=32: 8.0 -> 7.3 ms, B=128: 17.2 -> 15.7 ms, quiet GPU), nothing on toys. Host designed_values (~0.6 ms/world on ground) is as large as the device pass.
+Next: batch/prefetch designed_values; GPU shared, timings noisy.
 
 ## 2026-10-14 10:40 · wave5-pop (ckpop_hard_rkl: compile budget, L4 pressure, bench) · started
 Approach: (#18; own draws only, inside the frozen constitution) find why bench seed 0 compiled for 171 s after a warm-up and fix it (fixed shapes, warm through the bench import path); add a scaled-down L4 reverse-KL step; 2-seed 300 s bench of the chosen arm.

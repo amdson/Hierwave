@@ -1,0 +1,16 @@
+{
+ "problem": "ground",
+ "W": 64,
+ "B": 128,
+ "full": 0.0763,
+ "no_cond": 0.0812,
+ "no_feat": 0.0184,
+ "no_mlp": 0.0186,
+ "no_noise": 0.1153,
+ "no_cond+feat+mlp+noise": 0.0032,
+ "level4_only": 0.0036,
+ "level3_only": 0.0173,
+ "level2_only": 0.0113,
+ "level1_only": 0.0263,
+ "level0_only": 0.0142
+}

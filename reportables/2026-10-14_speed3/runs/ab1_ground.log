@@ -1,0 +1,2 @@
+{"problem": "ground", "W": 64, "B": 32, "differing_cells": 0, "old_min_ms": 21.8, "old_med_ms": 39.9, "old_worlds_per_s_min": 1468.0, "new_min_ms": 18.1, "new_med_ms": 38.1, "new_worlds_per_s_min": 1772.0, "speedup_min": 1.21, "speedup_med": 1.05}
+{"problem": "ground", "W": 64, "B": 128, "differing_cells": 0, "old_min_ms": 78.4, "old_med_ms": 116.6, "old_worlds_per_s_min": 1632.0, "new_min_ms": 93.1, "new_med_ms": 110.5, "new_worlds_per_s_min": 1375.0, "speedup_min": 0.84, "speedup_med": 1.06}

@@ -1,0 +1,20 @@
+== tests/variants/test_gen_speed.py
+FAILED tests/variants/test_gen_speed.py::test_generation_equal[toy_modes-16-True-0]
+FAILED tests/variants/test_gen_speed.py::test_generation_equal[dimers-16-True-0]
+FAILED tests/variants/test_gen_speed.py::test_generation_equal[ground-64-True-0]
+4 failed, 2 passed in 457.78s (0:07:37)
+== tests/variants/test_cstart.py
+...........                                                              [100%]
+11 passed in 191.45s (0:03:11)
+== tests/kernels/test_logq.py
+........                                                                 [100%]
+8 passed in 214.81s (0:03:34)
+== tests/variants/test_creplay.py
+........                                                                 [100%]
+8 passed in 510.42s (0:08:30)
+== tests/variants/test_cfast_cone.py
+..........                                                               [100%]
+10 passed in 163.37s (0:02:43)
+== tests/variants/test_cpass_gradient.py
+.......                                                                  [100%]
+7 passed in 181.93s (0:03:01)

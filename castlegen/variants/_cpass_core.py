@@ -232,6 +232,9 @@ def coloured_pass(lay: Layout, params, seed, designed, tau, lam, forced=None, ov
     forced: {name: array} values to score instead of draw.  override: (k, ci, j,
     value, on) replaces one draw at the coarsest level.  Returns (state,
     totals (nsteps,), logq_total, records or None)."""
+    if not record and critic_extra is None and not lay.resid:      # speed-3: same values, fewer device ops
+        from ._cfast_core import fast_coloured_pass
+        return fast_coloured_pass(lay, params, seed, designed, tau, lam, forced, override)
     p = lay.p
     state = {c.name: (designed[c.name] if c.designed is not None
                       else jnp.full(lay.hw[c.level], -1, jnp.int32)) for c in p.chans}
