@@ -15,14 +15,32 @@ Orchestrator's summary of the multi-agent waves on the GPU box. Each agent's own
 
 **Reading after wave 1.** Three separate limits, all now measured: (1) sampling variance at the coarse levels (fixed in principle by creplay, at a cost); (2) the fine levels never learned to read the parent count, so they cannot build fill-following contexts and the coarse levels avoid them (cresid targets this); (3) the actor itself: tanh MLP optimises badly and the 4×4 window is too small (cln targets this). Large B alone does nothing for ground.
 
-## Wave 2 (in flight)
+## Wave 2 and 3 (results; agents' reports in their folders)
 
-- cresid (Opus): generic per-draw count-residual features from the declared count factors; gate = clamp's test; bench ground vs cfast.
-- cln (Opus): LN+SiLU actor and 6×6 window as cfg options; `cln`, `cln6` variants; bench toy_support, toy_modes, ground.
-- creplay2 (Opus): profile and cut the replay cost (replay from the stored state at the branched step, K = 2, top level only); compile-cache miss; equal-update comparison on ground.
-- cbig2 (Sonnet): does B = 64/256 close the variance gap on the real toy_modes bench?
-- fixes (Sonnet): cpass GPU assert tolerance; cpass and ctrunc_full on ground; fair cfast columns rerun.
-- cconv2 (Sonnet): equal-update comparison cconv vs cfast on the toys.
+| agent | folder | verdict |
+| --- | --- | --- |
+| cresid | 2026-10-13_cresid | Generic count-residual features: no effect on the clamp gate. Fine rho draws stay 97-100 % identical under a probe clamp; levels 2-3 deterministic. |
+| cln | 2026-10-13_cln | LN+SiLU actor and 6×6 window as cfg options (tests pass, defaults unchanged). No gain at B = 8 in sampled training; ground still all dirt. |
+| creplay2 | 2026-10-13_creplay | 0.18 s/update (R = (2, 2), K = 4), compile-cache miss fixed. Coarse SNR ×1200-3400, and **more coarse signal changes nothing on ground** at equal updates. |
+| cbig2 | 2026-10-13_cbig | B = 256 closes half to two thirds of the toy_modes gap (plateau at the 4×4-window floor); toy_support B = 256 within 0.007 of F*, fails only the (old) probe flag. |
+| fixes | 2026-10-13_gpu_baselines | cpass GPU assert fixed; cpass/ctrunc_full on ground all dirt; columns all-air collapse survives a fair budget. |
+| cconv2/3 | 2026-10-13_cconv | At equal updates the conv actor matches or beats cfast on F (throughput-limited); at 300 s it collapses exactly like cfast on ground and columns. Parked. |
+| probes | 2026-10-14_probes | The old probe flag is a world-level LR test with n = 16: exchangeable draws trip it 53 %. Dimers' diagonal is present untrained and dies by update 20 with entropy collapse. |
+| csat | 2026-10-14_csat | **Collapse starts at the top level** (cert4 deterministic ~update 200 as dirt passes 0.95); fine levels follow. lr 1e-3 keeps them stochastic but context-blind. τ tempers only the designed term, not b (15-60 nats spread). |
+| ctop | 2026-10-14_ctop | At init the top level is near a tie (partial fill cheaper at τ 2). The all-dirt preference is **built within 50 updates** because the fine levels improve faster in dirt contexts. cert4 drives it. |
+| chot | 2026-10-14_chot | ε-hot draws at τ_b with bounded importance weights: unbiased (gradcheck 11/11) and **cannot help by construction** (same expected update as on-policy). |
+| ccur | 2026-10-14_ccur | Bottom-up schedule (ideas #7): frozen coarse levels give diverse but non-fill contexts; fine levels get worse in fill contexts; top level collapses within 90 updates of release. |
+| cfine | 2026-10-14_cfine | Enumerated fine-level branching with windowed replays: unbiased, fine SNR 0.01 → 25-85, **no effect**: the gradient only acts in visited contexts. |
+| cdim | 2026-10-14_cdim | Dimers: entropy and violations trade along one curve for every λ ∈ [1, 20] and τ. λ sets when stripes arrive, not whether. |
+| probe2 | 2026-10-14_probe2 | **Bench v2** (user-approved): per-block, per-level Spearman ρ and starvation count. cbig256 toy_modes at the exact-p ideal (ρ 0.87, 0 % starved); collapsed ground starves levels 1-4 by 24-77 nats/block, level 0 fine. |
+
+**Reading after wave 3.** Every estimator-side fix is now built, unbiased and measured: coarse credit (creplay), fine credit (cfine), batch size (cbig), actor (cln, cconv), information (cresid), schedules (csat, ccur), unbiased exploration (chot). None moves ground, for one reason: reverse KL on the sampler's own draws only trains a level in the contexts it visits, the top level locks into all dirt within 50-200 updates because the untrained fine levels are cheaper there, and from then on the fill-following contexts are never visited. The user approved the two things that act on that directly:
+- **ideas #12 / #14:** train the fine levels on target-like parent states at a mixed start depth (same minimiser, different context weighting): `cstart` (running), with a generic coarse-state source from the designed energy (`ccoarse`, running).
+- **bench v2 probe check** (landed), so starvation is now measured per level instead of by a miscalibrated world-level flag.
+Open structural question (cdim2, running): whether a diverse valid policy is representable at all in this sampler class on dimers, which would point at goal-4 freedoms (more passes, colouring, lookahead) rather than training.
+
+## Decisions taken by the user during the session
+Exploration at higher τ in scope (ideas #12); bench budget 300 s; ground is the focus problem with the fast loop (dimers pre-check → ground 120 s with entropy/dirt/line_match → clamp gate → bench); ideas #14 in scope; bench v2 probe check approved.
 
 ## Process notes
 - Box rules for agents: `/workspace/BOX_RULES.md` (core ranges, flags, no git by agents, no broad pkill, compile warm-up before benches).
