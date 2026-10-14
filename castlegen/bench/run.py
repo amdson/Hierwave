@@ -15,6 +15,7 @@ from pathlib import Path
 import numpy as np
 
 from . import energy as en
+from . import shares
 from .problem import Problem, Region
 from .problems import get as get_problem
 from .variant import load_variants
@@ -24,6 +25,9 @@ BENCH_DIR = Path(__file__).resolve().parent
 EVAL_SEED0 = 1_000_000          # evaluation noise seeds start here; variants train below it
 BUDGET = 2e-4                   # final violated fraction allowed at every level
 PROBE_FLAG = 0.05               # flag a probe set with more than 5 % above the 99th percentile
+BENCH_VERSION = 2               # 2: block check (per-level rho, starvation) added beside the old probe flag
+N_POOL_OWN = 128                # own worlds in the block check (at least)
+N_POOL_PROBE_SEEDS = 32         # probe seeds in the block check (each gives problem.probes(seed) worlds)
 Z = 3.0                         # agreement: |difference| <= Z * standard error + tolerance
 
 
@@ -125,6 +129,8 @@ def eval_seed(problem: Problem, v, k: int, n_eval: int, img_path: Path | None):
                          "median_gap_per_cell": float(np.median(ds - thr) / cells),
                          "flag": bool((ds > thr).mean() > PROBE_FLAG)}
 
+    out["blocks"] = block_check(problem, v, k, region)
+
     # finite support: two overlapping open windows must agree on the overlap
     W = problem.W_eval
     half = (W // 2) >> T << T
@@ -141,6 +147,42 @@ def eval_seed(problem: Problem, v, k: int, n_eval: int, img_path: Path | None):
             tot += a.size
     out["support_mismatch"] = mism / max(tot, 1)
     return out
+
+
+def block_check(problem: Problem, v, k: int, region: Region, pool_out=None):
+    """Bench version 2: per-level Spearman rho between the block log q share and the block target
+    log-weight share, pooled over own draws and probe states, and the starvation count
+    (castlegen/bench/shares.py).  None when the variant has no score_sites."""
+    if not problem.probes:
+        return None
+    t0 = time.time()
+    pool = shares.Pool(problem.T)
+    nown = 0
+    for i in range(N_POOL_OWN):
+        seed = EVAL_SEED0 + 1000 * k + 200 + i
+        x = _with_designed(problem, v.generate(seed, region)["raw"], seed, region)
+        s = v.score_sites(x, region)
+        if s is None:
+            return None
+        if i == 0:          # the per-draw terms must add up to score(); otherwise this variant is n/a
+            tot, q = sum(float(np.sum(a)) for a in s.values()), v.score(x, region)
+            if q is None or abs(tot - q) > 2e-3 * max(1.0, abs(q)):
+                return None
+        pool.add(problem, region, s, x, 0, i)
+        nown += 1
+    npr = 0
+    for i in range(N_POOL_PROBE_SEEDS):
+        seed = EVAL_SEED0 + 1000 * k + 600 + i
+        for j, y in enumerate(problem.probes(seed, region)):
+            y = _with_designed(problem, y, seed, region)
+            pool.add(problem, region, v.score_sites(y, region), y, 1, npr)
+            npr += 1
+    if pool_out is not None:
+        pool_out.append(pool)
+    nbx = {l: shares._nblk(problem, region, l)[1] for l in range(problem.T + 1)}
+    res = shares.summarize(pool, nbx)
+    return {"version": BENCH_VERSION, "n_own": nown, "n_probe": npr, "levels": res,
+            "lambda": shares.LAMBDA_SCORE, "starve_nats": shares.STARVE_NATS, "s": time.time() - t0}
 
 
 def run(variant: str, problem_name: str, seeds=2, train_s=150.0, n_eval=16, tag="", quiet=False):
@@ -174,7 +216,7 @@ def run(variant: str, problem_name: str, seeds=2, train_s=150.0, n_eval=16, tag=
                   f"F {m['free_energy']}  support {m['support_mismatch']:.3g}", flush=True)
 
     verdict = judge(problem, per_seed, train_s)
-    rec = {"run": run_id, "time": stamp, "variant": variant, "problem": problem_name,
+    rec = {"bench_version": BENCH_VERSION, "run": run_id, "time": stamp, "variant": variant, "problem": problem_name,
            "problem_version": problem.version, "harness": harness_hash(), "git": git_rev(),
            "machine": f"{platform.node()} {platform.machine()}", "train_budget_s": train_s,
            "seeds": seeds, "n_eval": n_eval, "wall_s": time.time() - t_all, "tag": tag,

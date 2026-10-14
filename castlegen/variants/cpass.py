@@ -359,6 +359,33 @@ class CPass(Variant):
         forced = {c.name: jnp.asarray(x[c.name], jnp.int32) for c in self.problem.sampled()}
         return float(lay.jit_score(self.params, des, forced, jnp.asarray(self.lam, jnp.float32)))
 
+    def score_sites(self, x, region):
+        """Per-draw log q by cell (bench v2): {channel: (h, w)} summing to score(x)."""
+        assert region.periodic
+        lay = self.layout(region)
+        if not hasattr(lay, "jit_sites"):
+            def f(params, des, forced, lam):
+                _, _, _, recs = core.coloured_pass(lay, params, 0, des, 1.0, lam, forced=forced, record=True)
+                out = {}
+                for l in lay.levels:
+                    for ci, c in enumerate(lay.chans[l]):
+                        r = recs[core.key_of(l, c.name)]
+                        la = jnp.take_along_axis(r["logq"], r["a"][..., None], 2)[..., 0]
+                        la = jnp.where(r["valid"], la, 0.0)
+                        Ys, Xs = [], []
+                        for k in range(core.NCOL):
+                            Y, X, valid = lay.sites(l, k)
+                            Ys.append(jnp.where(valid, Y, lay.hw[l][0]))
+                            Xs.append(X)
+                        arr = jnp.zeros(lay.hw[l]).at[jnp.stack(Ys), jnp.stack(Xs)].set(la, mode="drop")
+                        out[c.name] = arr
+                return out
+            lay.jit_sites = jax.jit(f)
+        des = {c.name: jnp.asarray(x[c.name], jnp.int32) for c in self.problem.chans if c.designed is not None}
+        forced = {c.name: jnp.asarray(x[c.name], jnp.int32) for c in self.problem.sampled()}
+        out = lay.jit_sites(self.params, des, forced, jnp.asarray(self.lam, jnp.float32))
+        return {k: np.asarray(v, float) for k, v in out.items()}
+
     def info(self):
         return {"updates": self.updates, "lam": self.lam.tolist(), "tau": self.tau,
                 "baseline": getattr(self, "baseline", None), "margin": core.margin(self.problem, window_of(self.cfg.get("win"))),

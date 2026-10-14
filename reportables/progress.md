@@ -17,6 +17,16 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 02:20 · probe2 · finished
+Approach: bench v2 block check (per-level Spearman rho of block log q share vs target log-weight share, starvation count) beside the old probe flag; not a gate. score_sites added for the cpass family and greedy; shares.py; board columns; notes/bench.md version 2.
+Result: toy_modes level 0 rho exact 0.87, cbig256 (60 s) 0.87, greedy 0.37; level 1 (subtree weight) 0.97 / 0.87 / 0.53; starvation at null level for exact and cbig256. Ground cfast 60 s (collapsed): level 0 not starved (rho_probe 0.78), levels 1-4 100 % of probe blocks starved by 24-77 nats median (own null 0.3-3 %). [Report](2026-10-14_probe2/report.md).
+Next: rerun the board rows with v2 for the leading variants; decide a gate rule (range-overlap, null rate).
+
+## 2026-10-14 01:58 · probe2 · started
+Approach: harness change approved by the user (bench version 2): per-block per-level rho and starvation; calibrate on toy_modes (exact / cbig256 / greedy) and a cfast ground run. Cores 56-63.
+Result: -
+Next: -
+
 ## 2026-10-14 01:51 · cfine · started
 Approach: csat proposal 1 / creplay's coupled enumeration extended to the fine levels (0-2 on ground): branch a random subset of non-forced (|A| > 1) draws per level, enumerate A when |A| <= K, replays restricted to the draw's cone window. Gate 1 gradcheck + windowed-replay faithfulness, gate 2 dimers / ground entropy / clamp, gate 3 bench only if gate 2 moves. Cores 16-23.
 Result: -

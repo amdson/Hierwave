@@ -41,6 +41,7 @@ def coloured_pass(problem, seed, region, forced=None):
     for c in problem.sampled():
         state[c.name] = np.full((problem.H >> c.level, region.W >> c.level), -1, np.int64)
     logq = 0.0
+    sites = {c.name: np.zeros((problem.H >> c.level, region.W >> c.level)) for c in problem.sampled()}
     for l in range(problem.T, -1, -1):
         chans = problem.level_chans(l)
         h, w = problem.H >> l, region.W >> l
@@ -58,8 +59,11 @@ def coloured_pass(problem, seed, region, forced=None):
                     t = np.argmax(logits + g, axis=1)
                 else:
                     t = np.asarray(forced[c.name])[Y, X]
-                logq += float(np.sum(logits[np.arange(Y.size), t] - lz))
+                lt = logits[np.arange(Y.size), t] - lz
+                sites[c.name][Y, X] = lt
+                logq += float(np.sum(lt))
                 state[c.name][Y, X] = t
+    coloured_pass.sites = sites
     return state, logq
 
 
@@ -92,6 +96,11 @@ class Greedy(Variant):
         assert region.periodic
         _, lq = coloured_pass(self.problem, 0, region, forced=x)
         return lq
+
+    def score_sites(self, x, region):
+        assert region.periodic
+        coloured_pass(self.problem, 0, region, forced=x)
+        return coloured_pass.sites
 
     def info(self):
         return {"margin": self.margin()}

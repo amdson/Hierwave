@@ -15,6 +15,7 @@ Rules the bench checks (constitution, hard constraints 2 and 3):
 - score(x, region) returns log q(raw draw = x) on a periodic region, or None
   if the variant cannot score (probe and free-energy metrics are then
   reported as missing, which fails acceptance).
+- score_sites(x, region) (optional, version 2) returns the per-draw log q terms by cell.
 - train must stop by its wall-clock budget; the bench measures it.
 """
 from __future__ import annotations
@@ -49,6 +50,12 @@ class Variant:
 
     def score(self, x: dict, region: Region):
         """log q of a complete raw sample on a periodic region, or None."""
+        return None
+
+    def score_sites(self, x: dict, region: Region):
+        """Bench version 2 (block scores).  The per-draw terms of log q: {channel: float array
+        (h, w) at the channel's level} whose sum over all channels is score(x), or None if the
+        variant cannot split its log q (the block check is then reported n/a)."""
         return None
 
     def info(self) -> dict:

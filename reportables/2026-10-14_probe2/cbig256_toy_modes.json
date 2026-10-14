@@ -1,0 +1,429 @@
+{
+ "version": 2,
+ "n_own": 128,
+ "n_probe": 128,
+ "levels": {
+  "0": {
+   "n_own": 16384,
+   "n_probe": 16384,
+   "direct": {
+    "rho_pool": 0.867696147070441,
+    "rho_probe": 0.8709516066048805,
+    "rho_own": 0.8642363120386879,
+    "slope": 0.2346216705110338,
+    "intercept": 0.3519325057665507,
+    "starved_probe": 0.0,
+    "starved_own": 0.0,
+    "median_deficit_probe": 0.0,
+    "worst": [
+     {
+      "level": 0,
+      "probe": 3,
+      "block": [
+       1,
+       21
+      ],
+      "deficit": 4.679435898860296,
+      "logq": -6.087165921926498,
+      "weight": -7.5
+     },
+     {
+      "level": 0,
+      "probe": 115,
+      "block": [
+       0,
+       12
+      ],
+      "deficit": 4.35497256120046,
+      "logq": -5.762702584266663,
+      "weight": -7.5
+     },
+     {
+      "level": 0,
+      "probe": 14,
+      "block": [
+       3,
+       31
+      ],
+      "deficit": 4.277239461739859,
+      "logq": -5.684969484806061,
+      "weight": -7.5
+     },
+     {
+      "level": 0,
+      "probe": 82,
+      "block": [
+       0,
+       24
+      ],
+      "deficit": 4.191855986913046,
+      "logq": -5.599586009979248,
+      "weight": -7.5
+     },
+     {
+      "level": 0,
+      "probe": 19,
+      "block": [
+       3,
+       15
+      ],
+      "deficit": 4.123342335224152,
+      "logq": -5.179139852523804,
+      "weight": -6.0
+     }
+    ]
+   },
+   "subtree": {
+    "rho_pool": 0.867696147070441,
+    "rho_probe": 0.8709516066048805,
+    "rho_own": 0.8642363120386879,
+    "slope": 0.23930445313453674,
+    "intercept": 0.3589566797018051,
+    "starved_probe": 0.0,
+    "starved_own": 0.0,
+    "median_deficit_probe": 0.0,
+    "worst": [
+     {
+      "level": 0,
+      "probe": 3,
+      "block": [
+       1,
+       21
+      ],
+      "deficit": 4.651339203119278,
+      "logq": -6.087165921926498,
+      "weight": -7.5
+     },
+     {
+      "level": 0,
+      "probe": 115,
+      "block": [
+       0,
+       12
+      ],
+      "deficit": 4.326875865459442,
+      "logq": -5.762702584266663,
+      "weight": -7.5
+     },
+     {
+      "level": 0,
+      "probe": 14,
+      "block": [
+       3,
+       31
+      ],
+      "deficit": 4.24914276599884,
+      "logq": -5.684969484806061,
+      "weight": -7.5
+     },
+     {
+      "level": 0,
+      "probe": 82,
+      "block": [
+       0,
+       24
+      ],
+      "deficit": 4.163759291172028,
+      "logq": -5.599586009979248,
+      "weight": -7.5
+     },
+     {
+      "level": 0,
+      "probe": 19,
+      "block": [
+       3,
+       15
+      ],
+      "deficit": 4.102269813418388,
+      "logq": -5.179139852523804,
+      "weight": -6.0
+     }
+    ]
+   }
+  },
+  "1": {
+   "n_own": 4096,
+   "n_probe": 4096,
+   "direct": {
+    "rho_pool": null,
+    "rho_probe": null,
+    "rho_own": null,
+    "slope": 0.0,
+    "intercept": -1.9322320856153965,
+    "starved_probe": 0.031982421875,
+    "starved_own": 0.01708984375,
+    "median_deficit_probe": 0.051528092473745346,
+    "worst": [
+     {
+      "level": 1,
+      "probe": 39,
+      "block": [
+       0,
+       6
+      ],
+      "deficit": 7.622695501893759,
+      "logq": -9.554927587509155,
+      "weight": 0.0
+     },
+     {
+      "level": 1,
+      "probe": 120,
+      "block": [
+       0,
+       1
+      ],
+      "deficit": 7.570035990327597,
+      "logq": -9.502268075942993,
+      "weight": 0.0
+     },
+     {
+      "level": 1,
+      "probe": 9,
+      "block": [
+       0,
+       1
+      ],
+      "deficit": 7.558927353471518,
+      "logq": -9.491159439086914,
+      "weight": 0.0
+     },
+     {
+      "level": 1,
+      "probe": 35,
+      "block": [
+       0,
+       10
+      ],
+      "deficit": 7.482360418885946,
+      "logq": -9.414592504501343,
+      "weight": 0.0
+     },
+     {
+      "level": 1,
+      "probe": 106,
+      "block": [
+       1,
+       1
+      ],
+      "deficit": 7.141348656266928,
+      "logq": -9.073580741882324,
+      "weight": 0.0
+     }
+    ]
+   },
+   "subtree": {
+    "rho_pool": 0.8741081969805995,
+    "rho_probe": 0.8900032393533505,
+    "rho_own": 0.8562054357355676,
+    "slope": 0.5629965133137174,
+    "intercept": 1.4921108732620878,
+    "starved_probe": 0.0,
+    "starved_own": 0.0,
+    "median_deficit_probe": 0.01040894165635109,
+    "worst": [
+     {
+      "level": 1,
+      "probe": 120,
+      "block": [
+       0,
+       1
+      ],
+      "deficit": 3.3939260194698964,
+      "logq": -9.502268075942993,
+      "weight": -13.5
+     },
+     {
+      "level": 1,
+      "probe": 9,
+      "block": [
+       0,
+       1
+      ],
+      "deficit": 3.3828173826138173,
+      "logq": -9.491159439086914,
+      "weight": -13.5
+     },
+     {
+      "level": 1,
+      "probe": 71,
+      "block": [
+       1,
+       5
+      ],
+      "deficit": 3.1840623666842776,
+      "logq": -8.447909653186798,
+      "weight": -12.0
+     },
+     {
+      "level": 1,
+      "probe": 0,
+      "block": [
+       1,
+       3
+      ],
+      "deficit": 3.0096988131602602,
+      "logq": -8.27354609966278,
+      "weight": -12.0
+     },
+     {
+      "level": 1,
+      "probe": 17,
+      "block": [
+       1,
+       5
+      ],
+      "deficit": 2.8490703254938126,
+      "logq": -7.268422842025757,
+      "weight": -10.5
+     }
+    ]
+   }
+  },
+  "2": {
+   "n_own": 1024,
+   "n_probe": 1024,
+   "direct": {
+    "rho_pool": null,
+    "rho_probe": null,
+    "rho_own": null,
+    "slope": 0.0,
+    "intercept": 0.0,
+    "starved_probe": 0.0,
+    "starved_own": 0.0,
+    "median_deficit_probe": 0.0,
+    "worst": [
+     {
+      "level": 2,
+      "probe": 0,
+      "block": [
+       0,
+       0
+      ],
+      "deficit": 0.0,
+      "logq": 0.0,
+      "weight": 0.0
+     },
+     {
+      "level": 2,
+      "probe": 0,
+      "block": [
+       0,
+       1
+      ],
+      "deficit": 0.0,
+      "logq": 0.0,
+      "weight": 0.0
+     },
+     {
+      "level": 2,
+      "probe": 0,
+      "block": [
+       0,
+       2
+      ],
+      "deficit": 0.0,
+      "logq": 0.0,
+      "weight": 0.0
+     },
+     {
+      "level": 2,
+      "probe": 0,
+      "block": [
+       0,
+       3
+      ],
+      "deficit": 0.0,
+      "logq": 0.0,
+      "weight": 0.0
+     },
+     {
+      "level": 2,
+      "probe": 0,
+      "block": [
+       0,
+       4
+      ],
+      "deficit": 0.0,
+      "logq": 0.0,
+      "weight": 0.0
+     }
+    ]
+   },
+   "subtree": {
+    "rho_pool": null,
+    "rho_probe": null,
+    "rho_own": null,
+    "slope": 0.0,
+    "intercept": 0.0,
+    "starved_probe": 0.0,
+    "starved_own": 0.0,
+    "median_deficit_probe": 0.0,
+    "worst": [
+     {
+      "level": 2,
+      "probe": 0,
+      "block": [
+       0,
+       0
+      ],
+      "deficit": 0.0,
+      "logq": 0.0,
+      "weight": -33.0
+     },
+     {
+      "level": 2,
+      "probe": 0,
+      "block": [
+       0,
+       1
+      ],
+      "deficit": 0.0,
+      "logq": 0.0,
+      "weight": -39.0
+     },
+     {
+      "level": 2,
+      "probe": 0,
+      "block": [
+       0,
+       2
+      ],
+      "deficit": 0.0,
+      "logq": 0.0,
+      "weight": -37.5
+     },
+     {
+      "level": 2,
+      "probe": 0,
+      "block": [
+       0,
+       3
+      ],
+      "deficit": 0.0,
+      "logq": 0.0,
+      "weight": -36.0
+     },
+     {
+      "level": 2,
+      "probe": 0,
+      "block": [
+       0,
+       4
+      ],
+      "deficit": 0.0,
+      "logq": 0.0,
+      "weight": -37.5
+     }
+    ]
+   }
+  }
+ },
+ "lambda": 10.0,
+ "starve_nats": 5.0,
+ "s": 11.84794306755066,
+ "info": {
+  "train_s": 71.06022834777832,
+  "updates": 955
+ },
+ "free_energy": 0.2576553048565984
+}

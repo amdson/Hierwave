@@ -62,7 +62,7 @@ Per training seed: construct, `train(budget)`, then on held-out noise seeds:
    standard error; compared with exact values where the problem has them.
 4. **Finite support**: two overlapping open windows from the same seed must
    agree exactly on their overlap, at every level, raw and final.
-5. **Probes** (when scorable): d(y) = -S(y) - log q(y) of valid probe states
+5. **Probes** (when scorable; the old flag, kept): d(y) = -S(y) - log q(y) of valid probe states
    against the 99th percentile of d over the variant's own valid draws.
 6. An image of one final world in `images/bench/`.
 
@@ -79,3 +79,31 @@ writes `results/board.md` (latest run per variant x problem).
 A bench run takes 5-10 minutes on the Mac (default 2 seeds x 150 s training
 plus evaluation), single-threaded, at most 2-3 runs at once. No sweeps or
 longer runs without a stated, very good reason.
+
+## Version 2 (2026-10-14): block check
+
+User-approved harness change, version 1 -> 2 (`BENCH_VERSION` in `run.py`; the
+harness hash changes, so every older board row is marked "(old harness)").  The
+v1 probe flag is a world-level likelihood-ratio test and trips on exchangeable
+draws about half the time at n = 16 vs 16
+(`reportables/2026-10-14_probes/report.md`).  It stays on the board for now;
+the **block check** is added beside it and is **not an acceptance gate yet**.
+
+- New optional `Variant.score_sites(x, region) -> {channel: (h, w) per-draw log q}`
+  (sums to `score`; the bench checks this on the first world and records n/a if not).
+  Implemented for the cpass family (cpass, cfast, cbig, ...) and greedy; others: n/a.
+- `castlegen/bench/shares.py`.  A block at level l is the 2 x 2 patch of level-l sites with
+  one parent; at the coarsest level T the same rule gives 2 x 2 top cells (as if a level T+1
+  existed).  Log q share = sum of the block's per-draw log q.  Target log-weight share =
+  -soft energy - 10 * violated hard instances (LAMBDA_SCORE = 10, cpass lam0) of the factors
+  homed at level l; each instance goes to the block of its finer-side cell, a same-level
+  pair across a block boundary gives half to each block ("direct").  Because direct weight is
+  constant at levels whose factors are hard equalities (toy coarse levels), a "subtree" weight
+  (direct share plus those of all blocks below) is reported in brackets.
+- Pool: 128 own raw worlds and 32 probe seeds (all worlds of `problem.probes`).  Per level:
+  Spearman rho pooled, on probes alone, on own alone (None when a share is constant);
+  starvation = fraction of probe blocks whose log q share lies more than 5 nats below the
+  own-draw Theil-Sen line (log q share on weight) at their weight, plus the same fraction of
+  own blocks (a null) and the five worst probe blocks (level, block, deficit).
+- Board: two new columns, rho per level (pooled) and starved % per level, levels 0 / 1 / ... / T,
+  direct [subtree].
