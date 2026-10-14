@@ -22,6 +22,16 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 10:32 · wave4-pop (ckernel_pop violation pressure + bench) · finished
+Approach: ckernel_pop (P3) own draws only, INSIDE the frozen constitution: (i) 2 hard colour-Gibbs sweeps per iteration (ML targets valid); (ii) + cfast's lambda-controlled reverse-KL on levels 0-3 (32 steps/iter, lr 1e-3). Variants ckpop_hard, ckpop_hard_rkl.
+Result: [report](2026-10-14_wave4_pop/report.md). (i) alone: own line_match 0.636, viol 3e-4..1e-3 per level (not < 2e-4). (i)+(ii) with 300 s of training: viol 7.6e-5/2.0e-4/5.2e-4/3.1e-4/0, line_match 0.611. Bench ckpop_hard_rkl ground 2 seeds 300 s: NOT accepted; worst final viol 5.9e-3 (s0 L4; setup 171 s, 224 updates) / 7.9e-4 (s1 L2; 608 updates); F -0.004 / -0.091 (cfast 0.774); line_match 0.554 / 0.622; rho 0.29-0.38 / 0.72-0.80 / 0.57-0.77 / 0.30 / <=0; starved probes L3-L4 21-33 %. GPU shared.
+Next: single-shape jit to cut setup; violation pressure at L4 (rkl_levels incl. 4 scaled 0.3); fresh warmed process per seed.
+
+## 2026-10-14 10:06 · wave4-pop (ckernel_pop violation pressure + bench) · started
+Approach: ckernel_pop (P3: persistent own chains, 3 % refresh, 20 colour-Gibbs sweeps), own draws only (inside the frozen constitution); violation pressure: (i) 2 hard (lam = inf) colour-Gibbs sweeps at the end of each iteration; (ii) + cfast's lambda-controlled reverse-KL on levels 0-3 (32 steps/iter, lr 1e-3). Then bench the better arm, ground, 2 seeds, 300 s.
+Result: pending.
+Next: pending.
+
 ## 2026-10-14 10:03 · wave3-explore (persistent own chains, certificate moves) · finished
 Approach: ckernel_pop: persistent population of own-started chains (refresh 10 % / 3 %), kernel cycle (coarse Gibbs, tempered transitions L4/L3, MTM L2, fine Gibbs) +/- 20 colour-Gibbs sweeps (all levels, lam 20), ML on the population; own draws only. Certificate-only (lambda-only) tempered transitions measured per move; lift count of a column-freeing move.
 Result: [report](2026-10-14_wave3_explore/report.md). Own draws leave the dirt state inside the rules: P3 (refresh 3 % + colour Gibbs) own dirt 0.508, line_match 0.645 (64 draws; start 0.851 / 0.507), rows track fill; clamp gate own <= fill (L3 -0.111 vs -0.112, L4 -0.144 vs -0.138); population 98 % valid; own viol 9.4e-4/cell (over budget, not benched). Persistence alone 0.545, sweeps alone 0.574. lambda-only TT 20->5: L4 acc .74-.82, dirt->partial 8-9 %/move. Freeing one column of an L4 block = 46 cells over 5 levels in a tight lift.

@@ -238,7 +238,8 @@ class CKernelOwn(CKernel):
 register(CKernelOwn)
 
 
-POP = dict(phase1_s=0.0, m_flip=0, tt_Ls=(4, 3), tt_tau_hi=2.0, tt_n=16, tt_m=4, refresh=0.1, n_cycles=1, cg_sweeps=0)
+POP = dict(phase1_s=0.0, m_flip=0, tt_Ls=(4, 3), tt_tau_hi=2.0, tt_n=16, tt_m=4, refresh=0.1, n_cycles=1, cg_sweeps=0,
+           hard_sweeps=0, lv_n=8, lv_every=2, clock_setup=True)
 
 
 class CKernelPop(CKernelOwn):
@@ -287,12 +288,23 @@ class CKernelPop(CKernelOwn):
         fresh = self._own_ctx(nref, region)                 # warm the refresh shape
         pop, _, v = self.refine(pop, key, 2)
         self.E(v)
+        if c["cg_sweeps"] > 0 or c["hard_sweeps"] > 0:
+            from castlegen.kernels import colour_gibbs as cg
+            if c["cg_sweeps"] > 0:
+                cg.sweep_all(self.lay_tr, pop, 1.0, c["kernel_lam"], key)
+            if c["hard_sweeps"] > 0:
+                cg.sweep_all(self.lay_tr, pop, 1.0, None, key)
         idx = np.arange(c["ml_B"])
         _ = self.mlstep(self.params, opt, {k: x[idx] for k, x in pop.items()}, jnp.ones(c["ml_B"]), jnp.float32(c["ml_lr"]), on)
+        self.rkl_updates = 0
+        if c["rkl_n"] > 0:
+            self._rkl_setup(log)
+            self._rkl_steps(1)
         t_setup = time.time() - t0
         log({"t": t_setup, "setup_done": True, "start": self.start, "refresh": nref})
         it = 0
-        while time.time() - t0 < budget_s + t_setup:
+        t_end = budget_s if c["clock_setup"] else budget_s + t_setup
+        while time.time() - t0 < t_end:
             it += 1
             ti = time.time()
             fresh = self._own_ctx(nref, region)
@@ -312,6 +324,12 @@ class CKernelPop(CKernelOwn):
                     sub, s3 = jax.random.split(sub)
                     pop = cg.sweep_all(self.lay_tr, pop, 1.0, c["kernel_lam"], s3)
                 v = self._to_flat(pop)
+            if c["hard_sweeps"] > 0:                     # lam = inf: violating values excluded (ML targets valid)
+                from castlegen.kernels import colour_gibbs as cg
+                for _ in range(c["hard_sweeps"]):
+                    sub, s4 = jax.random.split(sub)
+                    pop = cg.sweep_all(self.lay_tr, pop, 1.0, None, s4)
+                v = self._to_flat(pop)
             age += 1
             rec.update(kd)
             rec["pop"] = self._pop_stats(pop, v)
@@ -328,9 +346,36 @@ class CKernelPop(CKernelOwn):
             rec.update({"t": time.time() - t0, "t_train": time.time() - t0 - t_setup, "update": self.updates,
                         "loss_per_cell": float(np.mean(losses)), "infeasible_draws_per_state": ninf / (c["upi"] * c["ml_B"]),
                         "time_refine": tm - ti, "time_ml": time.time() - tm})
+            if c["rkl_n"] > 0:
+                tk = time.time()
+                rec["rkl_raw_viol"] = self._rkl_steps(c["rkl_n"]).tolist()
+                rec["lam"] = self.lam.tolist(); rec["rkl_updates"] = self.rkl_updates
+                rec["time_rkl"] = time.time() - tk
+            if c["lv_n"] > 0 and it % c["lv_every"] == 1 % c["lv_every"]:
+                own8 = self._own_ctx(c["lv_n"], region)
+                rec["own8"] = self._ground_stats(own8)
+                rec["lv_own"] = self._level_viol(own8, 0, c["lv_n"], region)["frac"]
+                rec["lv_pop"] = self._level_viol(pop, 0, n, region)["frac"]
             log(rec)
         self.pop = pop
         self.timing = {"setup": t_setup, "total": time.time() - t0, "iters": it}
 
 
 register(CKernelPop)
+
+P3 = dict(refresh=0.03, cg_sweeps=20)
+
+
+def _pop_variant(name, **over):
+    cls = type(f"CKernelPop_{name}", (CKernelPop,), {"name": name})
+    orig = cls.__init__
+
+    def init(self, problem, seed, workdir, **cfg):
+        orig(self, problem, seed, workdir, **{**P3, **over, **cfg})
+    cls.__init__ = init
+    return register(cls)
+
+
+# wave4-pop: violation pressure, own draws only (inside the frozen constitution)
+_pop_variant("ckpop_hard", hard_sweeps=2)
+_pop_variant("ckpop_hard_rkl", hard_sweeps=2, rkl_n=32, rkl_lr=1e-3, rkl_lam0=10.0, rkl_levels=[0, 1, 2, 3])

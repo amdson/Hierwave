@@ -1,0 +1,541 @@
+layout resid False win (-2, 3) net ln
+CHG untrained/L4/rho3/j0_vs_j2 0.0085
+CHG untrained/L4/rho3/j0_vs_j1 0.0056
+CHG untrained/L4/rho3/own_vs_j0 0.0168
+CHG untrained/L4/cert3/j0_vs_j2 0.0598
+CHG untrained/L4/cert3/j0_vs_j1 0.041
+CHG untrained/L4/cert3/own_vs_j0 0.6199
+CHG untrained/L4/rho2/j0_vs_j2 0.0382
+CHG untrained/L4/rho2/j0_vs_j1 0.0237
+CHG untrained/L4/rho2/own_vs_j0 0.371
+CHG untrained/L4/cert2/j0_vs_j2 0.0452
+CHG untrained/L4/cert2/j0_vs_j1 0.0286
+CHG untrained/L4/cert2/own_vs_j0 0.5118
+CHG untrained/L4/rho1/j0_vs_j2 0.0359
+CHG untrained/L4/rho1/j0_vs_j1 0.0218
+CHG untrained/L4/rho1/own_vs_j0 0.3962
+CHG untrained/L4/cert1/j0_vs_j2 0.0322
+CHG untrained/L4/cert1/j0_vs_j1 0.02
+CHG untrained/L4/cert1/own_vs_j0 0.4269
+CHG untrained/L4/t/j0_vs_j2 0.021
+CHG untrained/L4/t/j0_vs_j1 0.0127
+CHG untrained/L4/t/own_vs_j0 0.3475
+CHG untrained/L4/t_eq_probe_j0 0.9045
+CHG untrained/L4/line_match_j0 0.5636
+CHG untrained/L3/rho2/j0_vs_j2 0.0285
+CHG untrained/L3/rho2/j0_vs_j1 0.0182
+CHG untrained/L3/rho2/own_vs_j0 0.7225
+CHG untrained/L3/cert2/j0_vs_j2 0.0414
+CHG untrained/L3/cert2/j0_vs_j1 0.0223
+CHG untrained/L3/cert2/own_vs_j0 0.533
+CHG untrained/L3/rho1/j0_vs_j2 0.0188
+CHG untrained/L3/rho1/j0_vs_j1 0.0114
+CHG untrained/L3/rho1/own_vs_j0 0.5785
+CHG untrained/L3/cert1/j0_vs_j2 0.0227
+CHG untrained/L3/cert1/j0_vs_j1 0.0127
+CHG untrained/L3/cert1/own_vs_j0 0.4627
+CHG untrained/L3/t/j0_vs_j2 0.0106
+CHG untrained/L3/t/j0_vs_j1 0.0059
+CHG untrained/L3/t/own_vs_j0 0.3906
+CHG untrained/L3/t_eq_probe_j0 0.9816
+CHG untrained/L3/line_match_j0 0.7341
+CHG untrained/own/line_match 0.5093
+CHG untrained/own/dirt 0.8503
+CHG trained/L4/rho3/j0_vs_j2 0.0215
+CHG trained/L4/rho3/j0_vs_j1 0.0129
+CHG trained/L4/rho3/own_vs_j0 0.1086
+CHG trained/L4/cert3/j0_vs_j2 0.0405
+CHG trained/L4/cert3/j0_vs_j1 0.0273
+CHG trained/L4/cert3/own_vs_j0 0.1387
+CHG trained/L4/rho2/j0_vs_j2 0.0106
+CHG trained/L4/rho2/j0_vs_j1 0.0062
+CHG trained/L4/rho2/own_vs_j0 0.0458
+CHG trained/L4/cert2/j0_vs_j2 0.0203
+CHG trained/L4/cert2/j0_vs_j1 0.0109
+CHG trained/L4/cert2/own_vs_j0 0.0762
+CHG trained/L4/rho1/j0_vs_j2 0.0087
+CHG trained/L4/rho1/j0_vs_j1 0.0044
+CHG trained/L4/rho1/own_vs_j0 0.0334
+CHG trained/L4/cert1/j0_vs_j2 0.0101
+CHG trained/L4/cert1/j0_vs_j1 0.0053
+CHG trained/L4/cert1/own_vs_j0 0.042
+CHG trained/L4/t/j0_vs_j2 0.0058
+CHG trained/L4/t/j0_vs_j1 0.0031
+CHG trained/L4/t/own_vs_j0 0.0259
+CHG trained/L4/t_eq_probe_j0 0.9631
+CHG trained/L4/line_match_j0 0.652
+CHG trained/L3/rho2/j0_vs_j2 0.0211
+CHG trained/L3/rho2/j0_vs_j1 0.0112
+CHG trained/L3/rho2/own_vs_j0 0.1203
+CHG trained/L3/cert2/j0_vs_j2 0.0432
+CHG trained/L3/cert2/j0_vs_j1 0.0205
+CHG trained/L3/cert2/own_vs_j0 0.1027
+CHG trained/L3/rho1/j0_vs_j2 0.0167
+CHG trained/L3/rho1/j0_vs_j1 0.0083
+CHG trained/L3/rho1/own_vs_j0 0.0565
+CHG trained/L3/cert1/j0_vs_j2 0.021
+CHG trained/L3/cert1/j0_vs_j1 0.0099
+CHG trained/L3/cert1/own_vs_j0 0.0616
+CHG trained/L3/t/j0_vs_j2 0.0122
+CHG trained/L3/t/j0_vs_j1 0.0056
+CHG trained/L3/t/own_vs_j0 0.0397
+CHG trained/L3/t_eq_probe_j0 0.9749
+CHG trained/L3/line_match_j0 0.6924
+CHG trained/own/line_match 0.6167
+CHG trained/own/dirt 0.4863
+{
+"untrained/own": {
+"0": {
+"cost_per_cell": [
+0.44441577792167664,
+0.00864571408539678
+],
+"viol_frac": [
+0.0035686492919921875,
+0.00018108409668278147
+],
+"forced_frac": [
+0.9643173217773438,
+0.0014542786542296685
+],
+"noopt_frac": [
+0.00714111328125,
+0.0003625004753896754
+]
+},
+"1": {
+"cost_per_cell": [
+0.07241962105035782,
+0.004675866204207733
+],
+"viol_frac": [
+0.00885009765625,
+0.0005146417425308242
+],
+"forced_frac": [
+0.45314788818359375,
+0.001734126155080163
+],
+"noopt_frac": [
+0.00873565673828125,
+0.0004985991935174003
+]
+},
+"2": {
+"cost_per_cell": [
+0.0777924656867981,
+0.0036184103361480056
+],
+"viol_frac": [
+0.026275634765625,
+0.0014787952979328257
+],
+"forced_frac": [
+0.394073486328125,
+0.00370672378884652
+],
+"noopt_frac": [
+0.025909423828125,
+0.0014733405542854822
+]
+},
+"3": {
+"cost_per_cell": [
+0.4107518494129181,
+0.014655294261673975
+],
+"viol_frac": [
+0.0498046875,
+0.0035254120044198034
+],
+"forced_frac": [
+0.303955078125,
+0.005347235207938908
+],
+"noopt_frac": [
+0.049072265625,
+0.0033598140665701136
+]
+},
+"4": {
+"cost_per_cell": [
+-0.01606147550046444,
+0.0002621259652431002
+],
+"viol_frac": [
+0.0,
+0.0
+],
+"forced_frac": [
+0.14990234375,
+0.008025675333340318
+],
+"noopt_frac": [
+0.0,
+0.0
+]
+}
+},
+"untrained/probe_L4": {
+"0": {
+"cost_per_cell": [
+0.34067726135253906,
+0.0027217251034582263
+],
+"viol_frac": [
+0.0014109611511230469,
+4.947480562142759e-05
+],
+"forced_frac": [
+0.9747409820556641,
+0.00035321355726100785
+],
+"noopt_frac": [
+0.0028219223022460938,
+9.894960504694347e-05
+]
+},
+"1": {
+"cost_per_cell": [
+0.02988446317613125,
+0.0014083548883293666
+],
+"viol_frac": [
+0.004116058349609375,
+0.00012064224224785161
+],
+"forced_frac": [
+0.4653453826904297,
+0.0004393244666935425
+],
+"noopt_frac": [
+0.004077911376953125,
+0.0001187931254054272
+]
+},
+"2": {
+"cost_per_cell": [
+0.01406045537441969,
+0.0015778514030662127
+],
+"viol_frac": [
+0.01436614990234375,
+0.0004893796498590947
+],
+"forced_frac": [
+0.42436981201171875,
+0.0010829175859621808
+],
+"noopt_frac": [
+0.01418304443359375,
+0.000474011199540913
+]
+},
+"3": {
+"cost_per_cell": [
+0.41213762760162354,
+0.007156006065909896
+],
+"viol_frac": [
+0.006011962890625,
+0.0004783813224340411
+],
+"forced_frac": [
+0.364593505859375,
+0.0015448571707633895
+],
+"noopt_frac": [
+0.006011962890625,
+0.0004783813420549181
+]
+},
+"4": {
+"cost_per_cell": [
+-0.019845440983772278,
+0.00010113122923503704
+],
+"viol_frac": [
+0.0,
+0.0
+],
+"forced_frac": [
+0.153564453125,
+0.0022604364075850952
+],
+"noopt_frac": [
+0.0,
+0.0
+]
+}
+},
+"untrained/probe_L3": {
+"0": {
+"cost_per_cell": [
+0.06715516746044159,
+0.0004943829446231045
+],
+"viol_frac": [
+5.4836273193359375e-05,
+6.1244995773147685e-06
+],
+"forced_frac": [
+0.9782505035400391,
+0.00020050202494362515
+],
+"noopt_frac": [
+0.00010967254638671875,
+1.2248998590564395e-05
+]
+},
+"1": {
+"cost_per_cell": [
+-0.10487539321184158,
+0.0003261823425803888
+],
+"viol_frac": [
+0.0001583099365234375,
+1.66028813694746e-05
+],
+"forced_frac": [
+0.4697895050048828,
+0.000277159836656806
+],
+"noopt_frac": [
+0.0001583099365234375,
+1.6602880714589163e-05
+]
+},
+"2": {
+"cost_per_cell": [
+-0.0649559497833252,
+0.00016260513457402935
+],
+"viol_frac": [
+7.62939453125e-05,
+2.325568931794302e-05
+],
+"forced_frac": [
+0.43500518798828125,
+0.0008027963775505559
+],
+"noopt_frac": [
+7.62939453125e-05,
+2.3255688980972172e-05
+]
+},
+"3": {
+"cost_per_cell": [
+-0.05638532340526581,
+0.00014537195087833594
+],
+"viol_frac": [
+0.0,
+0.0
+],
+"forced_frac": [
+0.375579833984375,
+0.0018372738167293692
+],
+"noopt_frac": [
+0.0,
+0.0
+]
+},
+"4": {
+"cost_per_cell": [
+-0.019845440983772278,
+0.00010113122923503704
+],
+"viol_frac": [
+0.0,
+0.0
+],
+"forced_frac": [
+0.153564453125,
+0.0022604364075850952
+],
+"noopt_frac": [
+0.0,
+0.0
+]
+}
+},
+"trained/own": {
+"0": {
+"cost_per_cell": [
+0.11728560924530029,
+0.0019017184883721773
+],
+"viol_frac": [
+4.9591064453125e-05,
+1.2389480813506949e-05
+],
+"forced_frac": [
+0.9832687377929688,
+0.0004448811006157737
+],
+"noopt_frac": [
+9.918212890625e-05,
+2.477896159404434e-05
+]
+},
+"1": {
+"cost_per_cell": [
+-0.1020362600684166,
+0.0009970669250873945
+],
+"viol_frac": [
+0.0001678466796875,
+3.541583274979099e-05
+],
+"forced_frac": [
+0.46482086181640625,
+0.0006799556420936661
+],
+"noopt_frac": [
+0.00016021728515625,
+3.216510933263605e-05
+]
+},
+"2": {
+"cost_per_cell": [
+-0.06454528123140335,
+0.0015358910872872048
+],
+"viol_frac": [
+0.000396728515625,
+0.00011484219330500035
+],
+"forced_frac": [
+0.43292236328125,
+0.0009838570161656423
+],
+"noopt_frac": [
+0.000396728515625,
+0.00011484218762978487
+]
+},
+"3": {
+"cost_per_cell": [
+-0.027060823515057564,
+0.0008172198193643934
+],
+"viol_frac": [
+0.0,
+0.0
+],
+"forced_frac": [
+0.3385009765625,
+0.0027599597036833223
+],
+"noopt_frac": [
+0.0,
+0.0
+]
+},
+"4": {
+"cost_per_cell": [
+-0.008628897368907928,
+0.00015543899729477252
+],
+"viol_frac": [
+0.0,
+0.0
+],
+"forced_frac": [
+0.138671875,
+0.0031179039977354875
+],
+"noopt_frac": [
+0.0,
+0.0
+]
+}
+},
+"trained/probe_L4": {
+"0": {
+"cost_per_cell": [
+0.11690525710582733,
+0.0007027127588608662
+],
+"viol_frac": [
+5.14984130859375e-05,
+4.4102489886459405e-06
+],
+"forced_frac": [
+0.9828395843505859,
+0.00020443407072369472
+],
+"noopt_frac": [
+0.000102996826171875,
+8.820497549790082e-06
+]
+},
+"1": {
+"cost_per_cell": [
+-0.10441303253173828,
+0.0004556261186031785
+],
+"viol_frac": [
+0.000213623046875,
+2.1832571086252497e-05
+],
+"forced_frac": [
+0.46518707275390625,
+0.0003279074616575972
+],
+"noopt_frac": [
+0.00020599365234375,
+2.1397889906261947e-05
+]
+},
+"2": {
+"cost_per_cell": [
+-0.0668141320347786,
+0.0006424185639796194
+],
+"viol_frac": [
+0.0004119873046875,
+6.089983981152265e-05
+],
+"forced_frac": [
+0.44089508056640625,
+0.0005524276749421775
+],
+"noopt_frac": [
+0.0004119873046875,
+6.089983974367425e-05
+]
+},
+"3": {
+"cost_per_cell": [
+-0.019786518067121506,
+0.0003144048091225306
+],
+"viol_frac": [
+0.0,
+0.0
+],
+"forced_frac": [
+0.375823974609375,
+0.0016140185028084967
+],
+"noopt_frac": [
+0.0,
+0.0
+]
+},
+"4": {
+"cost_per_cell": [
+-0.015110238455235958,
+0.00014753984852934124
+],
+"viol_frac": [
+0.0,
+0.0
+],
+"forced_frac": [
+0.153564453125,
+0.0022604364075850952
+],
+"noopt_frac
