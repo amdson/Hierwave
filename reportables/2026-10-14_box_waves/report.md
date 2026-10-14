@@ -53,7 +53,7 @@ Open structural question (cdim2, running): whether a diverse valid policy is rep
 | cdim3 | 2026-10-14_cdim3 | **It is optimisation, not representation**: the distilled MLP fits (KL 0.026, then trains to 0.002). Under λ 20 the early gradient points at the locally safe action and shared weights saturate every context within 50 steps. |
 | cbound | 2026-10-14_cbound | **λ ramp 1→20 + whole-logit τ 8→1: KL 4e-5 with exact gradients.** Sampled dimers: `cbound_lam` ends with three orientations (0.47/0.30/0.23) inside the violation budget, one seed. Ground: still all dirt at λ ≈ 3 (soft terms, not the penalty). |
 | cstart2 | 2026-10-14_cstart2 | Fine levels shown only fill contexts (f = 1, L = 3): all actors 8× better than cfast's fine levels; LN+SiLU 6×6 best (soft 0.194 vs probe 0.014) but all stall at block terraces; parent-awareness still weak. |
-| cbound2 | 2026-10-14_cbound | Confirmation of the dimers result on two more seeds (see the appended section). |
+| cbound2 | 2026-10-14_cbound | **Confirmed on two more seeds:** `cbound_lam` keeps three orientations and meets the 2e-4 budget (h/v/d 0.49/0.27/0.24 and 0.44/0.18/0.38; viol 7.8e-5, 1.1e-4). 300 s bench: F −0.29 vs cfast −0.23, raw viol 1.1e-4, only the old probe flag fires. Mix and entropy are still off the target (0.25 each, 0.377). cfast ends with two orientations in every seed; which one dies is seed-dependent. |
 
 ### What the session established (numbers in the folders)
 

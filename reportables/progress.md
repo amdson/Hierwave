@@ -17,6 +17,11 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 04:10 · cbound2 · finished
+Approach: confirmation of cbound_lam on dimers, seeds 11/12, 120 s, cfast control seed 11, then bench once.
+Result: [report](2026-10-14_cbound/report.md) section 'Confirmation (cbound2)'. cbound_lam h/v/d 0.491/0.266/0.243 (seed 11, never collapsed) and 0.439/0.182/0.379 (seed 12, vertical dipped to 0.02 at update 3495, recovered to 0.18); entropy 0.274/0.299; raw viol 7.8e-5/1.1e-4, both within 2e-4. cfast seed 11 lost vertical (h/d 0.48/0.52, entropy 0.255). Bench 300 s x 2 seeds: viol 1.1e-4 worst, h/v/d ~0.44-0.47/0.39/0.14-0.17, F -0.291/-0.288 (cfast -0.227); not accepted (probe flag only).
+Next: ground remains unresolved; a longer run or lam schedule to reach 0.248 each.
+
 ## 2026-10-14 04:10 · orchestrator (box session) · finished
 Approach: four waves of 3 Opus + 3 Sonnet agents on the GPU box; wave log and closing summary in [2026-10-14_box_waves](2026-10-14_box_waves/report.md).
 Result: toys solved under bench v2 (cbig256 at F*); ground/columns/dimers not accepted. Collapse mechanism measured end to end (ctop, csat, cdim2, cdim3); the network's failure is optimisation not capacity; `cbound_lam` is the first sampled dimers run to end diverse and in budget (confirmation pending); fine levels learn fill contexts 8x better when shown them (cstart2) but stall at terraces.

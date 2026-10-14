@@ -86,3 +86,31 @@ Clamp gate (csat's `eval_ground.py`, 32 seeds × 4 probes; fine cost per fine ce
 - The sampled dimers runs use 4-world readouts, which are noisy (±0.05).
 - The GPU was shared: 2770-3960 updates in 60 s.
 - The ground run's λ was 0 at the end (raw violations under ε), as in csat's lever arms, so its own-context cost is not comparable with a λ > 0 run.
+
+## Confirmation (cbound2)
+Agent cbound2, cores 48-55, GPU shared with other jobs. Scripts, logs-as-json and figure: `2026-10-14_cbound2/` (`dimers2.py` is cbound's `dimers.py` with a seed argument; `run.sh`, `plot.py`). Dimers, 120 s training, compile warmed first, seeds 11 and 12 (cbound used seed 0), cfast control with seed 11. Orientation fractions, entropy (-log q per cell) and raw violations logged every 5 updates on 4 held-out worlds (noise about +-0.05); the final row is on 16 worlds. Target h/v/d 0.505/0.248/0.248, entropy 0.377.
+
+| run | updates | final h / v / d (raw) | entropy/cell | raw viol | repaired viol | within 2e-4 | smallest orientation after update 100 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| cbound_lam seed 11 | 7150 | 0.491 / 0.266 / 0.243 | 0.274 | 7.8e-5 | 7.8e-5 | yes | 0.13 (never below 0.05) |
+| cbound_lam seed 12 | 7635 | 0.439 / 0.182 / 0.379 | 0.299 | 1.1e-4 | 1.1e-4 | yes | vertical 0.022 at update 3495 |
+| cfast seed 11 (control) | 7390 | 0.484 / 0.0001 / 0.516 | 0.255 | 1.4e-4 | 1.4e-4 | yes | vertical 0.000 |
+
+![orientation](../2026-10-14_cbound2/images/orientation_curves.png)
+
+- **Seed 11:** all three orientations stayed alive the whole run. At update ~3700, when raw violations fell from 1 % to 1e-4, h rose to 0.5 and v/d settled near 0.27/0.24. There was no collapse and no recovery needed.
+- **Seed 12:** at update 3480 the vertical orientation dropped sharply to 0.04 (minimum 0.02) as violations fell. It then **recovered** slowly: 0.09 at update 5000, above 0.15 at update 5595, 0.18 at the end. So the diagonal in the original run was a late recovery of a collapsed orientation; here it was vertical, but the mechanism is the same (collapse at the violation drop, partial regrowth afterwards at zero violations).
+- **Correction to the original report:** cfast does not always lose the diagonal. With seed 11 it lost the **vertical** orientation (below 0.05 by update 15, 0.000 from update ~100) and ended h/d 0.48/0.52. Which orientation dies depends on the seed; what is stable is that cfast ends with exactly two orientations. All earlier cfast runs lost the diagonal and this one did not, so "the diagonal dies" is a seed-dependent instance of "one orientation dies". Entropy 0.255 is slightly above the earlier 0.225 because the surviving pair is h/d here, but still well below the 3-orientation runs.
+- Orientation mix is not the target in either seed: v/d are 0.27/0.24 and 0.18/0.38 against 0.248/0.248, and entropy is 0.27-0.30 against 0.377. The result is "three orientations alive", not "target reached".
+- λ at the end was 8-14 (the control's value after the ramp), not 20.
+
+### Bench (cbound_lam, dimers, `--train 300 --seeds 2`, run once, GPU shared, 615 s wall)
+| seed | final h / v / d (raw) | free energy | raw viol | repaired viol |
+| --- | --- | --- | --- | --- |
+| 0 | 0.439 / 0.395 / 0.166 | -0.2909 | 1.1e-4 | 1.1e-4 |
+| 1 | 0.470 / 0.388 / 0.141 | -0.2877 | 9.3e-5 | 7.8e-5 |
+
+cfast at 300 s on the board (`b300` run): h/v/d 0.50/0.50/0.00 on both seeds, free energy -0.2266 / -0.2258, raw viol 1.4e-4 / 1.1e-4. Worst violation 1.1e-4 is within budget. The bench marks the run `accepted: false` only because the probe check flags both seeds, which BOX_RULES says to treat as uninformative until the redesign lands. Diagonal is 0.14-0.17, not 0.25: three orientations alive, the mix is off target. Free energy is lower than cfast's by 0.06 nats per cell (a lower value is better in this harness, per the board convention; I did not verify the sign convention against notes/bench.md).
+
+### Verdict
+**The result holds across seeds in the sense that cbound_lam kept three orientations alive and met the 2e-4 budget in all four sampled runs (seed 0 at 60 s, seeds 11 and 12 at 120 s, bench seeds 0/1 at 300 s), where cfast ends with two.** It does not hold in the detailed sense: seed 11 never collapsed (not a recovery), seed 12 collapsed vertical and recovered only to 0.18, and the mix never matches the target. Small n: two new seeds, one control run. Not tested: ground (previous report: the λ ramp does not help there).
