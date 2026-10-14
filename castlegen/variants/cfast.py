@@ -51,7 +51,12 @@ _LAYS = {}
 CFG = dict(B=8, K=0, width=64, lr=3e-3, lr_critic=1e-3, lam0=10.0, lam_max=20.0, eta=0.01,
            alpha=0.05, tau0=2.0, tau1=1.0, anneal=0.2, clip=10.0, W_train=None,
            cone=True, critic="h1", sub=64,
-           net="tanh", win=None)          # actor network (tanh | ln) and window (None: 4 x 4 | (lo, hi)), cln
+           net="tanh", win=None,          # actor network (tanh | ln) and window (None: 4 x 4 | (lo, hi)), cln
+           # constitution change request #2 (adopted by the user 2026-10-14): the penalty term on its own.
+           # pen_only=True: every draw's cost is lam_l * violations(a) only (no designed energy, no tau log q),
+           # so the fused update is the same unbiased estimator (all-action + score-function, cone returns,
+           # critic as control variate) of grad sum_l lam_l E_q[H_l]; lambda control unchanged.  K = 0 only.
+           pen_only=False)
 
 
 @register
@@ -88,7 +93,8 @@ class CFast(CPass):
         return _LAYS[key]
 
     def train_fns(self, lay):
-        key = (self.cfg["K"], self.cfg["cone"], self.cfg["critic"], self.cfg["sub"], self.cfg.get("net", "tanh"))
+        key = (self.cfg["K"], self.cfg["cone"], self.cfg["critic"], self.cfg["sub"], self.cfg.get("net", "tanh"),
+               bool(self.cfg.get("pen_only", False)))
         if not hasattr(lay, "cfast_fns"):
             lay.cfast_fns = {}
         if key not in lay.cfast_fns:
@@ -115,6 +121,19 @@ class CFast(CPass):
                 sfrac[core.key_of(l, c.name)] = jnp.asarray(
                     [lay.step(l, k, ci) / lay.nsteps for k in range(core.NCOL)], jnp.float32)
         use_cone = self.cfg["cone"]
+        pen_only = bool(self.cfg.get("pen_only", False))
+        assert not (pen_only and K > 0), "pen_only: coupled replays (K > 0) are not supported"
+
+        def recost(recs, lam):
+            """pen_only: the recorded per-draw cost becomes lam_l * violations of the drawn value
+            (the pass's own cost, soft + lam nv + tau log q, is replaced after the pass; draws unchanged)."""
+            if not pen_only:
+                return recs
+            out = {}
+            for key, r in recs.items():
+                nva = jnp.take_along_axis(r["nv"], r["a"][..., None], -1)[..., 0]
+                out[key] = {**r, "cost": jnp.where(r["valid"], lam[level_of[key]] * nva, 0.0)}
+            return out
 
         def returns(costs):
             if use_cone:
@@ -137,6 +156,7 @@ class CFast(CPass):
 
         def rec_fn(params, seeds, des, tau, lam):
             st, recs = jax.vmap(lambda s, d: train_pass(lay, params, s, d, tau, lam))(seeds, des)
+            recs = recost(recs, lam)
             G = returns({k: r["cost"] for k, r in recs.items()})
             viol = jnp.zeros(T + 1)
             for key, r in recs.items():
@@ -186,7 +206,7 @@ class CFast(CPass):
                     logq = jax.nn.log_softmax(logits, -1)
                     q = jnp.exp(logq)
                     lq_sg = jax.lax.stop_gradient(jnp.where(r["mask"], logq, 0.0))
-                    ell = r["soft"] + lam[l] * r["nv"] + tau * lq_sg
+                    ell = lam[l] * r["nv"] if pen_only else r["soft"] + lam[l] * r["nv"] + tau * lq_sg
                     Q = jax.lax.stop_gradient(core.mlp(cparams[key], cfeat(r, key, tau, lam, p0))) * gs[key]
                     t1 = jnp.sum(jnp.where(r["mask"], q * (ell + Q), 0.0), -1)
                     la = jnp.take_along_axis(logq, r["a"][..., None], -1)[..., 0]
@@ -257,6 +277,7 @@ class CFast(CPass):
                 wgt = {}
             else:
                 st, recs = jax.vmap(lambda s, d: train_pass(lay, params, s, d, tau, lam))(seeds, des)
+                recs = recost(recs, lam)
                 viol = jnp.zeros(T + 1)
                 for key, r in recs.items():
                     nva = jnp.take_along_axis(r["nv"], r["a"][..., None], -1)[..., 0]

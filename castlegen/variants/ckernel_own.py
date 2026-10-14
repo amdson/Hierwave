@@ -420,3 +420,9 @@ _pop_variant("ckpop_rkl123x2", hard_sweeps=2, rkl_n=32, rkl_lr=1e-3, rkl_lam0=10
              rkl_level_scale={1: 2.0, 2: 2.0, 3: 2.0})
 _pop_variant("ckpop_rkl123x2_cg40", hard_sweeps=2, rkl_n=32, rkl_lr=1e-3, rkl_lam0=10.0, rkl_levels=[0, 1, 2, 3],
              rkl_level_scale={1: 2.0, 2: 2.0, 3: 2.0}, cg_sweeps=40)
+
+# change request #2 (adopted 2026-10-14): ckpop_hard_rkl with the penalty-only term (cfast pen_only: the 32 steps per
+# iteration are the unbiased estimator of grad sum_l lam_l E_q[H_l], no designed-energy or entropy term; same lr,
+# levels and lambda control).  Own draws only.  ckpop_pen_all also prices L4 (harmless now: no entropy pull there).
+_pop_variant("ckpop_hard_pen", hard_sweeps=2, rkl_n=32, rkl_lr=1e-3, rkl_lam0=10.0, rkl_levels=[0, 1, 2, 3], pen_only=True)
+_pop_variant("ckpop_pen_all", hard_sweeps=2, rkl_n=32, rkl_lr=1e-3, rkl_lam0=10.0, rkl_levels=[0, 1, 2, 3, 4], pen_only=True)

@@ -65,6 +65,8 @@ Constraints 3 and 4 are relaxed **for training only**, as follows.
 - Reverse-KL training remains valid and may be mixed with the above; which objective produced a result is stated in every report.
 - New diagnostics are admitted as evidence: per-kernel, per-level acceptance rates, and where the kernels move mass in the sampler's own draws.
 
+**Addendum 2026-10-14 (evening; user decision in chat, change request #2 adopted; not yet pasted into the doc, rev 53):** the penalty term Σ_l λ_l E_q[H_l] may be added to the weighted-ML objective on its own, with the same λ control and the same unbiased estimator as in reverse-KL training (i.e. without the designed-energy and entropy terms). Code: cfast `pen_only=True`; first test `reportables/2026-10-14_cr2_penalty/`.
+
 ## Invariants checked in code
 
 These are asserted or tested on every change. A failure blocks all experiments until it is fixed.

@@ -562,3 +562,9 @@ _variant("ckernel_rkl4w3f_l2x3", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, coarse_l
 _variant("ckernel_rkl4w3f_l2x15", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, coarse_lam=float("inf"),
          rkl_level_scale={2: 1.5, 4: 0.3}, fast=True)
 _variant("ckernel_inf", ml_wlam=20.0, kernel_lam=float("inf"))
+# change request #2 (adopted 2026-10-14): ckernel_rkl4w3f with the penalty-only term in place of the reverse-KL
+# mix (cfast pen_only: cost = lam_l * violations only; same steps, lr, levels, L4 scale and lambda control).
+# Still the UPPER-BOUND arm (probe-lift contexts, change request #1).
+_variant("ckernel_pen4w3f", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, coarse_lam=float("inf"), rkl_level_scale={4: 0.3},
+         fast=True, pen_only=True)
+_variant("ckernel_pen_all", ml_wlam=20.0, rkl_n=32, rkl_lam0=10.0, coarse_lam=float("inf"), fast=True, pen_only=True)

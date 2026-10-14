@@ -20,6 +20,10 @@ free energy), or why it stopped.
 Next: what you would try next.
 ```
 
+## 2026-10-14 (evening) · cr2-penalty (change request #2 adopted: ML + penalty-only term) · started
+Approach: (#18, change request #2, user-adopted in chat) cfast `pen_only`: the fused update's per-draw cost is lam_l x violations only (same cone returns, critic, lambda control), used in place of the reverse-KL mix: `ckpop_hard_pen` (own draws only) and `ckernel_pen4w3f` (upper bound); dimers loop with pen_only; gradient check vs exact grad of sum_l lam_l E_q[H_l] (tests/variants/test_cpen.py). Also re-running wave5-bench's throttled rows (l2x2, l2x15) on a cool GPU. New box: 2x A4000 (notes/box_rules_2026-10-14.md).
+Result: pending, [report](2026-10-14_cr2_penalty/report.md).
+
 ## 2026-10-14 · regress (full test suite) · finished
 Ran tests/ in pieces (CPU 64-71): ~570 passed, 1 persistent failure (variants/test_exactopt.py::test_full_history_table_reaches_target, kl 0.047 vs <0.01), 2 errors (legacy/test_exchain.py, missing cache/exemplar-cliffs npy), 2 transient XLA compile aborts that passed on rerun. No code changed. Report: reportables/2026-10-14_regress/report.md
 
