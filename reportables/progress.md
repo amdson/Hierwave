@@ -17,6 +17,16 @@ Next: what you would try next.
 
 ---
 
+## 2026-10-14 09:35 · wave2-explore (own-draw coarse exploration) · finished
+Approach: own draws only (no probe contexts), ckernel_own: A1 curriculum + coarse flips K=16; A2 + annealed L4 candidates with exact AIS weights; A3a-c Neal tempered transitions on L3/L4 subtrees (tau_hi 2 / 6, lambda ladder 20->1).
+Result: [report](2026-10-14_wave2_explore/report.md). No arm leaves the dirt state: own line_match 0.50 in all five arms (dirt 0.84-0.90; 272-992 updates in 300 s). Clamp gate gap closes (own L3 0.35 -> 0.05-0.14), as before. Accepted pure-dirt -> partial moves: <= 5 % (L4 flips, TT tau 2); anneal from full-support q 1.5 % valid; lambda ladder acc ~0. Diagnosis: own rho already follows fill (rho4 row 0 = 0.02); the collapse is in cert B (0.66 in row 0) which fixes tiles via hard support/honour; |rho - count| 0.37/cell at L4.
+Next: persistent own-started chains (replay buffer) so accepted moves accumulate; MTM with exact fine Gibbs as the certificate proposal.
+
+## 2026-10-14 09:30 · wave2-bench2 (ckernel upper-bound arm, follow-up) · started
+Approach: (#18; UPPER BOUND, probe-lift contexts, change request #1) level-split objectives: RKL (cfast lambda control, lr 1e-3) on L2-4 + ML on L0-2 vs ML all + RKL on L0-2; coarse kernels at lambda = inf; bench compile warmed in the bench's own cache dir; then v2 bench 300 s x 2.
+Result: pending.
+Next: pending.
+
 ## 2026-10-14 09:20 · wave2-bench (ckernel upper-bound arm) · finished
 Approach: violation pressure for ckernel (#18); UPPER BOUND, probe-lift contexts outside the frozen constitution (change request #1). (a) exp(-20V) ML weights; (b) cfast's lambda-controlled reverse-KL steps on own draws mixed with ML (amendment); (c) raw/final violations per level and factor.
 Result: [report](2026-10-14_wave2_bench/report.md). (a) no effect: own-refined states nearly all violate (lam=20 kernels even add support4 violations at L4), probe-refined are clean, so weights reduce training to probe-only ML; violations are q's mass leakage, which ML never penalises. (b) RKL 32 steps/iter at lr 1e-3 cuts violations 10-50x and keeps line_match 0.56-0.59; at lr 3e-3 it collapses (dirt 0.99, lm 0.50). Bench ckernel_rkl32 ground 300 s x 2: NOT accepted, worst final 2.4e-4 (L2, seed 0; seed 1 within budget), F -0.012, line_match 0.56/0.58, rho 0.33/0.80/0.47/0.75/0.47, starved 0/4/10/24/42 % (L3/L4 starvation up from 10/3.5). rkl48: worst 4.9e-4. (c) ckernel's 3.2e-3 = 13 L3 violations in 16 worlds, mostly support3, raised by repair (also creates support4); honourB/support = coarse certs the children cannot realise.
