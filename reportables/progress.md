@@ -20,6 +20,16 @@ free energy), or why it stopped.
 Next: what you would try next.
 ```
 
+## 2026-10-14 (night) · cmix (MCMC mixing between terrains; refinement under clamped coarse levels) · finished
+Approach: diagnostics asked for by the user, run on the Mac. Ground; colour_gibbs with hard, binary or graded penalties, annealing cycles, and a λ replica stack. 4 valid start families × 8 fills. Separately, refinement from uniform-random fine levels under clamped valid coarse levels.
+Result: [report](2026-10-14_cmix/report.md).
+- Hard single-cell Gibbs stays valid and moves surfaces: a 6-row shift returns in about 400 sweeps, τ ≈ 80 sweeps.
+- Soft λ doesn't speed travel up. Annealing cycles (λ down to 1) never end valid.
+- The stack cuts τ per sweep 4–10×, but per second the gain is at most about 1.7×.
+- Graded beats binary on validity at λ = 8 (0.79 vs 0.40) and on stack swaps (5× round trips).
+- Refinement: with only tiles free it is stuck (0/16 tight, 3/16 chain), because tight row honour needs paired flips. With levels 0–1 free, 14/16 at a median of 45–70 sweeps; with levels 0–3 free, all valid in 315–435 sweeps (graded about 25 % faster).
+Next: joint parent + children, or in-block pair moves, for refinement (ideas #20(a) / #15); a shallower annealing bottom rung.
+
 ## 2026-10-14 (night) · cgraded (graded vs binary penalty in MCMC, ideas #21) · finished
 Approach: diagnostic asked for by the user. Ground, 16 worlds, colour_gibbs at τ = 1 from shared greedy-pass starts. Penalty is λ × violation count vs λ × Σ d_f, where d_f is the L1 table-index distance to the nearest finite entry, built generically. No training.
 Result: [report](2026-10-14_cgraded/report.md).

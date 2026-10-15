@@ -1,0 +1,10 @@
+cyc_bin 250 19s valid 0 / 32 mean N 3981.5625
+cyc_bin 500 32s valid 0 / 32 mean N 26.40625
+cyc_bin 750 44s valid 0 / 32 mean N 3981.09375
+cyc_bin 1000 56s valid 0 / 32 mean N 33.90625
+cyc_bin done 57s
+cyc_grad 250 41s valid 0 / 32 mean N 3286.125
+cyc_grad 500 53s valid 0 / 32 mean N 33.46875
+cyc_grad 750 66s valid 0 / 32 mean N 3268.46875
+cyc_grad 1000 78s valid 0 / 32 mean N 37.09375
+cyc_grad done 78s

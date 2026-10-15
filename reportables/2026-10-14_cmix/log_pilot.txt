@@ -1,0 +1,45 @@
+hard 250 19s valid 32 / 32 mean N 0.0
+hard 500 32s valid 32 / 32 mean N 0.0
+hard 750 46s valid 32 / 32 mean N 0.0
+hard 1000 59s valid 32 / 32 mean N 0.0
+hard 1250 72s valid 32 / 32 mean N 0.0
+hard 1500 84s valid 32 / 32 mean N 0.0
+hard 1750 97s valid 32 / 32 mean N 0.0
+hard 2000 110s valid 32 / 32 mean N 0.0
+hard done 110s
+bin_3 250 21s valid 0 / 32 mean N 200.03125
+bin_3 500 36s valid 0 / 32 mean N 210.1875
+bin_3 750 52s valid 0 / 32 mean N 206.09375
+bin_3 1000 70s valid 0 / 32 mean N 214.71875
+bin_3 1250 85s valid 0 / 32 mean N 205.0625
+bin_3 1500 98s valid 0 / 32 mean N 209.53125
+bin_3 1750 113s valid 0 / 32 mean N 200.25
+bin_3 2000 127s valid 0 / 32 mean N 206.28125
+bin_3 done 127s
+grad_3 250 21s valid 0 / 32 mean N 67.25
+grad_3 500 33s valid 0 / 32 mean N 70.71875
+grad_3 750 47s valid 0 / 32 mean N 70.5625
+grad_3 1000 61s valid 0 / 32 mean N 73.65625
+grad_3 1250 75s valid 0 / 32 mean N 71.5
+grad_3 1500 88s valid 0 / 32 mean N 69.78125
+grad_3 1750 103s valid 0 / 32 mean N 71.21875
+grad_3 2000 117s valid 0 / 32 mean N 72.34375
+grad_3 done 118s
+bin_8 250 139s valid 11 / 32 mean N 1.09375
+bin_8 500 1268s valid 11 / 32 mean N 0.78125
+bin_8 750 1309s valid 14 / 32 mean N 0.75
+bin_8 1000 1427s valid 18 / 32 mean N 0.65625
+bin_8 1250 1716s valid 11 / 32 mean N 0.9375
+bin_8 1500 1733s valid 14 / 32 mean N 0.9375
+bin_8 1750 1748s valid 8 / 32 mean N 1.09375
+bin_8 2000 1764s valid 12 / 32 mean N 0.96875
+bin_8 done 1764s
+grad_8 250 20s valid 23 / 32 mean N 0.34375
+grad_8 500 33s valid 28 / 32 mean N 0.1875
+grad_8 750 47s valid 27 / 32 mean N 0.15625
+grad_8 1000 61s valid 27 / 32 mean N 0.15625
+grad_8 1250 74s valid 22 / 32 mean N 0.34375
+grad_8 1500 86s valid 25 / 32 mean N 0.21875
+grad_8 1750 98s valid 23 / 32 mean N 0.3125
+grad_8 2000 112s valid 24 / 32 mean N 0.28125
+grad_8 done 112s

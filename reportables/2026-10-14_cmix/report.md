@@ -1,0 +1,80 @@
+# cmix: how well does MCMC move between terrains, and refine clamped coarse levels? (2026-10-14)
+
+Diagnostics asked for by the user. Nothing is trained; the objective and constitution are untouched.
+- **Problem:** ground, periodic W = 128.
+- **Sampler:** castlegen.kernels.colour_gibbs, exact single-cell sweeps (levels coarse → fine), τ = 1.
+- **Penalties:** "bin" = λ × violated count; "grad" = λ × Σ distance to feasibility (equal to castlegen/graded.py's d on ground).
+- **Run on the Mac.** Note: the Mac was swapping heavily (31 of 32 GB swap in use by other processes), and one arm (bin_8) slowed 15× because of it. The wall-clock seconds below come from runs without swap stalls.
+
+## 1. Moving between terrains (`mix.py`, `analyse.py`)
+
+**Setup.**
+- 8 fill seeds × 4 valid start families = 32 chains. The families share each fill:
+  - smooth surface on the line;
+  - 3-row jitter;
+  - shifted 6 rows up;
+  - shifted 6 rows down.
+- Measured on valid states only:
+  - surface offset from the designed line;
+  - roughness;
+  - Fourier modes 1–2 of h − line;
+  - soft energy S;
+  - integrated autocorrelation time τ (second half of the run);
+  - sweeps until the shifted families recover half / 90 % of their offset;
+  - an R-hat across the 4 families on the window [t/2, t].
+
+![mix](all.png) (pilot λ = 3 / 8 arms: [pilot.png](pilot.png))
+
+| arm | fraction valid | τ offset / τ mode 1 (sweeps) | shift recovered ½ / 90 % (sweeps) | s/sweep (32 chains) | notes |
+|---|---|---|---|---|---|
+| hard (violations excluded) | 1.0 | 83 / 73 | 110 / ~395 | 0.055 | family R-hat 1.47 @2000 (means agree within 0.1 rows) |
+| bin λ = 8 | 0.40 | – | 110 / 345–440 | – | |
+| grad λ = 8 | **0.79** | – | 110 / 370–405 | 0.056 | |
+| bin λ = 3 / grad λ = 3 | 0 / 0 | – | 40–95 / 120–585 | 0.06 | never valid; settles 0.9 rows high (biased) |
+| annealing cycles (λ 20 → 1 → 20, 100 sweeps each), bin / grad | 0.015 / 0.018 | – | – | 0.06–0.08 | 0 of 32 valid at cycle ends: at λ = 1 the surface jumps about 25 rows up and 30 recovery sweeps at λ = 20 leave about 37 violations per world |
+| stack, bin (λ 20, 12, 10, 8, 7, 6) | 1.0 (cold rung) | 18 / 7 | 105–115 / 345–450 | 0.33 | swap acceptance 0.98 / 0.89 / 0.51 / 0.40 / 0.17; 612 round trips |
+| stack, grad | 1.0 (cold rung) | 23 / 6 | 105–115 / 335–420 | 0.40 | swap acceptance **0.996 / 0.97 / 0.82 / 0.72 / 0.48; 3185 round trips** |
+
+**Reading.**
+- **Hard single-cell Gibbs is not frozen.** It keeps every state valid and moves whole surfaces: a 6-row shift returns in about 400 sweeps, and fluctuations decorrelate in about 80 sweeps (about 4.5 s for 32 chains).
+- **Soft penalties don't speed up travel.** At λ = 8 the shift recovers at the same rate. At λ = 3 the chain is never valid and settles in a biased state.
+- **The stack cuts τ per sweep 4–10×, but each sweep costs 6–7×.** Per wall-second the low Fourier mode gains about 1.7× and the offset gains nothing. Recovery from a big shift is a drift, and swaps don't speed it up.
+- **Graded vs binary: graded is clearly better in two places.**
+  - At moderate λ it is valid twice as often (0.79 vs 0.40).
+  - In the stack it swaps far more readily: 5× the round trips on the same ladder. The graded chains carry fewer violations at each rung, so the swap ratio Δλ·ΔM stays small.
+- **Annealing cycles as designed fail.** λ = 1 is far too hot for ground; it needs a shallower bottom rung or a longer cool-down.
+- Whole-world swaps die on a coarse ladder (λ 20, 8, 4, 2, 1 gave 0 acceptance below 8): the swap ratio grows with world size.
+
+## 2. Refining clamped coarse levels (`refine.py`)
+
+**Setup.**
+- Levels ≥ d are clamped at a valid state; levels < d are drawn uniformly at random, then swept. 16 worlds, λ = 20, up to 600 sweeps.
+- **Tight coarse source:** a probe surface with every channel lifted exactly, so A = full columns, B = occupied columns, and rho is exact. There is no slack.
+- **Chain coarse source:** valid states from the cgraded λ = 20 chains.
+
+![refine](refine.png)
+
+| coarse source | free levels | bin: valid, median first-valid sweep | grad: valid, median first-valid sweep |
+|---|---|---|---|
+| tight | 0 | 0/16 (45 violations stuck) | 0/16 (identical) |
+| tight | 0–1 | 14/16, 70 | 14/16, **45** |
+| tight | 0–3 | 15/16, 435 | **16/16, 315** |
+| chain | 0 | 3/16 (25 stuck) | 3/16 (identical) |
+| chain | 0–1 | 9/16, 85 | 6/16, 55 |
+| chain | 0–3 | 16/16, 418 | 16/16, **355** |
+
+Finished refinements differ from the source tiles in 1.4–3.4 % of cells.
+
+**Reading.**
+- **With only the tiles free, single-cell MCMC almost never completes a refinement.**
+  - The parent's certificates fix the row counts inside each 2 × 2 block (row honour: Σ A ≥ A_parent, Σ B ≤ B_parent; with tiles A = B = t).
+  - Moving a misplaced tile therefore needs a two-tile swap, and no single flip is ever accepted.
+  - On level 0, d = 1, so the graded penalty is identical to binary and can't help.
+- **Freeing one more level fixes most of it** (median 45–85 sweeps): level-1 certificates can loosen, which creates the slack the tiles need.
+- **Freeing everything below the top always works but takes 300–450 sweeps.** Graded is about 15–30 % faster here.
+- **What this means for hierarchical sampling:** committing certificates exactly and then refining by single-cell moves is fragile. A refinement step needs moves that change a parent and its children together, or tile pair moves inside a block. This is generic, and it is the joint-move route of ideas #20(a) / #15.
+
+## Files
+- `mix.py` (arms), `analyse.py`, `refine.py`, `plot_refine.py`.
+- `trace_*.npz`, `metrics_{pilot,all}.json`, `refine.json`, `log_*.txt`.
+- Rerun: `PYTHONPATH=. OMP_NUM_THREADS=1 python reportables/2026-10-14_cmix/mix.py hard,grad_8 2000`.

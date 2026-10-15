@@ -1,0 +1,12 @@
+tight d 1 bin 6s valid 0 / 16 median first None final viol/level [45, 0, 0, 0, 0] tiles differ 0.018
+tight d 1 grad 6s valid 0 / 16 median first None final viol/level [45, 0, 0, 0, 0] tiles differ 0.018
+tight d 2 bin 12s valid 14 / 16 median first 70.0 final viol/level [3, 1, 0, 0, 0] tiles differ 0.025
+tight d 2 grad 12s valid 14 / 16 median first 45.0 final viol/level [3, 2, 0, 0, 0] tiles differ 0.025
+tight d 4 bin 21s valid 15 / 16 median first 435.0 final viol/level [0, 0, 0, 1, 0] tiles differ 0.033
+tight d 4 grad 14s valid 16 / 16 median first 315.0 final viol/level [0, 0, 0, 0, 0] tiles differ 0.034
+chain d 1 bin 5s valid 3 / 16 median first 10.0 final viol/level [25, 0, 0, 0, 0] tiles differ 0.014
+chain d 1 grad 5s valid 3 / 16 median first 10.0 final viol/level [25, 0, 0, 0, 0] tiles differ 0.014
+chain d 2 bin 10s valid 9 / 16 median first 85.0 final viol/level [8, 4, 0, 0, 0] tiles differ 0.021
+chain d 2 grad 10s valid 6 / 16 median first 55.0 final viol/level [12, 1, 0, 0, 0] tiles differ 0.021
+chain d 4 bin 15s valid 16 / 16 median first 417.5 final viol/level [0, 0, 0, 0, 0] tiles differ 0.031
+chain d 4 grad 13s valid 16 / 16 median first 355.0 final viol/level [0, 0, 0, 0, 0] tiles differ 0.031
