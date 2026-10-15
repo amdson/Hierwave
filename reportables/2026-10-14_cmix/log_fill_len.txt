@@ -1,0 +1,4 @@
+{"snap": 200, "pen": "bin", "n_valid": 32, "B": 32, "first_p50_p90_max": [35.0, 94.50000000000003, 208.0], "stuck_viol_per_level": [0, 0, 0, 0, 0], "stuck_families": []}
+{"snap": 200, "pen": "grad", "n_valid": 32, "B": 32, "first_p50_p90_max": [37.5, 54.900000000000006, 77.0], "stuck_viol_per_level": [0, 0, 0, 0, 0], "stuck_families": []}
+{"snap": 500, "pen": "bin", "n_valid": 32, "B": 32, "first_p50_p90_max": [37.0, 54.0, 87.0], "stuck_viol_per_level": [0, 0, 0, 0, 0], "stuck_families": []}
+{"snap": 500, "pen": "grad", "n_valid": 32, "B": 32, "first_p50_p90_max": [35.0, 54.500000000000014, 73.0], "stuck_viol_per_level": [0, 0, 0, 0, 0], "stuck_families": []}

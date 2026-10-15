@@ -167,3 +167,41 @@ Finished refinements differ from the source tiles in 1.4–3.4 % of cells.
   1. move the terrain with the certificates out of the way (the certificate-free target: τ 30, shift recovery ~105 sweeps);
   2. then fill the certificates from their conditional given the terrain (about 20 sweeps, which matched the exact conditional's statistics).
 - This samples p_strip(terrain) · p(certs | terrain). It differs from p by the terrain's number of valid certificate assignments, which didn't move any measured statistic. Making it exact would need that count as a weight or an acceptance correction.
+
+## 6. Certificate-free terrain chain + certificate fill (`fill.py`, `fill_len.py`)
+
+**Setup.**
+- Same 32 starts.
+- **Scheme:** a hard chain on certificate-free ground. Every snapshot gets random certificates, then a fill of certificate cells only (tiles and rho fixed).
+- **Reference:** the full hard chain on ground.
+
+**Fill length** (`fill_len.py`, certificate-free terrains after 200 and 500 sweeps):
+- Every fill reached validity, with no stuck worlds.
+- Binary: median 35–37 sweeps, 90th percentile 54–95, max 87–208.
+- Graded: median 35–38, 90th percentile ~55, **max 73–77**.
+- The first run's 40-sweep budget was too short: only 54 % of fills were valid.
+
+**Long fill** (`fill.py v2`: 100 graded + 200 hard fill sweeps, 10 snapshots):
+- Valid 100 %, fill median 36 sweeps, max 124.
+- Certificate statistics on valid fills are unchanged between fill sweeps 100, 150 and 300, so they are equilibrated.
+
+| A_tight − A (B − B_tight equal) | level 1 | level 2 | level 3 | level 4 | total slack B − A at level 4 |
+|---|---|---|---|---|---|
+| scheme, equilibrated fill | 0.007 | 0.019 | 0.052 | 0.19 | 3.96 |
+| full chain | 0.011 | 0.045 | 0.151 | 0.52 | 3.92 |
+
+- Terrain offset, roughness and Fourier mode 1 agree within noise between the two arms.
+- Wall clock per 1000 chain sweeps (32 worlds): scheme 30 s, full 53 s.
+- A fill to validity costs about 36 certificate-only sweeps, roughly 1.5 s for 32 worlds.
+
+**Reading.**
+- The scheme works mechanically:
+  - It always produces valid states.
+  - The terrain mixes 2–4× faster per sweep (section 3), and each sweep is about 1.8× cheaper.
+  - A short fill completes it; stopping at the first valid sweep gave equilibrium statistics in section 3.
+- **But it samples a different joint than ground's p.** Promise slack at levels 3–4 is 3× smaller.
+  - Ground weights each terrain by its number of valid certificate assignments, which favours terrains with more certificate freedom.
+  - This is the log(#valid certificates) term. It is invisible in the surface statistics (offset, roughness, low modes) but not in the certificates.
+- **Which target is wanted is a modelling choice for the user:**
+  1. Keep p as declared (certificates are free variables with uniform weight). Then the scheme needs a correction for #valid certificates, which is not available in closed form. AIS on certificate counts already failed for limbs (memory: limb free energy not estimable).
+  2. Treat certificates as derived scaffolding, so that the soft energies alone define the terrain. Then the scheme samples the intended target, and the full chain carries a certificate-entropy artefact.
