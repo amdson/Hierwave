@@ -1,0 +1,8 @@
+seed 0: setup 1.0 s, updates 1176/4705, counts [8, 4, 5, 2, 1] of [262144, 65536, 16384, 4096, 512], worst 0.002, fail viol, F 0.1044, lm 0.540, rough 1.23, nvalid 11, probes True, rho [0.28, 0.74, 0.56, 0.44, -0.15], starved [0.0, 5.0, 10.0, 28.2, 30.4]
+seed 1: setup 1.1 s, updates 1128/4513, counts [9, 2, 1, 0, 0] of [262144, 65536, 16384, 4096, 512], worst 6.1e-05, PASS viol, F -0.0036, lm 0.606, rough 1.38, nvalid 6, probes True, rho [0.33, 0.83, 0.71, 0.51, -0.14], starved [0.0, 4.9, 10.5, 24.0, 35.8]
+pooled L0: 17/524288 = 3.24e-05  95% CI [1.89e-05, 5.19e-05]  under budget 2e-4
+pooled L1: 6/131072 = 4.58e-05  95% CI [1.68e-05, 9.96e-05]  under budget 2e-4
+pooled L2: 6/32768 = 1.83e-04  95% CI [6.72e-05, 3.99e-04]  straddles budget 2e-4
+pooled L3: 2/8192 = 2.44e-04  95% CI [2.96e-05, 8.82e-04]  straddles budget 2e-4
+pooled L4: 1/1024 = 9.77e-04  95% CI [2.47e-05, 5.43e-03]  straddles budget 2e-4
+{"final_violations": {"worst_frac": 0.001953125, "ok": false}, "raw_vs_final": {"per_stat": {"dirt_frac": true, "dirt_excess": true, "roughness": true, "line_match": true, "floating": true, "fill_err": true}, "ok": true}, "across_seeds": {"per_stat": {"dirt_frac": true, "dirt_excess": false, "roughness": true, "line_match": true, "floating": true, "fill_err": true}, "ok": false}, "probes": {"flagged": [true, true], "ok": false}, "finite_support": {"worst_mismatch": 0.0, "ok": true}, "free_energy": 0.05040671955794096, "within_budget": true, "accepted": false}

@@ -114,6 +114,21 @@ Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
 
+## 2026-10-15 · deq (ideas #22 dimers gate: true equilibrium h/v/d) · finished
+Approach: exact Kasteleyn/Pfaffian edge probabilities on the bench strip, no MCMC.
+Result: [report](2026-10-15_deq/report.md). Exact h/v/d = 0.351/0.324/0.324 (32 rows); 0.5/0.25/0.25 is not the equilibrium; k=3 plateaus are slow-mode.
+Next: set the dimers gate to the exact value; coordinator decides on bench `exact`.
+
+## 2026-10-15 08:53 · gpen_p11 (graded penalty ckpop_hard_gpen; P11-1 no certificate tau log q) · finished
+Approach: (ideas #21, #22; cmix P11) Q1 ckpop_hard_gpen vs ckpop_hard_pen (120 s, then 300 s x 2 bench); Q2 ckpop_hard_rkl_nocq (castlegen/variants/cnocq.py, cert1..cert4 tau log q dropped from the reverse-KL cost; empty list bit-identical) vs ckpop_hard_rkl, 120 s. GPU 0, shared.
+Result: [report](2026-10-15_gpen_p11/report.md). Q1 no. gpen bench 1/2 seeds within 2e-4 (seed 0 misses L2 5, L3 2, L4 1). Pooled L2 1.8e-4 vs pen 0.8e-4 (4 seeds); line_match 0.540/0.606 vs 0.557-0.585; F 0.104/-0.004. Not accepted. Q2 no signal at 120 s: line_match 0.580 vs 0.586; slack A_tight-A 0.014/0.037/0.136/0.52 vs 0.010/0.036/0.201/0.80; L2 15 vs 6 of 16384. Change request #4 recorded.
+Next: P11 candidate 2 (ML on certificate-free chain + fill states); price the repair-created coarse misses (CR #3).
+
+## 2026-10-15 08:55 · kblock (ckpop_hard_pen + block-Gibbs population refresh) · started
+Approach: add p5's parent+children (J11) and 2x2 tile (F2) exact block sweeps to ckpop_hard_pen's population refresh (ideas #18, #22); 120 s fast run vs ckpop_hard_pen, bench only on signal. Training-only kernels (amendment 2026-10-14).
+Result: pending.
+Next: pending.
+
 ## 2026-10-15 · dstage (dimers post-pass block sweeps) · finished
 Approach: k in {10,30,60,120} fine-block Gibbs sweeps (2x2, 3x3) on 64 collapsed cfast60 dimers draws, GPU 0 shared.
 Result: [report](2026-10-15_dstage/report.md). 3x3: d=0.15/0.21/0.22/0.23, h/v stay 0.38-0.42, viol 5e-5; 2x2: d=0. Not within 0.05 of 0.5/0.25/0.25 at any k (h/v off by 0.12); strip equilibrium may be near 1/3 each.

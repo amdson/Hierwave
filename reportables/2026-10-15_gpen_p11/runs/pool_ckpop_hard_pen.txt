@@ -1,0 +1,10 @@
+seed 0: setup 1.0 s, updates 1184/4737, counts [6, 2, 0, 0, 0] of [262144, 65536, 16384, 4096, 512], worst 3.1e-05, PASS viol, F 0.0376, lm 0.557, rough 0.95, nvalid 9, probes True, rho [0.31, 0.79, 0.78, 0.46, -0.17], starved [0.0, 4.3, 13.2, 23.3, 22.9]
+seed 1: setup 1.1 s, updates 1184/4737, counts [0, 1, 1, 0, 0] of [262144, 65536, 16384, 4096, 512], worst 6.1e-05, PASS viol, F 0.1142, lm 0.561, rough 1.17, nvalid 13, probes True, rho [0.3, 0.75, 0.48, 0.33, -0.17], starved [0.0, 5.5, 10.9, 26.2, 28.1]
+seed 2: setup 1.0 s, updates 1176/4705, counts [13, 6, 1, 1, 0] of [262144, 65536, 16384, 4096, 512], worst 0.00024, fail viol, F 0.0245, lm 0.559, rough 1.21, nvalid 5, probes True, rho [0.3, 0.8, 0.75, 0.37, -0.1], starved [0.0, 4.2, 8.9, 24.0, 22.8]
+seed 3: setup 1.1 s, updates 1176/4705, counts [6, 5, 3, 0, 0] of [262144, 65536, 16384, 4096, 512], worst 0.00018, PASS viol, F -0.0388, lm 0.585, rough 1.13, nvalid 3, probes True, rho [0.34, 0.81, 0.7, 0.7, -0.15], starved [0.0, 4.8, 9.4, 21.2, 31.6]
+pooled L0: 25/1048576 = 2.38e-05  95% CI [1.54e-05, 3.52e-05]  under budget 2e-4
+pooled L1: 14/262144 = 5.34e-05  95% CI [2.92e-05, 8.96e-05]  under budget 2e-4
+pooled L2: 5/65536 = 7.63e-05  95% CI [2.48e-05, 1.78e-04]  under budget 2e-4
+pooled L3: 1/16384 = 6.10e-05  95% CI [1.55e-06, 3.40e-04]  straddles budget 2e-4
+pooled L4: 0/2048 = 0.00e+00  95% CI [0.00e+00, 1.80e-03]  straddles budget 2e-4
+{"final_violations": {"worst_frac": 0.000244140625, "ok": false}, "raw_vs_final": {"per_stat": {"dirt_frac": true, "dirt_excess": true, "roughness": true, "line_match": true, "floating": true, "fill_err": true}, "ok": true}, "across_seeds": {"per_stat": {"dirt_frac": true, "dirt_excess": true, "roughness": true, "line_match": true, "floating": true, "fill_err": true}, "ok": true}, "probes": {"flagged": [true, true, true, true], "ok": false}, "finite_support": {"worst_mismatch": 0.0, "ok": true}, "free_energy": 0.03438683785498142, "within_budget": true, "accepted": false}
