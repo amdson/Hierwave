@@ -8,6 +8,11 @@ and link them.
 Entry format:
 
 ```
+## 2026-10-15 · deq (ideas #22 dimers gate: true equilibrium h/v/d) · finished
+Approach: exact Kasteleyn/Pfaffian edge probabilities on the bench strip, no MCMC.
+Result: [report](2026-10-15_deq/report.md). Exact h/v/d = 0.351/0.324/0.324 (32 rows); 0.5/0.25/0.25 is not the equilibrium; k=3 plateaus are slow-mode.
+Next: set the dimers gate to the exact value; coordinator decides on bench `exact`.
+
 ## 2026-10-14 11:20 · speed-1b (coarse kernel speed) · finished
 Approach: profiled one ckernel iteration; block_mh / coarse_flip passes ran all colour steps over the whole image twice per move. Now: block-site-only, active-colour-only passes, candidates + reverse scoring in one batch, factored fast path for chunked coarse Gibbs.
 Result: [report](2026-10-14_speed1b/report.md). Same decisions and log ratios as the old code (64-256 moves per config, same keys). MTM L2 chain 7029 -> 124 ms, flips 1239 -> 279 ms (in-process, contended); iteration 7.1 -> 0.50 s (back to back); 300 s ckernel run 2312 updates vs sweep2b's 440, gate L3 fill -0.113, own line_match 0.703 (0.626). GPU shared.
@@ -19,6 +24,7 @@ Result: bench numbers (variant, problem, accepted?, worst final violations,
 free energy), or why it stopped.
 Next: what you would try next.
 ```
+
 
 ## 2026-10-14 (night) · cmix (MCMC mixing between terrains; refinement under clamped coarse levels) · finished
 Approach: diagnostics asked for by the user, run on the Mac. Ground; colour_gibbs with hard, binary or graded penalties, annealing cycles, and a λ replica stack. 4 valid start families × 8 fills. Separately, refinement from uniform-random fine levels under clamped valid coarse levels.
@@ -113,11 +119,6 @@ Approach: fuse ckernel's 32 reverse-KL steps and 8 ML updates into scans, prefet
 Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
-
-## 2026-10-15 · deq (ideas #22 dimers gate: true equilibrium h/v/d) · finished
-Approach: exact Kasteleyn/Pfaffian edge probabilities on the bench strip, no MCMC.
-Result: [report](2026-10-15_deq/report.md). Exact h/v/d = 0.351/0.324/0.324 (32 rows); 0.5/0.25/0.25 is not the equilibrium; k=3 plateaus are slow-mode.
-Next: set the dimers gate to the exact value; coordinator decides on bench `exact`.
 
 ## 2026-10-15 08:53 · gpen_p11 (graded penalty ckpop_hard_gpen; P11-1 no certificate tau log q) · finished
 Approach: (ideas #21, #22; cmix P11) Q1 ckpop_hard_gpen vs ckpop_hard_pen (120 s, then 300 s x 2 bench); Q2 ckpop_hard_rkl_nocq (castlegen/variants/cnocq.py, cert1..cert4 tau log q dropped from the reverse-KL cost; empty list bit-identical) vs ckpop_hard_rkl, 120 s. GPU 0, shared.
