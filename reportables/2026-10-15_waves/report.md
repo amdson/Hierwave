@@ -32,4 +32,31 @@ Results:
 - **dstage (done, partial):** on collapsed cfast dimers draws (h/v/d 0.47/0.53/0.00), 3x3 block sweeps restore the diagonal to 0.15/0.21/0.22/0.23 at k = 10/30/60/120 with violations 5-6e-5; h/v settle at 0.38/0.38, which matches the long chain's own plateau (0.38/0.38/0.23), so either the strip's equilibrium is not 0.5/0.25/0.25 or the chain is slow there; 2x2 blocks conserve the diagonal (0.000). Cost ~120-160 ms/world (shared GPU). Diversity is restored by a fixed stage where training never managed it; the gate value needs checking. Report: `reportables/2026-10-15_dstage/`.
 - **deq (done, no: the dimers gate is wrong):** an exact Kasteleyn/Pfaffian calculation on the 32-row bench strip gives h/v/d = 0.351/0.324/0.324 (1/3 each away from the edges; row 0 is 0.46/0.27/0.27 and the edge effect decays within 2 rows). No enumeration of uniform matchings gives 0.5/0.25/0.25; that value traces back to a trained-model 4x4 result, not an enumeration. The 3x3 chain plateau 0.38/0.38/0.23 is a slow mode, not equilibrium. **Decision for the user:** the bench is frozen; the recommendation is to gate dimers on 0.351/0.324/0.324 (exact script `reportables/2026-10-15_deq/scripts/exact.py`). Report: `reportables/2026-10-15_deq/`.
 - **kblock (done, no):** block sweeps in `ckpop_hard_pen`'s population refresh do not raise line_match (120 s, seed 0: eval 0.546 / 0.565 / 0.545 for 0 / 1 / 4 extra rounds, population 0.64 in all). The premise was wrong: the refresh already runs the parent+children block 3x per iteration; only the 2x2 tile block was missing, and it changes 1-1.5 % of tiles. The population already has more structure (0.64) than the pass fits under penalty pressure (0.55), so the loss is in the fit, not the targets. Report: `reportables/2026-10-15_kblock/`.
-- stage: pending.
+- **stage (done, yes as repair, no as a bench row):** `ckpop_hard_pen_stage` (R 30 rounds + F 150 random refill) bench 300 s x 2: final violations 0 at every level (old row worst 2.4e-4), seeds agree, F 0.078, but raw~final FAILS (roughness 1.10->2.20 / 1.33->1.91) and the finite-support check FAILS (mismatch 0.073: sweep noise is drawn by array position, not coordinate-keyed, and the kernels are periodic-only; computed reach ~2.6e5 fine columns at R 30, finite but unpaddable). Q1 on hard_pen, 128 worlds: minimum budget R 30 (128/128 valid); the roughness overshoot is a transient: 1.84 (R 30) -> 1.65 (R 120) -> 1.39 (R 240) = chain 1.40, with offset +4.63 (pass draw) -> +0.30 (chain -0.15), |c1| 1.26 -> 0.50 (chain 0.48), line_match 0.667, 8 % of tiles changed at R 240. Tight refill: 128/128 valid at F 20 (random start 61/128). Generation 1.3-2.6 s/world (one world at a time). Report: `reportables/2026-10-15_stage/`.
+
+## Synthesis (coordinator, end of wave 2)
+
+**Ruled out this session (quick checks, all negative):**
+- designed fixed r for the revising sampler (rgap): gap only 0.41-0.46 of uniform; exact-gradient training still collapses. Idea #19 is parked.
+- graded violation mass in the training penalty (gpen): pooled L2 1.8e-4 vs 0.76e-4 binary; the held-out coarse misses are repair-created, which a raw-draw penalty cannot reach. Addendum (c) tested, no.
+- dropping the certificate channels' log q from the rkl mix (P11-1): nothing moves in 120 s; the ML half still fits full-multiplicity certificates.
+- stronger (block) kernels in the training population (kblock): the population already has line_match 0.64; the pass fits it at 0.55. The loss is in the fit under penalty pressure, not in the targets.
+
+**Signal:**
+1. **A fixed post-pass MCMC stage** (p10, stage): 0 violations at every level from the saved own-draws models, 3-8 % of tiles changed, and with enough rounds the draws relax onto the chain's statistics (roughness, offset, Fourier mode 1) with line_match 0.667, the best own-draw structure seen. But it is a chain doing the sampler's job: raw~final fails by construction, and the reach (~2.6e5 columns at R 30, from 16-colour sweeps x rounds) is finite but far beyond anything paddable. As built it is a repair, not a sampler. With the tight refill (F 20) the certificate half of the budget disappears.
+2. **Tight-abstraction refill** (p4fill, stage): valid by construction at every sweep, equilibrium slack in 5-20 sweeps, F 20 instead of 150-200. Generic only if certificates are declared as abstraction maps of the level below (constraint 6 today). This is the cheapest concrete win and points at the DSL change.
+3. **The pass draw's bias is at the source:** offset +4.6 rows and |c1| 1.26 vs the chain's -0.15 / 0.48 (stage Q1). line_match ~0.55-0.59 is only part of the gap; the terrain's mean height and long-wave content are wrong before any repair.
+4. **The dimers gate is wrong** (deq): exact Pfaffian on the bench strip gives h/v/d 0.351/0.324/0.324, not 0.5/0.25/0.25. Every dimers pre-check verdict so far was measured against the wrong target. The 3x3 chain plateau 0.38/0.38/0.23 is a slow mode.
+5. Fill tail scales like log W per world (p6p8): a per-cell exponential tail of ~12 sweeps; binary lam 8 is unusable at scale.
+
+**Decisions for the user (nothing below was built):**
+- Dimers gate value: adopt 0.351/0.324/0.324 (bench frozen; `reportables/2026-10-15_deq/scripts/exact.py`).
+- The stage line: keep it as a repair diagnostic only, or declare a fixed-budget MCMC stage as part of generation (needs raw~final waived or redefined for a declared stage, coordinate-keyed sweep noise, batched kernels, and a reach the window test can pad: constitution constraint 2 as written, plus the bench's raw~final rule).
+- Certificates as declared abstraction maps (DSL direction) so the tight refill is generic (constraint 6).
+- P11-2 (ML targets from a certificate-free chain + tight fill) is the live training-side version of target B; untested.
+
+**Recommended next lines, in order (coordinator's view):**
+1. Fit-vs-penalty balance in `ckpop_hard_pen` (kblock's diagnosis): gate the 32 penalty-only steps on population validity, or raise the ML weight; measure own-draw line_match against the population's 0.64. Engineering freedom, cheap.
+2. The pass draw's offset/long-wave bias (stage Q1): find where +4.6 rows comes from (lookahead mask? repair? coarse levels?) with the clamp tooling; it is a sampler defect visible without any chain.
+3. P11-2 with the tight fill (F 20) as the kernel-route data source.
+4. If the user wants a stage: coordinate-keyed noise and batched kernels first, then the support test, then decide the rule.

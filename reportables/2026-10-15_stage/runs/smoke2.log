@@ -1,0 +1,5 @@
+0 23.75s raw [0, 0, 1, 0, 0] final [0, 0, 0, 0, 0]
+open windows 81.1s
+support mismatch raw {'rho4': 0.0, 'cert4': 0.0, 'rho3': 0.0, 'cert3': 0.0, 'rho2': 0.0, 'cert2': 0.0, 'rho1': 0.0, 'cert1': 0.0, 't': 0.0}
+support mismatch final {'rho4': 1.0, 'cert4': 0.5625, 'rho3': 0.90625, 'cert3': 0.296875, 'rho2': 0.72265625, 'cert2': 0.15625, 'rho1': 0.404296875, 'cert1': 0.09765625, 't': 0.04833984375}
+SMOKE_DONE

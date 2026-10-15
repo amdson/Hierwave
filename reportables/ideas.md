@@ -383,4 +383,6 @@ On ground, this gives unsupported columns for support and the full- or occupied-
 
 > **Annotation (2026-10-15, deq):** dimers gate: exact Pfaffian value for the 32-row strip is h/v/d = 0.351/0.324/0.324, not 0.5/0.25/0.25 (and the 3x3 plateau 0.38/0.38/0.23 is a slow-mode plateau, not equilibrium). [Report](2026-10-15_deq/report.md)
 
+> **Annotation (2026-10-15, stage):** p10's stage on hard_pen, 128 worlds, F 150: R 30 is the smallest zero-violation budget (R 15: 126/128). Roughness overshoot is transient: 1.84 (R30) → 1.65 (R120) → 1.39 (R240) = chain 1.40, tracking the offset relaxation +4.6 → +0.3 rows. Bench row `ckpop_hard_pen_stage` (R30 F150, 300 s × 2): final violations 0 at every level, but raw≈final FAILS (roughness 1.1-1.3 → 1.9-2.2, fill_err +50 %) and finite support FAILS (0.073; stage noise is per-sweep jax keys, not coordinate-keyed); computed reach ≈ 2.6e5 fine columns. Tight-abstraction refill: valid at sweep 1 (F 20: 128/128 vs random 61/128). Status: repair works, guard says it does the sampler's job. [Report](2026-10-15_stage/report.md)
+
 > **Annotation (2026-10-15, kblock):** P5's joint blocks used as a training-time population kernel in ckpop_hard_pen (not as a post-pass step) make no difference: own line_match 0.545-0.565 vs 0.546 at 120 s. [Report](2026-10-15_kblock/report.md).

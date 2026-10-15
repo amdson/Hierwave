@@ -1,3 +1,11 @@
+# Handoff: 2026-10-15 waves (two waves, nine agents, all finished)
+
+Read `reportables/2026-10-15_waves/report.md` (coordinator log with every agent's numbers, the synthesis, decisions for the user and recommended next lines). Per-agent reports: `reportables/2026-10-15_{p5,rgap,p6p8,p10,gpen_p11,p4fill,dstage,deq,kblock,stage}/`. Board regenerated (`results/board.md`, row `ckpop_hard_pen_stage`). New variants: `cnocq.py`, `ckblock.py`, `cstage.py`, `_rgap.py` (all registered under new names, none accepted). No jobs are running. Everything is pushed.
+
+Short version: ruled out the designed-r revising sampler, the graded penalty, dropping certificate log q, and block kernels in the training population. Signal: a fixed post-pass MCMC stage makes own draws fully valid and, with enough rounds, chain-like (line_match 0.667) but fails raw~final and finite support as built; the tight-abstraction certificate refill is valid by construction (F 20); the pass draw has a +4.6-row offset bias at the source; the dimers gate 0.5/0.25/0.25 is wrong (exact 0.351/0.324/0.324). Decisions pending for the user are listed in the waves report.
+
+---
+
 # Handoff: state at pause, 2026-10-14 evening session (new box)
 
 **Paused because the user ran out of usage.** Read this section first; the sections below are the earlier sessions' handoffs (still valid for context).

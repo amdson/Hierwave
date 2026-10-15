@@ -120,6 +120,11 @@ Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
 
+## 2026-10-15 09:20 · stage (ideas #22: fixed post-pass stage budget, bench row) · finished
+Approach: p10's v1b-d5 stage on hard_pen, R 15-240 at F 150 (128 worlds), then `ckpop_hard_pen_stage` (castlegen/variants/cstage.py, R30 F150) benched 300 s × 2 on GPU 1 (shared).
+Result: [report](2026-10-15_stage/report.md). R30 F150 minimum (128/128 valid); roughness overshoot is transient (1.84 → 1.39 at R240 = chain 1.40). Bench: final viol 0 all levels, not accepted: raw≈final FAIL (roughness, fill_err), support FAIL 0.073 (noise not coordinate-keyed), probes flagged; F 0.078.
+Next: coordinate-keyed sweep noise and a support re-check; fix the pass's +4.6-row offset at the source.
+
 ## 2026-10-15 09:15 · kblock (ckpop_hard_pen + block-Gibbs population refresh) · finished
 Approach: hard J11 (parent+children) + 2x2 tile-block sweeps added to ckpop_hard_pen's population refresh (ideas #18, #22); training-only kernels (amendment 2026-10-14), generation unchanged.
 Result: [report](2026-10-15_kblock/report.md). No. 120 s seed 0, ~470 updates each: population lm 0.649/0.642 (1/4 rounds) vs 0.638; eval line_match 0.565/0.545 vs 0.546; kb cost 9-23 ms/refresh. The refresh already contained J11 (3x/iter). No bench. GPU shared.
