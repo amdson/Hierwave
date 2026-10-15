@@ -117,3 +117,30 @@ Finished refinements differ from the source tiles in 1.4–3.4 % of cells.
 - A design that treats certificates as derived and cheap fits this:
   1. sample or learn the terrain with the soft energies (tiles and rho);
   2. fill in the certificates by a few local sweeps, or let them move freely alongside, never committed tight first (see section 2).
+
+## 4. Sampling terrain given certificates (`terrain.py`)
+
+**Setup.**
+- Certificates at levels ≥ k are clamped from the 16 valid cgraded states; tiles, all rho and the certificates below k are free.
+- (i) Hard chain from the valid source, 1000 sweeps.
+- (ii) Free cells drawn at random, then λ = 20 sweeps until valid (≤ 600).
+- The Mac was swapping during k = 1–2, so wall-clock times there are meaningless; sweep counts are unaffected.
+
+| certs clamped | column-height sd (rows) | tiles changed | τ offset / mode 1 (sweeps) | random → valid: bin | random → valid: grad | valid terrain vs source (rms rows) |
+|---|---|---|---|---|---|---|
+| all (k = 1) | 0.51 | 0.8 % | 5 / 5 | 3/16, median 15 (rest stuck) | 3/16, 10 | 1.7 |
+| ≥ 2 | 1.15 | 2.2 % | 15 / 13 | 10/16, 150 | 10/16, 65 | 2.0 |
+| ≥ 3 | 1.42 | 2.6 % | 30 / 38 | 14/16, 348 | 15/16, 185 | 2.4–2.6 |
+| 4 only | 1.50 | 2.9 % | 42 / 43 | 12/16, 505 | 16/16, 340 | 3.0 |
+| none | 1.57 | 3.0 % | 52 / 41 | 13/16, 465 | 10/16, 545 | 3.5 |
+
+**Reading.**
+- **Certificates act as a terrain-resolution knob.** Clamping level-k certificates pins the terrain at roughly the 2^k scale.
+- **With all certificates fixed, the terrain is nearly determined:** ±0.5-row wiggles, 0.8 % of tiles move. Generation from random tiles mostly gets stuck, because the tight level-1 certificates need paired tile flips (section 2).
+- **Each certificate level released adds freedom and slows mixing:** τ goes 5 → 15 → 30 → 42 → 52 sweeps.
+- **Coarse certificates help generation.** With only level 4 clamped, graded reaches 16/16 valid at a median of 340 sweeps, against 10–13/16 at 465–545 with nothing clamped.
+- **Graded is about 1.5–2.3× faster than binary at every partial clamp.**
+- **Consequence for "delete lower certificates and resample".**
+  - Both conditionals are nearly deterministic at fine levels: terrain given all certificates (sd 0.5 rows) and certificates given terrain (level-1 slack 0.011).
+  - So alternating between them would mix slowly, the classic problem of block Gibbs with strongly coupled blocks.
+  - The resample unit should be everything below a level: certificates and soft channels together. That is section 2's depth-d refinement, which reached validity in 45–450 sweeps.

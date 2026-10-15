@@ -1,0 +1,15 @@
+k 1 mix {'valid_end': 16, 'secs': 487.855, 'col_sd': 0.5061, 'h_change_rms': 0.8564, 'tiles_changed': 0.0076, 'tau_offset': 4.8647, 'tau_c1': 5.4496}
+k 1 gen bin {'n_valid': 3, 'median_first': 15.0, 'mean_N_end': 1.688, 'secs': 1544.679, 'h_vs_source_rms': 1.658}
+k 1 gen grad {'n_valid': 3, 'median_first': 10.0, 'mean_N_end': 1.562, 'secs': 2829.195, 'h_vs_source_rms': 1.665}
+k 2 mix {'valid_end': 16, 'secs': 695.4501, 'col_sd': 1.1489, 'h_change_rms': 1.9362, 'tiles_changed': 0.0215, 'tau_offset': 15.3338, 'tau_c1': 13.0468}
+k 2 gen bin {'n_valid': 10, 'median_first': 150.0, 'mean_N_end': 0.938, 'secs': 47.52, 'h_vs_source_rms': 2.011}
+k 2 gen grad {'n_valid': 10, 'median_first': 65.0, 'mean_N_end': 0.625, 'secs': 35.044, 'h_vs_source_rms': 2.013}
+k 3 mix {'valid_end': 16, 'secs': 34.5658, 'col_sd': 1.4167, 'h_change_rms': 2.3271, 'tiles_changed': 0.0261, 'tau_offset': 30.1198, 'tau_c1': 37.8571}
+k 3 gen bin {'n_valid': 14, 'median_first': 347.5, 'mean_N_end': 0.125, 'secs': 19.478, 'h_vs_source_rms': 2.423}
+k 3 gen grad {'n_valid': 15, 'median_first': 185.0, 'mean_N_end': 0.062, 'secs': 18.939, 'h_vs_source_rms': 2.627}
+k 4 mix {'valid_end': 16, 'secs': 31.7931, 'col_sd': 1.4968, 'h_change_rms': 2.5316, 'tiles_changed': 0.029, 'tau_offset': 41.9211, 'tau_c1': 42.8341}
+k 4 gen bin {'n_valid': 12, 'median_first': 505.0, 'mean_N_end': 0.312, 'secs': 19.286, 'h_vs_source_rms': 3.012}
+k 4 gen grad {'n_valid': 16, 'median_first': 340.0, 'mean_N_end': 0.0, 'secs': 13.42, 'h_vs_source_rms': 2.975}
+k 5 mix {'valid_end': 16, 'secs': 31.8801, 'col_sd': 1.5736, 'h_change_rms': 2.6368, 'tiles_changed': 0.0298, 'tau_offset': 52.4196, 'tau_c1': 41.4424}
+k 5 gen bin {'n_valid': 13, 'median_first': 465.0, 'mean_N_end': 0.625, 'secs': 157.989, 'h_vs_source_rms': 3.53}
+k 5 gen grad {'n_valid': 10, 'median_first': 545.0, 'mean_N_end': 0.75, 'secs': 19.716, 'h_vs_source_rms': 3.506}
