@@ -317,3 +317,26 @@ On ground, this gives unsupported columns for support and the full- or occupied-
 > - At λ = 3 it gives about 3× fewer violations, but that is partly a stronger penalty.
 > - Verdict: helps coarse levels and does no harm; it is not the lever for the remaining fine-level misses.
 > - Written before `castlegen/graded.py` landed. run.py has its own simpler d_f (plain L1 on all table axes); on all 21 hard factors of ground it equals graded.py's factor_distance(...).d exactly (checked).
+
+## 22. Certificates as cheap scaffolding, terrain as the hard part (from chat, user, 2026-10-15)
+"so to generate valid certificates, we could simply delete lower level certs, possibly also delete lower level soft channels, and resample with mcmc. as long as mcmc primarily/only touched certs, it would converge quickly. the trick would be to keep certs and soft channels coupled." / "there's a point where we could simply abandon certificates and run gibbs on the tile level"
+
+**Findings so far:** [cmix report](2026-10-14_cmix/report.md), sections 3–6.
+- Certificates given the terrain: valid in about 20–40 sweeps, at equilibrium statistics.
+- Committed certificates slow terrain mixing 2–4×.
+- Block alternation fails.
+- Certificate-free terrain plus a certificate fill is always valid but gives 3× tighter certificates than p: ground weights each terrain by its number of valid certificate assignments.
+
+**Proposals P1–P9:** [proposals](2026-10-14_cmix/proposals.md).
+- Decision needed: target (A) ground's p as declared, or (B) certificates as derived scaffolding.
+- P1: size the counting term exactly on enumerable cases.
+- P2: local exact correction of the count (keeps A).
+- P3: fixed-step generation along the scheme (B).
+- P4: fill from the tight abstraction.
+- P5: joint parent + children blocks (fixes the paired-flip deadlock).
+- P6: generic rule for derived channels.
+- P7: drift moves on certificate-free ground.
+- P8: graded vs binary fill tail at scale.
+- P9: shallow annealing.
+
+> **Annotation (2026-10-15, cmix):** recorded from chat. Proposals are written but none are run. (B) and training on the certificate-free target change the objective (constraint 4) and need the user's approval. P1, P4, P6, P8 and P9 are diagnostics. Status: open.
