@@ -1,0 +1,6 @@
+probe_naive 46s valid from 0 eq steps per fill [None, None, None, None, None, 1500, 1500, None] median not all eq secs median 46.4 line_match 0.687
+air_naive 42s valid from 0 eq steps per fill [None, None, None, 1500, None, 1500, None, None] median not all eq secs median 42.2 line_match 0.684
+dirt_naive 42s valid from 0 eq steps per fill [None, None, None, None, None, 1500, None, None] median not all eq secs median 42.1 line_match 0.684
+random_naive 45s valid from 100 eq steps per fill [None, None, None, None, None, 1500, None, None] median not all eq secs median 44.7 line_match 0.683
+air_ms 116s valid from 0 eq steps per fill [1500, None, 1485, None, None, None, None, 1500] median not all eq secs median 116.4 line_match 0.685
+dirt_ms 119s valid from 0 eq steps per fill [None, 1500, 1495, None, None, None, 1500, 1500] median not all eq secs median 119.1 line_match 0.695

@@ -1,0 +1,56 @@
+{
+ "ref": {
+  "offset": -0.10450185643564357,
+  "rough": 1.3956286741955446,
+  "S": 1237.8972772277227
+ },
+ "band": {
+  "offset": 0.07275195328811687,
+  "rough": 0.03480429734411632,
+  "S": 8.681396093245413
+ },
+ "arms": {
+  "probe_naive": {
+   "eq_step": 270,
+   "eq_sec": 10.647525787353516,
+   "valid_from": 0,
+   "line_match": 0.687,
+   "secs_per_step": 0.0309
+  },
+  "air_naive": {
+   "eq_step": 1240,
+   "eq_sec": 35.137954235076904,
+   "valid_from": 0,
+   "line_match": 0.684,
+   "secs_per_step": 0.0281
+  },
+  "dirt_naive": {
+   "eq_step": 1070,
+   "eq_sec": 30.10100507736206,
+   "valid_from": 0,
+   "line_match": 0.684,
+   "secs_per_step": 0.0281
+  },
+  "random_naive": {
+   "eq_step": 1400,
+   "eq_sec": 41.83843994140625,
+   "valid_from": 100,
+   "line_match": 0.683,
+   "secs_per_step": 0.0298
+  },
+  "air_ms": {
+   "eq_step": 875,
+   "eq_sec": 67.83321690559387,
+   "valid_from": 0,
+   "line_match": 0.685,
+   "secs_per_step": 0.0776
+  },
+  "dirt_ms": {
+   "eq_step": 1220,
+   "eq_sec": 97.09936094284058,
+   "valid_from": 0,
+   "line_match": 0.695,
+   "secs_per_step": 0.0794
+  }
+ }
+}

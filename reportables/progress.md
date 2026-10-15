@@ -45,6 +45,7 @@ Follow-up (user's "certificates easy, soft energies hard"):
 - Tried it (section 6): always valid, with graded fills done in at most 77 sweeps (median ~36) and a 1.8× cheaper terrain chain.
 - But the certificates are 3× tighter at levels 3–4 than under p. That is ground's #valid-certificates weighting on terrains: invisible in the surface statistics, real in the certificates.
 - Whether that weighting belongs in the target is a decision for the user.
+- Section 7: certificate-free MCMC alone converges from all air, all dirt and random starts. The bulk equilibrates in 100–250 sweeps (~0.2 s per world batched on the Mac); the slow-mode tail takes 1000–1400 sweeps. Multiscale sweeps don't pay.
 
 ## 2026-10-14 (night) · cgraded (graded vs binary penalty in MCMC, ideas #21) · finished
 Approach: diagnostic asked for by the user. Ground, 16 worlds, colour_gibbs at τ = 1 from shared greedy-pass starts. Penalty is λ × violation count vs λ × Σ d_f, where d_f is the L1 table-index distance to the nearest finite entry, built generically. No training.
