@@ -114,6 +114,16 @@ Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
 
+## 2026-10-15 · dstage (dimers post-pass block sweeps) · finished
+Approach: k in {10,30,60,120} fine-block Gibbs sweeps (2x2, 3x3) on 64 collapsed cfast60 dimers draws, GPU 0 shared.
+Result: [report](2026-10-15_dstage/report.md). 3x3: d=0.15/0.21/0.22/0.23, h/v stay 0.38-0.42, viol 5e-5; 2x2: d=0. Not within 0.05 of 0.5/0.25/0.25 at any k (h/v off by 0.12); strip equilibrium may be near 1/3 each.
+Next: measure the strip's true orientation mix before gating on 0.5/0.25/0.25.
+
+## 2026-10-15 p4fill (P4: fill from tight abstraction) · finished
+Approach: ideas #22, cmix P4; lift certs vs random start, graded/hard fill, W=512 and 2048, GPU 1 shared.
+Result: [report](2026-10-15_p4fill/report.md). Tight start valid at every k; slack plateau in 5-20 sweeps, same as random start's late values; random start at W=2048 is 75% valid at 80.
+Next: use tight start (F ~ 20) in P3/P10 if certificates are declared abstraction maps.
+
 ## 2026-10-15 08:46 · p10 (P10: pass, then delete-and-resample the levels below d) · finished
 Approach: (ideas #22, cmix P10) saved ckpop_hard_pen / ckpop_pen16 pass draws; levels >= d clamped; R graded single-cell (+ p5 block) sweeps below d; certificates below d refilled by F graded sweeps. GPU 1, shared.
 Result: [report](2026-10-15_p10/report.md). Yes, only with every level freed (d = T+1, R60 F80): 64/64 worlds valid, 0 violations at every level, both models, 3-5 % of tiles changed, ~27 ms per world. Variant 1 (d <= 4): one coarse-trapped world per 32 (over budget). Literal pipeline (honour dropped): refill infeasible 0/16. hard_pen's roughness rises 1.0 -> 1.8.

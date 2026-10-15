@@ -1,0 +1,17 @@
+start ([0.4662, 0.5338, 0.0], 0.000152587890625, 0.0)
+block2 lamNone sweeps 10 hvd [0.4992, 0.5008, 0.0] viol 1.53e-04 changed 0.478 ms/world 74.2
+block2 lamNone sweeps 30 hvd [0.5037, 0.4963, 0.0] viol 1.53e-04 changed 0.494 ms/world 74.7
+block2 lamNone sweeps 60 hvd [0.5053, 0.4947, 0.0] viol 1.53e-04 changed 0.497 ms/world 75.7
+block2 lamNone sweeps 120 hvd [0.5072, 0.4928, 0.0] viol 1.53e-04 changed 0.499 ms/world 77.8
+block2 lam20.0 sweeps 10 hvd [0.4987, 0.5005, 0.0008] viol 1.22e-04 changed 0.479 ms/world 76.2
+block2 lam20.0 sweeps 30 hvd [0.5028, 0.4955, 0.0017] viol 9.16e-05 changed 0.496 ms/world 77.0
+block2 lam20.0 sweeps 60 hvd [0.5036, 0.4934, 0.0031] viol 9.16e-05 changed 0.499 ms/world 78.2
+block2 lam20.0 sweeps 120 hvd [0.5053, 0.4904, 0.0043] viol 7.63e-05 changed 0.502 ms/world 80.5
+block3 lamNone sweeps 10 hvd [0.423, 0.4256, 0.1514] viol 4.58e-05 changed 0.542 ms/world 118.8
+block3 lamNone sweeps 30 hvd [0.3989, 0.3952, 0.206] viol 4.58e-05 changed 0.574 ms/world 126.0
+block3 lamNone sweeps 60 hvd [0.3849, 0.3943, 0.2207] viol 4.58e-05 changed 0.583 ms/world 137.4
+block3 lamNone sweeps 120 hvd [0.3833, 0.3837, 0.233] viol 4.58e-05 changed 0.589 ms/world 160.3
+block3 lam20.0 sweeps 10 hvd [0.4227, 0.4249, 0.1524] viol 6.10e-05 changed 0.543 ms/world 97.5
+block3 lam20.0 sweeps 30 hvd [0.3982, 0.3952, 0.2066] viol 6.10e-05 changed 0.575 ms/world 106.7
+block3 lam20.0 sweeps 60 hvd [0.3848, 0.3942, 0.221] viol 6.10e-05 changed 0.584 ms/world 120.8
+block3 lam20.0 sweeps 120 hvd [0.3821, 0.3829, 0.2349] viol 6.10e-05 changed 0.590 ms/world 149.9
