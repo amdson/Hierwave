@@ -1,0 +1,9 @@
+strip_hard 250 10s valid 32 / 32 mean N 0.0
+strip_hard 500 17s valid 32 / 32 mean N 0.0
+strip_hard 750 25s valid 32 / 32 mean N 0.0
+strip_hard 1000 32s valid 32 / 32 mean N 0.0
+strip_hard 1250 39s valid 32 / 32 mean N 0.0
+strip_hard 1500 46s valid 32 / 32 mean N 0.0
+strip_hard 1750 53s valid 32 / 32 mean N 0.0
+strip_hard 2000 60s valid 32 / 32 mean N 0.0
+strip_hard done 60s

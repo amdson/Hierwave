@@ -78,3 +78,42 @@ Finished refinements differ from the source tiles in 1.4–3.4 % of cells.
 - `mix.py` (arms), `analyse.py`, `refine.py`, `plot_refine.py`.
 - `trace_*.npz`, `metrics_{pilot,all}.json`, `refine.json`, `log_*.txt`.
 - Rerun: `PYTHONPATH=. OMP_NUM_THREADS=1 python reportables/2026-10-14_cmix/mix.py hard,grad_8 2000`.
+
+## 3. Are certificates "easy" and soft-energy sampling "hard"? (user's question; `certs.py`, `mix.py strip_hard`)
+
+**Test A: certificates given terrain (`certs.py`).**
+- Setup: tiles and rho are clamped from the 16 valid cgraded states, cert1–cert4 are drawn uniformly at random, and only certificate cells are swept (λ = 20).
+- Reference: the exact conditional, which is uniform over valid assignments, sampled by a 1000-sweep hard certificate-only chain from the valid state.
+- Result: all 16 worlds are valid at a median of **20 sweeps (binary) / 23 (graded)**.
+- At the first valid sweep the certificate statistics already match the reference. Slack below the tight A (A_tight − A) per level 1–4:
+
+| | level 1 | level 2 | level 3 | level 4 |
+|---|---|---|---|---|
+| first valid, binary | 0.011 | 0.044 | 0.159 | 0.539 |
+| first valid, graded | 0.012 | 0.046 | 0.164 | 0.561 |
+| exact reference | 0.011 | 0.046 | 0.163 | 0.542 |
+| random start | 0.33 | 0.64 | 1.08 | 1.23 |
+
+- B − B_tight and B − A agree equally well, and 200 more sweeps change nothing.
+- Stopping at the first valid state doesn't visibly bias the certificates, at least in these statistics.
+- Slack is nearly zero at level 1 and about half a column at level 4: the certificates are almost fixed by the terrain at fine levels.
+
+**Test B: soft-energy mixing without certificates (`strip_hard`).**
+- Setup: ground minus the certificate channels (tiles + rho, support on tiles only), with the same 4-family hard-chain analysis.
+
+| | τ offset / τ mode 1 (sweeps) | shift recovered ½ / 90 % (sweeps) | family R-hat @2000 | s / 2000 sweeps |
+|---|---|---|---|---|
+| full ground | 83 / 73 | 110 / ~395 | 1.47 | 110 |
+| no certificates | 30 / 45 | 30 / ~105 | 1.08 | 60 |
+
+- The stationary statistics are the same (offset −0.05 to −0.19 rows, roughness 1.39–1.41, S 1237–1243), so the certificate-multiplicity term barely moves them.
+
+**Reading.**
+- The split mostly holds:
+  - Given a terrain, certificates are easy and come out correctly distributed (about 20 sweeps).
+  - Sampling the terrain correctly under the soft energies is the slow part.
+- But the certificates also make that slow part 2–4× slower: surface moves must drag coordinated certificate changes through every level.
+- Without certificates, τ ≈ 30–45 sweeps remains as intrinsic soft-energy slowness.
+- A design that treats certificates as derived and cheap fits this:
+  1. sample or learn the terrain with the soft energies (tiles and rho);
+  2. fill in the certificates by a few local sweeps, or let them move freely alongside, never committed tight first (see section 2).

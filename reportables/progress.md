@@ -29,6 +29,10 @@ Result: [report](2026-10-14_cmix/report.md).
 - Graded beats binary on validity at λ = 8 (0.79 vs 0.40) and on stack swaps (5× round trips).
 - Refinement: with only tiles free it is stuck (0/16 tight, 3/16 chain), because tight row honour needs paired flips. With levels 0–1 free, 14/16 at a median of 45–70 sweeps; with levels 0–3 free, all valid in 315–435 sweeps (graded about 25 % faster).
 Next: joint parent + children, or in-block pair moves, for refinement (ideas #20(a) / #15); a shallower annealing bottom rung.
+Follow-up (user's "certificates easy, soft energies hard"):
+- Certificates from random given tiles + rho are valid in a median of 20–23 sweeps, and at the first valid sweep they match the exact uniform-over-valid conditional in every slack statistic.
+- Removing the certificate channels makes the soft-energy mixing 2–4× faster (τ offset 83 → 30, shift recovery 400 → 105 sweeps) with the same stationary statistics.
+- So the split holds, but committed certificates slow the soft part down.
 
 ## 2026-10-14 (night) · cgraded (graded vs binary penalty in MCMC, ideas #21) · finished
 Approach: diagnostic asked for by the user. Ground, 16 worlds, colour_gibbs at τ = 1 from shared greedy-pass starts. Penalty is λ × violation count vs λ × Σ d_f, where d_f is the L1 table-index distance to the nearest finite entry, built generically. No training.

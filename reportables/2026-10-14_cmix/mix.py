@@ -41,6 +41,16 @@ LADDER = [20.0, 12.0, 10.0, 8.0, 7.0, 6.0]
 FAM = ["smooth", "ragged", "up", "down"]
 
 
+def stripped(p):
+    """ground without certificate channels: tiles + rho, support on tiles only (support0), count
+    prior, smoothness, top noise.  Same support-valid tile set as ground; the tile marginal lacks
+    ground's log(#valid certificates) term."""
+    from castlegen.bench.problem import Problem
+    chans = [c for c in p.chans if not c.name.startswith("cert")]
+    fs = [f for f in p.factors if not (f.name.startswith("honour") or (f.name.startswith("support") and f.name != "support0"))]
+    return Problem(name="ground_strip", T=p.T, H=p.H, chans=chans, factors=fs, W_train=W, W_eval=W, stats=p.stats)
+
+
 def starts(nf):
     p = G.build_ground()
     reg = Region(W)
@@ -103,6 +113,12 @@ def cyc_lam(s):
 
 def run(arm, sweeps, nf=8, seed=0):
     p, st0, fam, fseed = starts(nf)
+    if arm.startswith("strip_"):
+        p = stripped(p)
+        st0 = {k: v for k, v in st0.items() if k in p.chan}
+        arm_run = arm[6:]
+    else:
+        arm_run = arm
     A = Arms(p)
     key = jax.random.PRNGKey(seed)
     rec = {"h": [], "S": [], "N": [], "M": [], "sweep": []}
@@ -171,12 +187,12 @@ def run(arm, sweeps, nf=8, seed=0):
         st = st0
         for s in range(1, sweeps + 1):
             key, sub = jax.random.split(key)
-            if arm == "hard":
+            if arm_run == "hard":
                 st = A.sweep(st, "hard", None, sub)
-            elif arm.startswith("cyc_"):
-                st = A.sweep(st, arm[4:], cyc_lam(s), sub)
+            elif arm_run.startswith("cyc_"):
+                st = A.sweep(st, arm_run[4:], cyc_lam(s), sub)
             else:
-                kind, lam = arm.split("_")
+                kind, lam = arm_run.split("_")
                 st = A.sweep(st, kind, float(lam), sub)
             if s % REC == 0:
                 record(s, st)
