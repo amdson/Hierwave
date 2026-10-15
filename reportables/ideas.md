@@ -349,3 +349,9 @@ On ground, this gives unsupported columns for support and the full- or occupied-
 >   2. kernel-route draws from a certificate-free terrain chain plus a certificate fill;
 >   3. dropping the certificates' log q terms (biased).
 > - Not yet formally adopted.
+
+> **Annotation (2026-10-15, cmix, user decision from chat):** "i'd mostly just want to handle this in whatever way is easiest. for now, i'll just say that changed behavior from dropping low level certificates is fine."
+> - Target (B) behaviour is accepted.
+> - Proposals updated ([proposals](2026-10-14_cmix/proposals.md)): P2 dropped. Added P10 (pass with certificates, then delete-and-resample the low levels, the user's pipeline) and P11 (easiest training change: drop the certificate channels' τ log q terms, or kernel-route draws).
+> - New order: P10, P4/P8, P5, P3, P11, P6/P7, optional P1/P9.
+> - Status: open, none run.

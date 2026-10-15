@@ -10,7 +10,14 @@ These follow from the cmix findings ([report](report.md), sections 1–6). Each 
 
 ---
 
-## Decision needed first (user)
+## Decision (user, 2026-10-15)
+- "the point of certificates is to give global planning abilities to the sampler for it to maintain the no tile over air rule. it's entropy playing a role in sampling is arguably incorrect"
+- Then: "i'd mostly just want to handle this in whatever way is easiest. for now, i'll just say that changed behavior from dropping low level certificates is fine."
+- **Accepted:** the behaviour change from dropping or refilling low-level certificates (target B below). Handle it in the easiest way.
+- As a result, P2 is dropped and P1 becomes an optional diagnostic.
+- The main line is P10, P3, P4, P5, P8 and P11.
+
+## Original framing of the decision
 **Which terrain target?**
 - **(A)** ground's p as declared: certificates are free variables with uniform weight, so terrains are weighted by #valid certificates.
 - **(B)** certificates as derived scaffolding: the terrain distribution comes from the soft energies only (the certificate-free target), and certificates are filled afterwards.
@@ -105,7 +112,49 @@ These follow from the cmix findings ([report](report.md), sections 1–6). Each 
 
 ---
 
-**Suggested order:**
+## P10. Pass with certificates, then delete-and-resample the low levels (the user's pipeline)
+- **Question:** the coloured pass keeps certificates at every level, so it can plan top-down. Afterwards, delete everything below level d (certificates, plus optionally rho and tiles), resample the terrain below d by fixed-sweep MCMC without certificates, then refill the certificates below d. How often is the refill compatible with the kept level-d certificates? How much does the terrain change?
+- **Watch out:**
+  - The level-d certificates' row honour refers to the deleted level d − 1, so the resampled terrain is not bound by those promises.
+  - The refill can then be infeasible against them.
+  - Three variants:
+    1. Keep row honour active as a hard factor during the terrain resample, so certificates below d are derived, not dropped.
+    2. Also refill level d and above (certificates become planning-only).
+    3. Delete only the certificates below d and keep the terrain.
+- **Setup:**
+  - Greedy-pass and trained-pass draws on ground.
+  - d ∈ {1, 2, 3}.
+  - Terrain resample of R ∈ {10, 30, 60} hard sweeps on the certificate-free terrain under the clamped levels ≥ d.
+  - Graded certificate fill of F ∈ {40, 80} sweeps.
+- **Measure:**
+  - final violations per level against the 2 × 10⁻⁴ budget;
+  - refill feasibility rate;
+  - terrain change against the pass draw;
+  - terrain statistics against the bench (line_match, roughness, floating);
+  - finite-support window test.
+- **Cost:** 5–10 min on the Mac. **Status:**
+  - The resample and refill are fixed-count local steps (constraint 2 is fine; they act like a repair stage with a fixed budget).
+  - The behaviour change is accepted by the user (decision above).
+  - Untrained arms are diagnostic.
+
+## P11. Easiest training-side handling of the accepted change
+- **Question:** what is the cheapest change to the coloured-pass objective that stops rewarding certificate entropy?
+- **Candidates, easiest first:**
+  1. Drop the certificate channels' τ log q terms from the cost: certificates are still sampled, and their costs and violations still count. This is a one-line change in cfast.
+  2. Train on kernel-route draws refined by the certificate-free terrain chain plus a certificate fill.
+- **Setup:** cfast `pen_only` arm on ground on the box, 300 s × 4 seeds, against the current objective.
+- **Measure:** certificate slack per level (against section 6's 0.007 / 0.019 / 0.052 / 0.19 and the full chain's 0.011 / 0.045 / 0.151 / 0.52); terrain statistics; violations; probes.
+- **Status:** an objective change (constraint 4) covered by the user's acceptance of the changed behaviour. Record it as an amendment note in notes/constitution_change_requests.md when it is run.
+
+**Suggested order (after the decision):**
+1. P10 (the user's pipeline; Mac).
+2. P4 and P8 (cheap fill questions).
+3. P5 (joint blocks fix the paired-flip deadlock).
+4. P3, then P11 on the box.
+5. P6 and P7.
+6. Optional: P1 (size of the dropped term), then P9.
+
+**Original suggested order (before the decision):**
 1. P1 and P4 (cheap, and they inform decision A/B).
 2. P5 (the deadlock fix is useful under either target).
 3. P2 if you choose A, or P3 + P8 if you choose B.
