@@ -239,3 +239,17 @@ Finished refinements differ from the source tiles in 1.4–3.4 % of cells.
 - The strict band, which measures the slow-mode tail (τ ≈ 30–45), takes 1000–1400 sweeps.
 - **The random start with λ = 20 is fastest.** It begins near half full, and the soft phase relaxes it quickly; all air and all dirt have to drift about 30 rows.
 - **Multiscale sweeps don't pay:** about the same number of steps, 2.5× the cost per step.
+
+**Pictures** (`render_allair.py`; red = the designed ground line):
+
+![evolution](allair_evolution.png)
+
+![finals](allair_finals.png)
+
+**What the pictures show:**
+- From all air the surface grows up from the bottom.
+- From all dirt it erodes from the top.
+- From random (λ = 20) floating dirt clears within about 50 sweeps.
+- All starts sit on the line by about 250 sweeps.
+- The final certificate-free worlds track the line with ±1–3-row noise and single-column spikes and pits.
+- Full-ground chain samples look similar but somewhat more blocky (terraced steps), consistent with their certificate slack weighting.
