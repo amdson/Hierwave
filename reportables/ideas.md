@@ -340,3 +340,12 @@ On ground, this gives unsupported columns for support and the full- or occupied-
 - P9: shallow annealing.
 
 > **Annotation (2026-10-15, cmix):** recorded from chat. Proposals are written but none are run. (B) and training on the certificate-free target change the objective (constraint 4) and need the user's approval. P1, P4, P6, P8 and P9 are diagnostics. Status: open.
+
+> **Annotation (2026-10-15, cmix, user's view from chat):** "this is arguably correct behavior. the point of certificates is to give global planning abilities to the sampler for it to maintain the no tile over air rule. it's entropy playing a role in sampling is arguably incorrect"
+> - The user leans to target (B): certificates are planning variables, and their multiplicity should not weight terrains.
+> - The current objective (constraint 4: τ log q over all channels) rewards certificate entropy, so adopting (B) needs a constitution amendment.
+> - Candidate formulations:
+>   1. reverse KL on the terrain marginal via an auxiliary-variable bound with a learned s(certs | terrain);
+>   2. kernel-route draws from a certificate-free terrain chain plus a certificate fill;
+>   3. dropping the certificates' log q terms (biased).
+> - Not yet formally adopted.
