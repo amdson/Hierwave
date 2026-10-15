@@ -120,6 +120,16 @@ Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
 
+## 2026-10-15 09:15 · kblock (ckpop_hard_pen + block-Gibbs population refresh) · finished
+Approach: hard J11 (parent+children) + 2x2 tile-block sweeps added to ckpop_hard_pen's population refresh (ideas #18, #22); training-only kernels (amendment 2026-10-14), generation unchanged.
+Result: [report](2026-10-15_kblock/report.md). No. 120 s seed 0, ~470 updates each: population lm 0.649/0.642 (1/4 rounds) vs 0.638; eval line_match 0.565/0.545 vs 0.546; kb cost 9-23 ms/refresh. The refresh already contained J11 (3x/iter). No bench. GPU shared.
+Next: the lever is the fit under penalty pressure, not the targets.
+
+## 2026-10-15 08:50 · stage (ideas #22: fixed post-pass stage budget, bench row) · started
+Approach: p10's v1b-d5 stage on hard_pen at R 15/30/60/120/240, F 150 (roughness vs chain reference 1.39); then the stage as generation-time repair of ckpop_hard_pen (castlegen/variants/cstage.py) and a 300 s x 2 bench row.
+Result: pending.
+Next: pending.
+
 ## 2026-10-15 08:53 · gpen_p11 (graded penalty ckpop_hard_gpen; P11-1 no certificate tau log q) · finished
 Approach: (ideas #21, #22; cmix P11) Q1 ckpop_hard_gpen vs ckpop_hard_pen (120 s, then 300 s x 2 bench); Q2 ckpop_hard_rkl_nocq (castlegen/variants/cnocq.py, cert1..cert4 tau log q dropped from the reverse-KL cost; empty list bit-identical) vs ckpop_hard_rkl, 120 s. GPU 0, shared.
 Result: [report](2026-10-15_gpen_p11/report.md). Q1 no. gpen bench 1/2 seeds within 2e-4 (seed 0 misses L2 5, L3 2, L4 1). Pooled L2 1.8e-4 vs pen 0.8e-4 (4 seeds); line_match 0.540/0.606 vs 0.557-0.585; F 0.104/-0.004. Not accepted. Q2 no signal at 120 s: line_match 0.580 vs 0.586; slack A_tight-A 0.014/0.037/0.136/0.52 vs 0.010/0.036/0.201/0.80; L2 15 vs 6 of 16384. Change request #4 recorded.

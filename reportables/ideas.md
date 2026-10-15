@@ -236,6 +236,8 @@ Keep the shared-weight actor soft until it has learned context-dependent structu
 
 > **Annotation (2026-10-14, wave4-bench, UPPER BOUND: probe-lift contexts, change request #1):** fused ckernel loop (RKL scan, ML multi-update, prefetch; same objective) gives no net updates/300 s under GPU contention (RKL steps are GPU-latency bound); bench ckernel_rkl4w3f 4 seeds: 1/4 pass, misses only at L2 (pooled 2.9e-4 [1.75e-4, 4.5e-4]), L1 1.2e-4, L3/L4 0. Report: reportables/2026-10-14_wave4_bench/report.md.
 
+> **Annotation (2026-10-15, kblock):** ckpop_hard_pen's population refresh already runs p5's parent+children block (J11, 3x per iteration at λ = 20). Adding hard J11 + 2x2 tile-block sweeps (1 or 4 rounds; 9-23 ms; 1.1-1.5 % of tiles moved per refresh; `castlegen/variants/ckblock.py`, 0 rounds bit-identical) leaves population line_match at 0.64-0.65 (vs 0.64) and eval line_match at 0.565/0.545 (vs 0.546) in 120 s, seed 0, equal updates; no bench. The gap lies in the pass's fit under penalty pressure, not in the targets. [Report](2026-10-15_kblock/report.md). Status: tried, negative.
+
 ## 19. Revising (diffusion-style) generation trained by path KL (from chat, user, 2026-10-14) — AUTHORISED
 **Authorised by the user on 2026-10-14** as an objective change under the constitution; see "Amendment 2026-10-14 (b)" in `notes/coloured_pass_constitution.md`.
 
@@ -380,3 +382,5 @@ On ground, this gives unsupported columns for support and the full- or occupied-
 > **Annotation (2026-10-15, dstage):** dimers: 3x3 fine-block Gibbs on collapsed cfast draws reaches d=0.15/0.21/0.23 at 10/30/120 sweeps with violations 5e-5 (about 0.1-0.16 s per world), but h/v settle at 0.38/0.38, not 0.5/0.25; 2x2 stays d=0. [Report](2026-10-15_dstage/report.md)
 
 > **Annotation (2026-10-15, deq):** dimers gate: exact Pfaffian value for the 32-row strip is h/v/d = 0.351/0.324/0.324, not 0.5/0.25/0.25 (and the 3x3 plateau 0.38/0.38/0.23 is a slow-mode plateau, not equilibrium). [Report](2026-10-15_deq/report.md)
+
+> **Annotation (2026-10-15, kblock):** P5's joint blocks used as a training-time population kernel in ckpop_hard_pen (not as a post-pass step) make no difference: own line_match 0.545-0.565 vs 0.546 at 120 s. [Report](2026-10-15_kblock/report.md).
