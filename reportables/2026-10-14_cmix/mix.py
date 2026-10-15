@@ -183,6 +183,30 @@ def run(arm, sweeps, nf=8, seed=0):
                 print(arm, s, f"{time.time() - t0:.0f}s", "swap acc", np.round(acc / np.maximum(tries, 1), 3).tolist(),
                       "trips", trips.sum(), "cold valid", int((np.asarray(rec['N'][-1]) == 0).sum()), flush=True)
         extra = {"swap_acc": acc / np.maximum(tries, 1), "round_trips": trips.sum(1)}
+    elif arm_run.startswith("blk_"):
+        # two-block schedule: m sweeps of the terrain block (tiles, rho, cert1, cert2; cert3-4 fixed),
+        # then n sweeps of the high-certificate block (cert3, cert4 given everything else); hard.
+        # `sweeps` counts terrain-block sweeps.
+        m, nb = (int(v) for v in arm_run.split("_")[1:])
+        B = fam.size
+        tmask = {c.name: jnp.full((B,) + st0[c.name].shape[1:], not (c.name.startswith("cert") and c.level >= 3), bool)
+                 for c in p.sampled()}
+        cmask = {c.name: jnp.full((B,) + st0[c.name].shape[1:], c.name.startswith("cert"), bool)
+                 for c in p.sampled() if c.level >= 3}
+        st = st0
+        s = 0
+        while s < sweeps:
+            for _ in range(m):
+                s += 1
+                key, sub = jax.random.split(key)
+                st = cg.sweep_all(A.lay, st, 1.0, None, sub, mask=tmask)
+                if s % REC == 0:
+                    record(s, st)
+            for _ in range(nb):
+                key, sub = jax.random.split(key)
+                st = cg.sweep_all(A.lay, st, 1.0, None, sub, levels=[4, 3], mask=cmask)
+            if s % 250 < m:
+                print(arm, s, f"{time.time() - t0:.0f}s", "valid", int((rec["N"][-1] == 0).sum()), "/", B, flush=True)
     else:
         st = st0
         for s in range(1, sweeps + 1):

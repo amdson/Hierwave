@@ -33,6 +33,9 @@ Follow-up (user's "certificates easy, soft energies hard"):
 - Certificates from random given tiles + rho are valid in a median of 20–23 sweeps, and at the first valid sweep they match the exact uniform-over-valid conditional in every slack statistic.
 - Removing the certificate channels makes the soft-energy mixing 2–4× faster (τ offset 83 → 30, shift recovery 400 → 105 sweeps) with the same stationary statistics.
 - So the split holds, but committed certificates slow the soft part down.
+- Terrain given clamped certificates (levels ≥ k): certificates act as a resolution knob (all clamped pins the terrain to ±0.5 rows).
+- A two-block schedule (terrain vs cert3–4) is worse than the full chain (shift recovery 685 → never as blocks lengthen): the high certificates block drift.
+- Proposed instead: terrain without certificates, then fill certificates given the terrain.
 
 ## 2026-10-14 (night) · cgraded (graded vs binary penalty in MCMC, ideas #21) · finished
 Approach: diagnostic asked for by the user. Ground, 16 worlds, colour_gibbs at τ = 1 from shared greedy-pass starts. Penalty is λ × violation count vs λ × Σ d_f, where d_f is the L1 table-index distance to the nearest finite entry, built generically. No training.

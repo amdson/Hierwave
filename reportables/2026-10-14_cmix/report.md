@@ -144,3 +144,26 @@ Finished refinements differ from the source tiles in 1.4–3.4 % of cells.
   - Both conditionals are nearly deterministic at fine levels: terrain given all certificates (sd 0.5 rows) and certificates given terrain (level-1 slack 0.011).
   - So alternating between them would mix slowly, the classic problem of block Gibbs with strongly coupled blocks.
   - The resample unit should be everything below a level: certificates and soft channels together. That is section 2's depth-d refinement, which reached validity in 45–450 sweeps.
+
+## 5. Two-block schedule: terrain block vs high-certificate block (`mix.py blk_m_n`)
+
+**Setup.**
+- Rounds of m hard sweeps of {tiles, all rho, cert1, cert2} with cert3–4 fixed, then n hard sweeps of {cert3, cert4} given the rest.
+- Same 4-start-family test; sweeps counted as terrain-block sweeps.
+
+| schedule | τ offset / mode 1 | shift recovered ½ / 90 % | family R-hat @2000 | late offset, up / down families |
+|---|---|---|---|---|
+| full chain | 83 / 73 | 110 / ~395 | 1.47 | −0.19 / −0.07 |
+| blk 10 + 5 | 74 / 84 | 150 / 510–685 | 1.40 | −0.10 / −0.10 |
+| blk 30 + 20 | 93 / 76 | 245 / 1135–1435 | 2.25 | −0.64 / +0.37 |
+| blk 60 + 20 | 129 / 94 | 310–385 / not reached | 3.43 | −1.21 / +1.07 |
+| no certificates | 30 / 45 | 30 / ~105 | 1.08 | −0.15 / −0.05 |
+
+**Reading: negative, and longer blocks are worse.**
+- High certificates barely restrict terrain fluctuations (column sd 1.42 vs 1.57, section 4), but they block drift: the terrain can move only within the clamped certificates' slack.
+- Given the terrain, the certificates have little slack either (0.16 and 0.54 columns at levels 3–4). For directional moves each block waits on the other, which is the near-deterministic block-Gibbs problem again.
+- The τ ≈ 30 of section 4 was mixing within one fixed set of certificates, not global mixing.
+- A scheme that should work, consistent with sections 3–4:
+  1. move the terrain with the certificates out of the way (the certificate-free target: τ 30, shift recovery ~105 sweeps);
+  2. then fill the certificates from their conditional given the terrain (about 20 sweeps, which matched the exact conditional's statistics).
+- This samples p_strip(terrain) · p(certs | terrain). It differs from p by the terrain's number of valid certificate assignments, which didn't move any measured statistic. Making it exact would need that count as a weight or an acceptance correction.

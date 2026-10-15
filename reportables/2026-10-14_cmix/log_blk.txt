@@ -1,0 +1,27 @@
+blk_10_5 250 21s valid 32 / 32
+blk_10_5 500 34s valid 32 / 32
+blk_10_5 750 48s valid 32 / 32
+blk_10_5 1000 62s valid 32 / 32
+blk_10_5 1250 75s valid 32 / 32
+blk_10_5 1500 89s valid 32 / 32
+blk_10_5 1750 103s valid 32 / 32
+blk_10_5 2000 116s valid 32 / 32
+blk_10_5 done 116s
+blk_30_20 270 22s valid 32 / 32
+blk_30_20 510 102s valid 32 / 32
+blk_30_20 750 144s valid 32 / 32
+blk_30_20 1020 243s valid 32 / 32
+blk_30_20 1260 257s valid 32 / 32
+blk_30_20 1500 271s valid 32 / 32
+blk_30_20 1770 286s valid 32 / 32
+blk_30_20 2010 300s valid 32 / 32
+blk_30_20 done 300s
+blk_60_20 300 22s valid 32 / 32
+blk_60_20 540 35s valid 32 / 32
+blk_60_20 780 47s valid 32 / 32
+blk_60_20 1020 60s valid 32 / 32
+blk_60_20 1260 73s valid 32 / 32
+blk_60_20 1500 85s valid 32 / 32
+blk_60_20 1800 101s valid 32 / 32
+blk_60_20 2040 113s valid 32 / 32
+blk_60_20 done 114s
