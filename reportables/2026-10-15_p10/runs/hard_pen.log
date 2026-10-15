@@ -1,0 +1,13 @@
+hard_pen: 16 pass draws in 40.3 s
+pass raw {'viol': [3, 4, 4, 0, 0], 'nhard': [16384, 4096, 1024, 256, 32], 'valid': 11, 'stats': {'dirt_frac': 0.4344635009765625, 'dirt_excess': -0.0721282958984375, 'roughness': 0.9394685039370079, 'line_match': 0.552490234375, 'floating': 1.75, 'fill_err': 0.02660369873046875}} 
+pass final {'viol': [3, 2, 3, 0, 0], 'nhard': [16384, 4096, 1024, 256, 32], 'valid': 13, 'stats': {'dirt_frac': 0.4344635009765625, 'dirt_excess': -0.0721282958984375, 'roughness': 0.9394685039370079, 'line_match': 0.552490234375, 'floating': 1.75, 'fill_err': 0.02660369873046875}} 
+probe {'dirt_frac': 0.5060958862304688, 'dirt_excess': -0.00049591064453125, 'roughness': 0.20570866141732283, 'line_match': 0.8848876953125, 'floating': 0.0, 'fill_err': 0.00388336181640625}
+[v1 d1 R10 F0] 2.6+0.1s  stage1 viol [2, 4, 4, 0, 0] | final viol [2, 4, 4, 0, 0] valid 12/16 tiles chg 0.0013 lm 0.552 rough 0.942 float 1.50 dirt 0.434 fill p50/max None/None
+[v1 d2 R10 F40] 3.8+7.1s  stage1 viol [2, 1, 4, 0, 0] | final viol [2, 1, 4, 0, 0] valid 14/16 tiles chg 0.0052 lm 0.552 rough 1.070 float 1.50 dirt 0.434 fill p50/max 2.0/4
+[v1 d3 R10 F40] 3.9+7.2s  stage1 viol [2, 1, 2, 0, 0] | final viol [2, 1, 2, 0, 0] valid 15/16 tiles chg 0.0050 lm 0.557 rough 1.023 float 1.50 dirt 0.434 fill p50/max 7.0/15
+[v1 d2 R30 F80] 0.1+0.3s  stage1 viol [2, 1, 4, 0, 0] | final viol [2, 1, 4, 0, 0] valid 14/16 tiles chg 0.0065 lm 0.555 rough 1.080 float 1.50 dirt 0.433 fill p50/max 3.0/5
+[v1 d3 R30 F80] 0.1+0.4s  stage1 viol [2, 1, 2, 0, 0] | final viol [2, 1, 2, 0, 0] valid 15/16 tiles chg 0.0089 lm 0.557 rough 1.062 float 1.50 dirt 0.435 fill p50/max 8.0/24
+[plain d2 R30 F80] 4.2+0.3s  stage1 viol [4065, 4, 4, 0, 0] | final viol [532, 1186, 4, 0, 0] valid 0/16 tiles chg 0.0460 lm 0.562 rough 1.913 float 0.00 dirt 0.439 fill p50/max None/None
+[plain d3 R30 F80] 6.1+0.4s  stage1 viol [5252, 4, 4, 0, 0] | final viol [222, 250, 463, 0, 0] valid 0/16 tiles chg 0.0646 lm 0.592 rough 1.725 float 0.00 dirt 0.468 fill p50/max None/None
+[v1 d2 R30 F80 DEL] 0.1+0.3s  stage1 viol [309, 1056, 4, 0, 0] | final viol [385, 951, 4, 0, 0] valid 0/16 tiles chg 0.0231 lm 0.558 rough 2.689 float 111.81 dirt 0.434 fill p50/max None/None
+DONE

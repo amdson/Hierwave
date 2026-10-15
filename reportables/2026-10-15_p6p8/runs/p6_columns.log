@@ -1,0 +1,7 @@
+columns exact samples viol 0
+{"n4": [0.0, 1.0], "n3": [0.0, 1.0], "n2": [0.0, 1.0], "n1": [0.0, 1.0], "k": [0.0, 1.0]}
+{"k": [0.0, 1.0]}
+{'frac_cells_changed_per_sweep': 0.0, 'frac_changed_vs_start': 0.0, 'final_viol': 0, 'max_viol': 0, 'density_acf_lag1_10_50': [0.0, 0.0, 0.0], 'density_mean_std_over_chains': [0.817474365234375, 0.01104074353581751]}
+{'frac_cells_changed_per_sweep': 0.0, 'frac_changed_vs_start': 0.0, 'final_viol': 0, 'max_viol': 0, 'density_acf_lag1_10_50': [0.0, 0.0, 0.0], 'density_mean_std_over_chains': [0.817474365234375, 0.01104074353581751]}
+{'frac_cells_changed_per_sweep': 0.0, 'frac_changed_vs_start': 0.0, 'final_viol': 0, 'max_viol': 0, 'density_acf_lag1_10_50': [0.0, 0.0, 0.0], 'density_mean_std_over_chains': [0.817474365234375, 0.01104074353581751]}
+{'frac_cells_changed_per_sweep': 0.0, 'frac_changed_vs_start': 0.0, 'final_viol': 0, 'max_viol': 0, 'density_acf_lag1_10_50': [0.0, 0.0, 0.0], 'density_mean_std_over_chains': [0.0, 0.0]}

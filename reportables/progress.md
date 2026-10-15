@@ -114,6 +114,35 @@ Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
 
+## 2026-10-15 08:46 · p10 (P10: pass, then delete-and-resample the levels below d) · finished
+Approach: (ideas #22, cmix P10) saved ckpop_hard_pen / ckpop_pen16 pass draws; levels >= d clamped; R graded single-cell (+ p5 block) sweeps below d; certificates below d refilled by F graded sweeps. GPU 1, shared.
+Result: [report](2026-10-15_p10/report.md). Yes, only with every level freed (d = T+1, R60 F80): 64/64 worlds valid, 0 violations at every level, both models, 3-5 % of tiles changed, ~27 ms per world. Variant 1 (d <= 4): one coarse-trapped world per 32 (over budget). Literal pipeline (honour dropped): refill infeasible 0/16. hard_pen's roughness rises 1.0 -> 1.8.
+Next: 256 worlds × 2 seeds for the winning arm; finite-support window test.
+
+## 2026-10-15 p6p8 (fill tail at scale, derived-channel entropy) · finished
+Approach: fill_len at W=128/512/2048 (graded, bin 20, bin 8); plug-in conditional entropy of ground rho/cert and columns channels; stripped column chain.
+Result: [report](2026-10-15_p6p8/report.md). Graded fill tail scale constant (~12 sweeps) but +12 sweeps per 4x W: F=80 leaves 20% invalid at W=2048, F~165 for 2e-4; bin 20 ~310; bin 8 never fills. Cert H 0.03-0.22 vs rho 0.56-2.7 nats/cell; columns coarse H=0 but chain frozen. GPU shared.
+Next: tight-abstraction fill (P4); level-below-only entropy plus ergodicity test.
+
+## 2026-10-15 rgap (designed-r bound gap, exact) · finished
+Approach: exact enumeration (`castlegen/variants/_rgap.py`) of the path-KL gap with uniform vs designed refill r on the tiny flat and two-level problems; CPU cores 0-3.
+Result: [report](2026-10-15_rgap/report.md). Untrained generator, flat: designed r gap 1.27-1.32 (lam_r 2-5) vs uniform 3.12 (coins 3), 1.63-1.66 vs 3.56 (coins 1): 0.41-0.46x, not below a third; lam_r 20 = uniform. Trained generators collapse to deterministic under both. Answer: no.
+Next: none for the designed r unless a different r shape is proposed.
+
+## 2026-10-15 09:00 · p5 (joint blocks for refinement under clamped levels) · finished
+Approach: cmix section 2 refinement rerun with exact block Gibbs (2x2 tiles; parent + 4 children) vs single-cell (ideas #22, P5).
+Result: [report](2026-10-15_p5/report.md). Blocks: 32/32 tight and 16/16 chain valid in 5-10 sweeps; single-cell 1/32 and 2/16 after 200 (d=1), 21/32 and 12/16 (d=2). GPU shared.
+Next: use the 2x2 tile block for P10's resample below a clamped level.
+
+
+## 2026-10-15 08:25 · gpen_p11 (graded penalty ckpop_hard_gpen; P11-1 no certificate tau log q) · started
+Approach: (ideas #21, #22; cmix P11) Q1: ckpop_hard_gpen vs ckpop_hard_pen, 120 s fast runs, then 300 s x 2 bench if not worse. Q2: ckpop_hard_rkl_nocq (castlegen/variants/cnocq.py, reverse-KL cost without tau log q for cert1..cert4) vs ckpop_hard_rkl, 120 s, bench if signal. GPU 0, cores 16-23, shared.
+Result: pending. Report: 2026-10-15_gpen_p11/report.md.
+
+## 2026-10-15 08:40 · p10 (P10: pass, then delete-and-resample the levels below d) · started
+Approach: (ideas #22, cmix P10 variant 1) saved own-draws models ckpop_hard_pen / ckpop_pen16 + greedy pass; clamp levels >= d, R graded sweeps below d, refill certificates below d by F graded certificate-only sweeps; GPU 1, shared.
+Result: pending. Report: 2026-10-15_p10/report.md.
+
 ## 2026-10-14 12:05 · wave6-pop (ckpop: L1-L3 pressure, 4-seed bench) · finished
 Approach: (#18; own draws only, inside the frozen constitution) arms: reverse-KL step x2 at L1-L3 (C), plus 40 colour-Gibbs sweeps (D), 300 s each, back to back; 4-seed 300 s bench of the chosen arm through the warm wrapper.
 Result: [report](2026-10-14_wave6_pop/report.md). Neither arm qualified (line_match 0.571 / 0.562, L3 starvation 30 %; only 536 / 488 updates, GPU shared with wave4-bench's bench), so ckpop_hard_rkl was benched: 4 x 300 s NOT accepted, 0/4 seeds within budget (worst 6.7e-4; closest seed 1, 2.4e-4 = 4 L2 instances against 3 allowed); pooled L2 3.5e-4 [2.2e-4, 5.3e-4] over budget, L0/L1 under, L3 1.8e-4 and L4 0 compatible; F -0.090; line_match 0.60-0.63; roughness fails across seeds (seed 2 1.93 vs 1.13-1.23); probes fail (1-4 valid raw worlds of 16); setup 1.1-2.7 s, 696-904 updates.

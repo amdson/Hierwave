@@ -270,6 +270,9 @@ Every factor is computable from step probabilities, r and the energy, so no samp
 
 > **Annotation (2026-10-14 evening, crevise agent):** built as `castlegen/variants/crevise.py` (pass + R fixed revising steps, fixed-rate erase r with uniform refill on the P side, path KL as per-draw costs on cfast's machinery; R = 0 = cfast bit for bit; gradient-checked against trajectory enumeration; guided variant reads a per-cell violation field). First prototype results: dimers unguided collapses to a deterministic policy with 0.6 % violations (worse than cfast); ground 8 x 16 patch all dirt (0.94 vs MCMC 0.64, cfast 0.65). Bound gap on the tiny problem 3-5 nats per world (|M| log D dominates). Guided runs: biased-term 0.79/0.17/0.04 at 2.4e-2 violations; with the corrected estimator (a bias in the revising steps' all-action term was found by the gradient check and fixed) all diagonal 0/0/1.00 at 3.1e-5: budget met with one orientation, deterministic trajectory; ground patch guided dirt 0.94. Verdict: negative so far; the uniform-refill r charges rho R log D per cell and the sampler answers by going deterministic. Proposal: a designed fixed r (report). Report: `reportables/2026-10-14_crevise/report.md`. Status: does not work (this r); untested with a designed r.
 
+> **Annotation (2026-10-15, rgap agent):** exact bound gap, uniform vs designed refill r(a | x_notM) ∝ exp(−s − λ_r nv), by trajectory enumeration on the tiny flat and two-level problems (`reportables/2026-10-15_rgap/report.md`). For a generator that keeps entropy (untrained) the designed r (best λ_r 2-5) removes only 55-60 % of the gap (flat: 3.12 -> 1.27-1.32 and 3.56 -> 1.63-1.66 nats per world, 0.41-0.46 of uniform); λ_r 20 is no better than uniform. Trained generators still collapse to a deterministic one under both objectives. Status: proposal not shown to work; not built.
+
+
 ## 20. Brute-force refinement by random jittering (from chat, user, 2026-10-14)
 "one-step lookahead is fine, but I suspect that random jittering would produce valid solutions for most cases."
 
@@ -343,6 +346,8 @@ On ground, this gives unsupported columns for support and the full- or occupied-
 
 > **Annotation (2026-10-15, cmix, user's view from chat):** "this is arguably correct behavior. the point of certificates is to give global planning abilities to the sampler for it to maintain the no tile over air rule. it's entropy playing a role in sampling is arguably incorrect"
 > - The user leans to target (B): certificates are planning variables, and their multiplicity should not weight terrains.
+
+> **Annotation (2026-10-15, p6p8):** graded fill tail at W=2048 is bounded in scale (~12 sweeps) but shifts +12 sweeps per 4x W: F=80 leaves 20% invalid, F~165 reaches 2e-4; binary 20 needs F~310, binary 8 never fills. Cert channels have 12-25x lower conditional entropy than rho (0.03-0.22 vs 0.56-2.7 nats/cell); columns' coarse channels have H = 0 exactly, but so does k (frozen single-site chain). [Report](2026-10-15_p6p8/report.md)
 > - The current objective (constraint 4: τ log q over all channels) rewards certificate entropy, so adopting (B) needs a constitution amendment.
 > - Candidate formulations:
 >   1. reverse KL on the terrain marginal via an auxiliary-variable bound with a learned s(certs | terrain);
@@ -355,3 +360,16 @@ On ground, this gives unsupported columns for support and the full- or occupied-
 > - Proposals updated ([proposals](2026-10-14_cmix/proposals.md)): P2 dropped. Added P10 (pass with certificates, then delete-and-resample the low levels, the user's pipeline) and P11 (easiest training change: drop the certificate channels' τ log q terms, or kernel-route draws).
 > - New order: P10, P4/P8, P5, P3, P11, P6/P7, optional P1/P9.
 > - Status: open, none run.
+
+> **Annotation (2026-10-15, p10, P10 run; report [2026-10-15_p10](2026-10-15_p10/report.md)):** first P10 test on saved own-draws models (ckpop_hard_pen, ckpop_pen16), W = 128, λ = 20 graded sweeps at τ = 1.
+> - **Literal pipeline** (drop the certificates below d, resample the terrain without them, refill): the refill is infeasible against the kept level-d certificates, 0/16 worlds.
+> - **Variant 1** (carry the certificates below d through the resample): the refill is always feasible, but at d ≤ 4 one world in 32 keeps a coarse trap (clamped L3/L4 promise), so the budget is missed.
+> - **All levels free** (d = T+1, certificates planning-only, rho4 also resampled; R = 60 rounds of single-cell + p5 block sweeps, F = 80 refill): 64/64 worlds valid, 0 violations, for both models; 3-5 % of tiles changed; about 27 ms per world.
+> - With rho4 clamped, pen16 keeps one L2 instance (over by one).
+> - pen16's structure is kept; hard_pen's roughness rises 1.0 → 1.8.
+> - Status: signal; needs a 256-world confirmation and the finite-support window test.
+
+
+> **Annotation (2026-10-15, p5):** P5 run: joint blocks (2x2 tiles, or parent+4 children when level 1 is free) refine clamped tiles in 5-10 sweeps (32/32, 16/16 valid) where single-cell gets 1/32 and 2/16 in 200; see [p5 report](2026-10-15_p5/report.md).
+
+> **Annotation (2026-10-15, gpen_p11):** P11-1 built and run once: `ckpop_hard_rkl_nocq` (`castlegen/variants/cnocq.py`; reverse-KL cost without τ log q for cert1..cert4, chosen by name for this test, P6 measures a generic rule; empty list bit-identical to ckpop_hard_rkl, tests/variants/test_cnocq.py). 120 s, seed 0, GPU 0 shared, both 464 updates: own-draw line_match 0.580 vs 0.586; certificate slack A_tight − A (raw, L1–L4) 0.014/0.037/0.136/0.52 vs 0.010/0.036/0.201/0.80 (B − B_tight 0.003/0.028/0.214/1.34 vs 0.002/0.011/0.073/1.75); final L2 15 vs 6 of 16384 instances (budget 2e-4: 9.2e-4 vs 3.7e-4), training raw violation rates 10–20 % lower. No signal; no bench. Likely reason: the ML half still fits the certificate conditionals to kernel-refined states, which carry ground's full certificate multiplicity, so only half the objective changed. Recorded as change request #4 in notes/constitution_change_requests.md. [report](2026-10-15_gpen_p11/report.md). Status: tried, null at 120 s.

@@ -1,0 +1,1 @@
+{"source": "chain", "arm": "f2", "d": 1, "B": 16, "sweeps_run": 9, "sec_per_sweep": 0.0013492902119954426, "valid_at": {"5": 15, "10": 16, "20": 16, "40": 16, "100": 16, "200": 16}, "n_valid_final": 16, "median_first": 5.0, "tile_changed_frac": 0.0129547119140625, "mean_viol_final": 0.0, "first": [5, 5, 5, 5, 5, 9, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5], "curve": [[5, 0.0625, 15]]}
