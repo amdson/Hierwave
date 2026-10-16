@@ -1,3 +1,9 @@
+# Handoff: 2026-10-16 (waves 3-4; decisions adopted; first clean ground row)
+
+Read `reportables/2026-10-15_waves/report.md` (all waves, synthesis at the end). User decisions adopted 2026-10-16: constitution Amendment 2026-10-16 (fixed-budget generation stage; `Variant.staged`), dimers bench gate = exact 0.351/0.324/0.324. **Best row:** `cfitpen_ml2_stage` (castlegen/variants/cfitpen.py + cfitstage.py + cstage.py): 0 violations at every level on 4 seeds, F -0.09, line_match 0.65, fails only the old probe flag (user decision pending: drop it / adopt the v2 block check). No jobs running; everything pushed.
+
+---
+
 # Handoff: 2026-10-15 waves (two waves, nine agents, all finished)
 
 Read `reportables/2026-10-15_waves/report.md` (coordinator log with every agent's numbers, the synthesis, decisions for the user and recommended next lines). Per-agent reports: `reportables/2026-10-15_{p5,rgap,p6p8,p10,gpen_p11,p4fill,dstage,deq,kblock,stage}/`. Board regenerated (`results/board.md`, row `ckpop_hard_pen_stage`). New variants: `cnocq.py`, `ckblock.py`, `cstage.py`, `_rgap.py` (all registered under new names, none accepted). No jobs are running. Everything is pushed.

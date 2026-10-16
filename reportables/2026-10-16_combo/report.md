@@ -67,3 +67,6 @@ Roughness is no longer the stage's job: the 300 s pass is already at the chain's
 
 ## Files
 `castlegen/variants/cfitstage.py`; `reportables/2026-10-16_combo/scripts/{run_q2.sh,run_smoke.sh,smoke.py,run_bench.sh,bench_warm.py,table.py}`; `runs/{q2_ml2_120s,q2_ml2_300s}.{json,log}`, `runs/q2_table.md`, `runs/bench.log`, `runs/bench_row.jsonl`, `runs/pool.txt`, `runs/ml2_bench4_row.jsonl`, `runs/pool_ml2_bench4.txt`, `runs/params_s0.pkl`, `runs/nvidia_*`.
+
+## Addendum (coordinator, 2026-10-16): 4-seed bench of `cfitpen_ml2_stage`
+`runs/bench4_cfitpen_ml2_stage.log` (GPU 1 shared, 300 s x 4 seeds, ~2100 updates per seed; the log's warm-up lines were truncated by a duplicate launch that was killed). Final violations **0 at every level on all four seeds** (pooled L2 CI [0, 5.6e-5]; L3 [0, 2.3e-4] because 16 384 instances cannot resolve the budget). F -0.101 / -0.080 / -0.093 / -0.090; line_match 0.646 / 0.660 / 0.649 / 0.646; roughness 1.41-1.46 (chain 1.40); across-seed agreement passes; finite support 0; raw vs final reported (floating differs, as the stage removes floating cells); old probe flag fires on all four. Not accepted on the old probe flag only.

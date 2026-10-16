@@ -1,0 +1,59 @@
+warm-up: 112.8 s ({'setup': 68.2075867652893, 'total': 75.40870761871338, 'iters': 3})
+[seed 0] train 301s  final viol {'0': 0.0, '1': 0.0, '2': 0.0, '3': 0.0, '4': 0.0}  F -0.10119550675153732  support 0
+[seed 1] train 302s  final viol {'0': 0.0, '1': 0.0, '2': 0.0, '3': 0.0, '4': 0.0}  F -0.08040333725512028  support 0
+[seed 2] train 301s  final viol {'0': 0.0, '1': 0.0, '2': 0.0, '3': 0.0, '4': 0.0}  F -0.09300833009183407  support 0
+[seed 3] train 301s  final viol {'0': 0.0, '1': 0.0, '2': 0.0, '3': 0.0, '4': 0.0}  F -0.09010619483888149  support 0
+{
+ "final_violations": {
+  "worst_frac": 0.0,
+  "ok": true
+ },
+ "raw_violations_worst": 0.00048828125,
+ "exact_stats": {
+  "per_stat": {},
+  "ok": null
+ },
+ "raw_vs_final": {
+  "per_stat": {
+   "dirt_frac": true,
+   "dirt_excess": true,
+   "roughness": true,
+   "line_match": true,
+   "floating": false,
+   "fill_err": true
+  },
+  "ok": null,
+  "staged": true
+ },
+ "across_seeds": {
+  "per_stat": {
+   "dirt_frac": true,
+   "dirt_excess": true,
+   "roughness": true,
+   "line_match": true,
+   "floating": true,
+   "fill_err": true
+  },
+  "ok": true
+ },
+ "probes": {
+  "flagged": [
+   true,
+   true,
+   true,
+   true
+  ],
+  "ok": false
+ },
+ "finite_support": {
+  "worst_mismatch": 0.0,
+  "ok": true
+ },
+ "free_energy": -0.09117834223434329,
+ "within_budget": true,
+ "accepted": false
+}
+seed 0 train_s 300.5518682003021
+seed 1 train_s 302.29993057250977
+seed 2 train_s 300.9900097846985
+seed 3 train_s 301.27423095703125

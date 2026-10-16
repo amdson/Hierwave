@@ -1,0 +1,3 @@
+index, clocks.current.sm [MHz], temperature.gpu
+0, 1935 MHz, 63
+1, 210 MHz, 52
