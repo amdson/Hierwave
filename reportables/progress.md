@@ -121,6 +121,14 @@ Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
 
+## 2026-10-16 · dgate (ideas #22 dimers: record under corrected gate, fixed-stage reach) · finished
+Approach: tabulated saved dimers h/v/d vs 0.351/0.324/0.324; 3x3 and 1-site+3x3 stages, 64 worlds, two starts.
+Result: [report](2026-10-16_dgate/report.md). No valid trained sampler passes. 3x3 stage not at gate within 480 sweeps (collapsed .38/.38/.24, tiling .38/.31/.31, sectors differ); 4x4 unsupported (2.9M completions > max_out).
+Next: test sector/winding hypothesis; stage needs a sector-changing move.
+
+## 2026-10-16 05:10 · fitpen (ckpop_hard_pen fit vs penalty rebalance; ideas #18) · started
+Approach: castlegen/variants/cfitpen.py; 120 s fast loop on GPU 0 of ckpop_hard_pen vs 2x ML steps per iteration and 2x ML lr (engineering freedoms), own-draw line_match vs L2 raw violations.
+
 ## 2026-10-15 09:20 · stage (ideas #22: fixed post-pass stage budget, bench row) · finished
 Approach: p10's v1b-d5 stage on hard_pen, R 15-240 at F 150 (128 worlds), then `ckpop_hard_pen_stage` (castlegen/variants/cstage.py, R30 F150) benched 300 s × 2 on GPU 1 (shared).
 Result: [report](2026-10-15_stage/report.md). R30 F150 minimum (128/128 valid); roughness overshoot is transient (1.84 → 1.39 at R240 = chain 1.40). Bench: final viol 0 all levels, not accepted: raw≈final FAIL (roughness, fill_err), support FAIL 0.073 (noise not coordinate-keyed), probes flagged; F 0.078.

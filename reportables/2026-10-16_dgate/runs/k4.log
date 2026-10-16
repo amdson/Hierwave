@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "/workspace/Hierwave/reportables/2026-10-16_dgate/scripts/dgate_stage.py", line 32, in <module>
+    KS = [FineBlockKernel(p, region, k, lam=l, seed=0) for k, l in kerns]
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/Hierwave/castlegen/kernels/fine_block.py", line 182, in __init__
+    self.Ks = [FineBlockGibbs(problem, region, k, o, lam=lam, seed=seed, internal=internal) for o in self.offsets]
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/Hierwave/castlegen/kernels/fine_block.py", line 76, in __init__
+    self.comps = internal_pruned(self, max_out=max_out)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/Hierwave/castlegen/kernels/amortised.py", line 72, in internal_pruned
+    assert comps.shape[0] <= max_out, f"internal-pruned set too large at slot {j}: {comps.shape[0]}"
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: internal-pruned set too large at slot 15: 2884844

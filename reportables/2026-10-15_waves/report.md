@@ -60,3 +60,15 @@ Results:
 2. The pass draw's offset/long-wave bias (stage Q1): find where +4.6 rows comes from (lookahead mask? repair? coarse levels?) with the clamp tooling; it is a sampler defect visible without any chain.
 3. P11-2 with the tight fill (F 20) as the kernel-route data source.
 4. If the user wants a stage: coordinate-keyed noise and batched kernels first, then the support test, then decide the rule.
+
+## Wave 3 (launched 2026-10-16, after the user's decisions: fixed-budget stage allowed, dimers gate fixed)
+| agent | model | gpu / cores | question |
+| --- | --- | --- | --- |
+| fitpen | Opus | GPU 0 / 16-23 | fit-vs-penalty balance in ckpop_hard_pen: can the pass fit the population's line_match 0.64 (now 0.55) while staying under budget? |
+| stage2 | Opus | GPU 1 / 8-15 | make the stage bench-legal under the amendment: coordinate-keyed sweep noise, batched kernels, finite-support pass; bench rows at R 30 and R 120 with before/after stats. |
+| offset | Sonnet | GPU 0 light / 4-5 | where does the pass draw's +4.6-row mean-height bias come from (which level, pass vs repair)? plus chain reference stats per level for ground. |
+| dgate | Sonnet | GPU 1 light / 6-7 | dimers under the corrected gate: rerun the pre-check on the saved models; can a fixed stage (3x3 / 4x4 blocks, k <= 240) reach 0.351/0.324/0.324? |
+
+Results:
+- **dgate (done):** (1) no valid trained sampler passes the corrected dimers gate; closest is cbound_lam 0.44-0.47/0.39/0.14-0.17; collapsed samplers ~0.5/0.5/0 or 1/0/0; untrained/greedy draws sit inside the box but with 4-5 % violations. (2) A fixed 3x3 block stage does not reach the gate within 480 sweeps from either start (collapsed -> 0.382/0.382/0.237, tiling -> 0.382/0.310/0.307): the h/v-rich and h/d-rich sectors are not connected by local 3x3 moves; 4x4 is not runnable with the current enumeration cap (2.88M completions). Dimers needs a sector-changing move, or the sampler itself has to place the mass. Report: `reportables/2026-10-16_dgate/`.
+- fitpen, stage2, offset: pending.

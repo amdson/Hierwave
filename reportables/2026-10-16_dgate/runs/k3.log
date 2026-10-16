@@ -1,0 +1,34 @@
+k3 collapsed start [0.4662, 0.5338, 0.0] 0.000152587890625
+k3 collapsed 30 [0.3989, 0.3946, 0.2065] viol 3.05e-05 ms/w 25.4 gate False
+k3 collapsed 60 [0.3859, 0.3887, 0.2254] viol 3.05e-05 ms/w 33.8 gate False
+k3 collapsed 90 [0.3839, 0.3828, 0.2333] viol 3.05e-05 ms/w 42.2 gate False
+k3 collapsed 120 [0.3851, 0.3851, 0.2299] viol 3.05e-05 ms/w 50.7 gate False
+k3 collapsed 150 [0.3825, 0.3871, 0.2304] viol 3.05e-05 ms/w 59.2 gate False
+k3 collapsed 180 [0.3794, 0.3862, 0.2344] viol 3.05e-05 ms/w 67.8 gate False
+k3 collapsed 210 [0.3807, 0.3806, 0.2387] viol 3.05e-05 ms/w 76.1 gate False
+k3 collapsed 240 [0.3813, 0.3829, 0.2358] viol 3.05e-05 ms/w 84.7 gate False
+k3 collapsed 270 [0.3816, 0.3827, 0.2357] viol 3.05e-05 ms/w 93.2 gate False
+k3 collapsed 300 [0.3765, 0.3897, 0.2338] viol 3.05e-05 ms/w 101.7 gate False
+k3 collapsed 330 [0.3835, 0.3842, 0.2323] viol 3.05e-05 ms/w 110.4 gate False
+k3 collapsed 360 [0.3791, 0.3847, 0.2362] viol 3.05e-05 ms/w 118.9 gate False
+k3 collapsed 390 [0.3779, 0.3855, 0.2366] viol 3.05e-05 ms/w 127.8 gate False
+k3 collapsed 420 [0.3805, 0.38, 0.2395] viol 3.05e-05 ms/w 136.1 gate False
+k3 collapsed 450 [0.3768, 0.383, 0.2401] viol 1.53e-05 ms/w 144.8 gate False
+k3 collapsed 480 [0.3816, 0.3817, 0.2367] viol 1.53e-05 ms/w 153.7 gate False
+k3 tiling start [0.5045, 0.2478, 0.2477] 0.0
+k3 tiling 30 [0.4102, 0.2927, 0.2971] viol 0.00e+00 ms/w 8.6 gate False
+k3 tiling 60 [0.4014, 0.298, 0.3005] viol 0.00e+00 ms/w 17.3 gate False
+k3 tiling 90 [0.397, 0.3004, 0.3026] viol 0.00e+00 ms/w 25.9 gate False
+k3 tiling 120 [0.3979, 0.3009, 0.3011] viol 0.00e+00 ms/w 34.6 gate False
+k3 tiling 150 [0.3944, 0.2963, 0.3093] viol 0.00e+00 ms/w 43.2 gate False
+k3 tiling 180 [0.3944, 0.3003, 0.3053] viol 0.00e+00 ms/w 51.8 gate False
+k3 tiling 210 [0.3876, 0.3068, 0.3055] viol 0.00e+00 ms/w 60.5 gate False
+k3 tiling 240 [0.3892, 0.3036, 0.3072] viol 0.00e+00 ms/w 69.1 gate False
+k3 tiling 270 [0.3874, 0.302, 0.3106] viol 0.00e+00 ms/w 77.8 gate False
+k3 tiling 300 [0.3882, 0.3042, 0.3076] viol 0.00e+00 ms/w 86.5 gate False
+k3 tiling 330 [0.3876, 0.3058, 0.3066] viol 0.00e+00 ms/w 95.3 gate False
+k3 tiling 360 [0.3847, 0.3065, 0.3087] viol 0.00e+00 ms/w 104.1 gate False
+k3 tiling 390 [0.3867, 0.3047, 0.3086] viol 0.00e+00 ms/w 112.9 gate False
+k3 tiling 420 [0.39, 0.3041, 0.3058] viol 0.00e+00 ms/w 121.6 gate False
+k3 tiling 450 [0.3841, 0.3044, 0.3115] viol 0.00e+00 ms/w 130.3 gate False
+k3 tiling 480 [0.3823, 0.3103, 0.3074] viol 0.00e+00 ms/w 139.2 gate False
