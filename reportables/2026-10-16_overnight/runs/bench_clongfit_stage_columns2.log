@@ -1,0 +1,150 @@
+[ckernel] init reportables/2026-10-14_sweep2a/runs/armB_s0/params_ground.pkl does not match the columns layout: cfast init
+[JaxBlockGibbs] L1 depth 1: 142805 completions > 4096: internally pruned to 196
+warm-up: 86.4 s ({'setup': 50.78496050834656, 'total': 55.28268122673035, 'iters': 3})
+[ckernel] init reportables/2026-10-14_sweep2a/runs/armB_s0/params_ground.pkl does not match the columns layout: cfast init
+[JaxBlockGibbs] L1 depth 1: 142805 completions > 4096: internally pruned to 196
+[JaxBlockGibbs] L1 depth 1: 142805 completions > 4096: internally pruned to 196
+E1016 18:35:03.328442  410765 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 1s:
+
+  %gather = s32[117312,196,1]{2,1,0} gather(%constant.314, %constant.306), offset_dims={1,2}, collapsed_slice_dims={}, start_index_map={1}, index_vector_dim=1, slice_sizes={196,1}, metadata={op_name="jit(run_slow)/gather" stack_frame_id=17}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1016 18:35:04.002361  410665 slow_operation_alarm.cc:140] The operation took 1.674065448s
+Constant folding an instruction is taking > 1s:
+
+  %gather = s32[117312,196,1]{2,1,0} gather(%constant.314, %constant.306), offset_dims={1,2}, collapsed_slice_dims={}, start_index_map={1}, index_vector_dim=1, slice_sizes={196,1}, metadata={op_name="jit(run_slow)/gather" stack_frame_id=17}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1016 18:35:22.150654  410765 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 2s:
+
+  %scatter-add.186 = f32[1,19968,196]{2,1,0} scatter(%broadcast.149, %constant.243, %constant.155), update_window_dims={1,2,3}, inserted_window_dims={}, scatter_dims_to_operand_dims={1}, index_vector_dim=1, to_apply=%region_6.23, metadata={op_name="jit(run_slow)/vmap()/scatter-add" stack_frame_id=10}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1016 18:35:33.733354  410665 slow_operation_alarm.cc:140] The operation took 13.582811131s
+Constant folding an instruction is taking > 2s:
+
+  %scatter-add.186 = f32[1,19968,196]{2,1,0} scatter(%broadcast.149, %constant.243, %constant.155), update_window_dims={1,2,3}, inserted_window_dims={}, scatter_dims_to_operand_dims={1}, index_vector_dim=1, to_apply=%region_6.23, metadata={op_name="jit(run_slow)/vmap()/scatter-add" stack_frame_id=10}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1016 18:35:37.738637  410765 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 4s:
+
+  %scatter-add.187 = f32[1,19968,196]{2,1,0} scatter(%broadcast.149, %constant.243, %constant.159), update_window_dims={1,2,3}, inserted_window_dims={}, scatter_dims_to_operand_dims={1}, index_vector_dim=1, to_apply=%region_7.24, metadata={op_name="jit(run_slow)/vmap()/scatter-add" stack_frame_id=13}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1016 18:35:47.360665  410665 slow_operation_alarm.cc:140] The operation took 13.622134558s
+Constant folding an instruction is taking > 4s:
+
+  %scatter-add.187 = f32[1,19968,196]{2,1,0} scatter(%broadcast.149, %constant.243, %constant.159), update_window_dims={1,2,3}, inserted_window_dims={}, scatter_dims_to_operand_dims={1}, index_vector_dim=1, to_apply=%region_7.24, metadata={op_name="jit(run_slow)/vmap()/scatter-add" stack_frame_id=13}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1016 18:36:16.519249  410765 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 8s:
+
+  %scatter-add.196 = f32[1,19968,196]{2,1,0} scatter(%broadcast.149, %constant.243, %constant.439), update_window_dims={1,2,3}, inserted_window_dims={}, scatter_dims_to_operand_dims={1}, index_vector_dim=1, to_apply=%region_19.39, metadata={op_name="jit(run_slow)/vmap()/scatter-add" stack_frame_id=10}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1016 18:36:22.049921  410665 slow_operation_alarm.cc:140] The operation took 13.530762505s
+Constant folding an instruction is taking > 8s:
+
+  %scatter-add.196 = f32[1,19968,196]{2,1,0} scatter(%broadcast.149, %constant.243, %constant.439), update_window_dims={1,2,3}, inserted_window_dims={}, scatter_dims_to_operand_dims={1}, index_vector_dim=1, to_apply=%region_19.39, metadata={op_name="jit(run_slow)/vmap()/scatter-add" stack_frame_id=10}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1016 18:37:43.175285  410765 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 16s:
+
+  %scatter-add.203 = f32[1,19968,196]{2,1,0} scatter(%broadcast.149, %constant.266, %constant.701), update_window_dims={1,2,3}, inserted_window_dims={}, scatter_dims_to_operand_dims={1}, index_vector_dim=1, to_apply=%region_28.52, metadata={op_name="jit(run_slow)/vmap()/scatter-add" stack_frame_id=13}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1016 18:38:21.767972  410665 slow_operation_alarm.cc:140] The operation took 54.592827042s
+Constant folding an instruction is taking > 16s:
+
+  %scatter-add.203 = f32[1,19968,196]{2,1,0} scatter(%broadcast.149, %constant.266, %constant.701), update_window_dims={1,2,3}, inserted_window_dims={}, scatter_dims_to_operand_dims={1}, index_vector_dim=1, to_apply=%region_28.52, metadata={op_name="jit(run_slow)/vmap()/scatter-add" stack_frame_id=13}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1016 18:38:53.821752  410765 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 32s:
+
+  %scatter-add.202 = f32[1,19968,196]{2,1,0} scatter(%broadcast.149, %constant.266, %constant.708), update_window_dims={1,2,3}, inserted_window_dims={}, scatter_dims_to_operand_dims={1}, index_vector_dim=1, to_apply=%region_27.51, metadata={op_name="jit(run_slow)/vmap()/scatter-add" stack_frame_id=10}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1016 18:39:16.731498  410665 slow_operation_alarm.cc:140] The operation took 54.909856838s
+Constant folding an instruction is taking > 32s:
+
+  %scatter-add.202 = f32[1,19968,196]{2,1,0} scatter(%broadcast.149, %constant.266, %constant.708), update_window_dims={1,2,3}, inserted_window_dims={}, scatter_dims_to_operand_dims={1}, index_vector_dim=1, to_apply=%region_27.51, metadata={op_name="jit(run_slow)/vmap()/scatter-add" stack_frame_id=10}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+[seed 0] train 300s  final viol {'0': 0.037748360339506175, '1': 0.098388671875, '2': 0.11865234375, '3': 0.150390625, '4': 0.0}  F -0.8934734135866165  support 0
+[ckernel] init reportables/2026-10-14_sweep2a/runs/armB_s0/params_ground.pkl does not match the columns layout: cfast init
+[seed 1] train 301s  final viol {'0': 0.037199797453703706, '1': 0.0953369140625, '2': 0.1240234375, '3': 0.171875, '4': 0.0}  F -0.9079911027103662  support 0
+{
+ "final_violations": {
+  "worst_frac": 0.171875,
+  "ok": false
+ },
+ "raw_violations_worst": 0.11345606674382716,
+ "exact_stats": {
+  "per_stat": {
+   "density": false,
+   "bottom_density": false,
+   "empty_xcol_frac": true,
+   "gap_len": true
+  },
+  "ok": false
+ },
+ "raw_vs_final": {
+  "per_stat": {
+   "density": false,
+   "bottom_density": false,
+   "gap_len": true,
+   "empty_xcol_frac": true
+  },
+  "ok": null,
+  "staged": true
+ },
+ "across_seeds": {
+  "per_stat": {
+   "density": true,
+   "bottom_density": true,
+   "gap_len": true,
+   "empty_xcol_frac": true
+  },
+  "ok": true
+ },
+ "probes": {
+  "flagged": [
+   null,
+   null
+  ],
+  "ok": false
+ },
+ "finite_support": {
+  "worst_mismatch": 0.0,
+  "ok": true
+ },
+ "free_energy": -0.9007322581484913,
+ "within_budget": true,
+ "accepted": false
+}
+seed 0 train_s 300.41787457466125
+seed 1 train_s 301.2165949344635

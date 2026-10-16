@@ -134,3 +134,7 @@ Read `reportables/2026-10-14_box_waves/report.md` first: it summarises all four 
 
 ## Overnight box session, 2026-10-14 (kernel route)
 Read `reportables/2026-10-14_overnight/report.md` ("What the night established", then the wave log) and `notes/methodology.md` §7-9. Decisions pending in `notes/constitution_change_requests.md` (#1-#3). Main variants: `ckpop_hard_rkl` (own draws only, castlegen/variants/ckernel_own.py) and `ckernel_rkl4w3f` (upper bound, ckernel.py). Kernels in `castlegen/kernels/`.
+
+### Addendum 2026-10-16 evening: columns
+- Kernel-route OOM on columns was the fine block Gibbs kernel `J11` enumerating 5 x 13^4 completions (not the energy tables). Guard: `JaxBlockGibbs` prunes to internally consistent completions above 4096 (`AUTO_PRUNE_C`, amortised.py); ground/dimers unchanged. User verdict: enumeration-based block resampling must be replaced (within-block variable elimination = the exact strip resampler; one implementation for the refine kernels and the stage's `J1`). Recommended next line.
+- Columns 300 s x 2: `cboot_stage` (q pre-fitted on 32 exact probe worlds, then clongfit's loop) final viol/cell 0.04, density 0.80, F -1.17 (exact -0.578); control `clongfit_stage` 0.04 / 0.62 / -0.90. Neither valid. Pre-fit helps; validity is the pass's problem, as on dimers.

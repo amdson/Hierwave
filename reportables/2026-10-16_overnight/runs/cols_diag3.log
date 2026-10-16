@@ -1,0 +1,39 @@
+[ckernel] init reportables/2026-10-14_sweep2a/runs/armB_s0/params_ground.pkl does not match the columns layout: cfast init
+E called with (2, 10912) int32
+  ok [(2,), (2,), (2,)]
+E1016 16:28:19.367122  407865 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 1s:
+
+  %gather.290 = s32[9139520,1]{1,0} gather(%iota.44, %constant.1230), offset_dims={1}, collapsed_slice_dims={}, start_index_map={0}, index_vector_dim=1, slice_sizes={1}, metadata={op_name="jit(_sweep)/while/body/eval_jaxpr/gather" stack_frame_id=32}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1016 16:28:20.120780  407848 slow_operation_alarm.cc:140] The operation took 1.753819964s
+Constant folding an instruction is taking > 1s:
+
+  %gather.290 = s32[9139520,1]{1,0} gather(%iota.44, %constant.1230), offset_dims={1}, collapsed_slice_dims={}, start_index_map={0}, index_vector_dim=1, slice_sizes={1}, metadata={op_name="jit(_sweep)/while/body/eval_jaxpr/gather" stack_frame_id=32}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E called with (64, 10912) int32
+  ok [(64,), (64,), (64,)]
+E called with (64, 10912) int32
+  ok [(64,), (64,), (64,)]
+Traceback (most recent call last):
+  File "<stdin>", line 17, in <module>
+  File "/workspace/Hierwave/castlegen/variants/ckernel_own.py", line 320, in train
+    self._pop_stats(pop, v)
+  File "/workspace/Hierwave/castlegen/variants/ckernel_own.py", line 282, in _pop_stats
+    nv = np.asarray(nv)
+         ^^^^^^^^^^^^^^
+  File "/venv/main/lib/python3.12/site-packages/jax/_src/array.py", line 409, in __array__
+    return np.asarray(self._value, dtype=dtype, **kwds)  # pyrefly: ignore[no-matching-overload]
+                      ^^^^^^^^^^^
+  File "/venv/main/lib/python3.12/site-packages/jax/_src/profiler.py", line 420, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/main/lib/python3.12/site-packages/jax/_src/array.py", line 637, in _value
+    npy_value, did_copy = self._single_device_array_to_np_array_did_copy()
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+jax.errors.JaxRuntimeError: INTERNAL: Error dispatching computation: Error dispatching computation: Error dispatching computation: Error dispatching computation: Error dispatching computation: Out of memory allocating 932670397760 bytes.

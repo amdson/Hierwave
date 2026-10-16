@@ -73,12 +73,26 @@ def internal_pruned(K: ExactBlockGibbs, max_out=2_000_000):
     return comps
 
 
+AUTO_PRUNE_C = 4096   # full-enumeration block kernels above this many completions are internally pruned
+
+
 class JaxBlockGibbs:
     def __init__(self, problem, region, level, depth, lam=None, comps="full", chunk=None, fast=True):
         K = ExactBlockGibbs(problem, region, level=level, depth=depth, lam=lam, max_joint=10 ** 12 if comps == "full" else 0)
         self.K, self.lam, self.level, self.depth = K, lam, level, depth
+        self.pruned = False
         if isinstance(comps, str):
-            comps = K.comps if comps == "full" else internal_pruned(K)
+            if comps == "full" and K.comps.shape[0] > AUTO_PRUNE_C:
+                # memory guard (2026-10-16, columns): a full enumeration this large (columns L1 depth 1: 5 * 13^4)
+                # allocates hundreds of GB per sweep; completions violating a hard factor that lies wholly inside
+                # the block have zero p*-mass, so dropping them leaves the block conditional (and p*-invariance)
+                # exact.  Ground / dimers enumerate well under the threshold and are unchanged.
+                comps = internal_pruned(K)
+                self.pruned = True
+                print(f"[JaxBlockGibbs] L{level} depth {depth}: {K.comps.shape[0]} completions > {AUTO_PRUNE_C}: "
+                      f"internally pruned to {np.asarray(comps).shape[0]}", flush=True)
+            else:
+                comps = K.comps if comps == "full" else internal_pruned(K)
         self.comps = np.asarray(comps, np.int32)
         C = self.comps.shape[0]
         self.chunk = chunk or C

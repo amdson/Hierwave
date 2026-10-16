@@ -1,0 +1,3 @@
+[ckernel] init reportables/2026-10-14_sweep2a/runs/armB_s0/params_ground.pkl does not match the columns layout: cfast init
+E called with (2, 10912) int32 flat n 10912
+stopped at first E call after 7 s

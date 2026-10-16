@@ -1,0 +1,12 @@
+[ckernel] init reportables/2026-10-14_sweep2a/runs/armB_s0/params_ground.pkl does not match the columns layout: cfast init
+nctx 64 ml_B 32
+flat n 10912
+pair by_pos False n_inst 8192 members 2 table (13, 13) MB 0.0
+pair by_pos False n_inst 128 members 2 table (13, 13) MB 0.0
+unary by_pos None n_inst 8192 members 1 table (13,) MB 0.0
+count by_pos None n_inst 2048 members 5 table (5, 5) MB 0.0
+count by_pos None n_inst 512 members 5 table (17, 17) MB 0.0
+count by_pos None n_inst 128 members 5 table (65, 65) MB 0.0
+count by_pos None n_inst 32 members 5 table (257, 257) MB 0.3
+total table MB 0.3
+built in 1 s
