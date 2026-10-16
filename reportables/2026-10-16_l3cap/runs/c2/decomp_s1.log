@@ -1,0 +1,8 @@
+probes 128
+/workspace/Hierwave/reportables/2026-10-16_relax4/scripts/decomp.py:56: ConstantInputWarning: An input array is constant; the correlation coefficient is not defined.
+  rho_slack=float(spearmanr(sl[m], lq[m])[0]), rho_def_slack=float(spearmanr(sl[m], d[m])[0]) if sl[m].std() > 0 else None,
+c2 own/slack0 {"n": 2333, "rho_direct": 0.537, "rho_sub": 0.294, "rho_slack": NaN, "rho_def_slack": null, "med_def_direct": -0.692, "med_def_sub": -0.489, "med_D_minus_S": 31.25, "med_slack": 0.0, "slope": 0.741, "slope_sub": 0.116, "coef_slack": 0.0, "coef_D": 0.521}
+c2 own/hi_cross {"n": 1066, "rho_direct": 0.265, "rho_sub": 0.503, "rho_slack": -0.466, "rho_def_slack": 0.469, "med_def_direct": 3.441, "med_def_sub": 1.334, "med_D_minus_S": 56.0, "med_slack": 2.75, "slope": 0.741, "slope_sub": 0.116, "coef_slack": -1.484, "coef_D": 0.449}
+c2 probe/slack0 {"n": 2733, "rho_direct": 0.454, "rho_sub": 0.233, "rho_slack": NaN, "rho_def_slack": null, "med_def_direct": -0.61, "med_def_sub": -0.279, "med_D_minus_S": 29.875, "med_slack": 0.0, "slope": 0.741, "slope_sub": 0.116, "coef_slack": 0.0, "coef_D": 0.538}
+c2 probe/hi_cross {"n": 1050, "rho_direct": 0.269, "rho_sub": 0.166, "rho_slack": -0.046, "rho_def_slack": 0.128, "med_def_direct": 3.246, "med_def_sub": 2.134, "med_D_minus_S": 45.688, "med_slack": 4.0, "slope": 0.741, "slope_sub": 0.116, "coef_slack": -0.655, "coef_D": 0.577}
+DONE

@@ -121,6 +121,14 @@ Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
 
+## 2026-10-16 12:55 · l3cap (is the high-slack L3 deficit a capacity/window limit?) · started
+Approach: 300 s-equivalent clongfit continuations from big300 with L3 width x2 / window 8x8 / both. Driver: reportables/2026-10-16_l3cap/scripts/driver.sh.
+
+## 2026-10-16 14:05 · l3cap (is the high-slack L3 deficit a capacity/window limit?) · finished
+Approach: clongfit continued 1904 updates from big300 with L3 width x2 / window 8x8 (all levels) / both; relaxed-probe L3 block measures; seed 1 for ctl and c2.
+Result: [report](2026-10-16_l3cap/report.md). No arm cuts the high-slack crossing deficit (ctl 2.9-3.0 nats; arms 2.9-3.6); raw violations and L4 within noise.
+Next: look at the L3 certificate training signal rather than head size.
+
 ## 2026-10-16 · relax4 deficit decomposition · finished
 No certificate-based weight exists in the bench (cert only in hard constraints). Hi-slack crossing L3: deficit vs D 3.3-3.8 nats, vs S 1.0-2.7, median slack 3-4, rho(deficit,slack) .1-.4, q -0.7..-1.4 nats per slack unit at fixed D. Report section 'Deficit decomposition'.
 

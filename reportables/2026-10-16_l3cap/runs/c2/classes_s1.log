@@ -1,0 +1,10 @@
+probes 128
+c2 own/all {"n": 4096, "frac_blocks": 1.0, "starved": 0.084, "med_deficit": 0.0, "mean_lq": -10.609, "share_lq": 1.0, "share_starved": 1.0}
+c2 own/slack0 {"n": 2333, "frac_blocks": 0.57, "starved": 0.0, "med_deficit": -0.692, "mean_lq": -8.934, "share_lq": 0.48, "share_starved": 0.003}
+c2 own/hi_cross {"n": 1066, "frac_blocks": 0.26, "starved": 0.303, "med_deficit": 3.441, "mean_lq": -13.958, "share_lq": 0.342, "share_starved": 0.939}
+c2 own/hi_all {"n": 1089, "frac_blocks": 0.266, "starved": 0.297, "med_deficit": 3.394, "mean_lq": -13.904, "share_lq": 0.348, "share_starved": 0.939}
+c2 probe/all {"n": 4096, "frac_blocks": 1.0, "starved": 0.064, "med_deficit": -0.11, "mean_lq": -10.174, "share_lq": 1.0, "share_starved": 1.0}
+c2 probe/slack0 {"n": 2733, "frac_blocks": 0.667, "starved": 0.0, "med_deficit": -0.61, "mean_lq": -8.893, "share_lq": 0.583, "share_starved": 0.0}
+c2 probe/hi_cross {"n": 1050, "frac_blocks": 0.256, "starved": 0.245, "med_deficit": 3.246, "mean_lq": -13.416, "share_lq": 0.338, "share_starved": 0.981}
+c2 probe/hi_all {"n": 1054, "frac_blocks": 0.257, "starved": 0.245, "med_deficit": 3.25, "mean_lq": -13.415, "share_lq": 0.339, "share_starved": 0.985}
+DONE
