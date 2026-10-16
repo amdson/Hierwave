@@ -248,6 +248,9 @@ Keep the shared-weight actor soft until it has learned context-dependent structu
 
 > **Annotation (2026-10-16, longfit):** the user's brute-force question (sample, intensive MCMC, forward KL, repeat) run for an hour: ML-only, no penalty, cln6 actor, 64-world kernel-equilibrated population, 34064 updates. Own draws raw line_match 0.668 (ml2 300 s 0.628), raw violations at/under the 2e-4 budget (no leak), L3 probe-starved 0.114 (0.232), L4 still 0.35 starved; flat after ~10 min. Stage R 15 -> 128/128 valid, R 30: line_match 0.671, rough 1.41, offset -0.01, |c1| 0.51 (chain 0.69/1.40/-0.15/0.48). Report: reportables/2026-10-16_longfit/report.md.
 
+
+> cdata (2026-10-16, #18): coarse data/weight in cfitpen_ml2's ML steps (pop x2/x4, coarse step x4, +16/+48 coarse-only ML steps; 20 min each, single seed): no arm cuts L3/L4 starvation by a third (L3 probe 0.20 -> best 0.15; L4 gets worse 0.30 -> 0.29-0.52); validity unchanged. reportables/2026-10-16_cdata/report.md
+
 ## 19. Revising (diffusion-style) generation trained by path KL (from chat, user, 2026-10-14) — AUTHORISED
 **Authorised by the user on 2026-10-14** as an objective change under the constitution; see "Amendment 2026-10-14 (b)" in `notes/coloured_pass_constitution.md`.
 
@@ -411,3 +414,5 @@ On ground, this gives unsupported columns for support and the full- or occupied-
 > certfree (2026-10-16, #22 target B): certificate-free pass (rho + tiles only) with certificates derived bottom-up by the tight map (min over child rows of sum A / max of sum B, read from the honour factors) then the fixed stage on full ground: 30-min cold-start pass + stage R 15/30, F 20 gives 128/128 valid, 0 violations at every level, line_match 0.674, roughness 1.39/1.43 (chain 1.40), |c1| 0.40, offset +0.5; refill is unnecessary (F 0 = F 20). 300 s bench (2 seeds): 0 final violations, finite support 0, line_match 0.651/0.629, starved % L3/L4 8/7 and 12/2 (ml2 20/35, not like-for-like), probe flag still fails. No matched cold ml2 control yet. reportables/2026-10-16_certfree/report.md
 
 > 2026-10-16 longfit2: ML-only fit at 300/600 s, 2 seeds, big (ml_B 32, nctx 64) vs small (ml_B 8, nctx 32): raw line_match 0.653-0.670 in all arms (ml2 0.628), so the gain over ml2 is from dropping penalty steps, not batch or length; raw validity (11-31/128) and R 15 validity (122-127/128) do not reach the 70-min run (46, 128). No bench. See reportables/2026-10-16_longfit2/report.md.
+
+> cdata (2026-10-16, #22): the stage after retraining the coarse levels harder is unchanged (R 30: 0 violations, 128/128 valid, roughness 1.38-1.46, line_match 0.658-0.669 for all seven arms vs control 0.658); more coarse ML does not make the stage's job easier or harder. reportables/2026-10-16_cdata/report.md

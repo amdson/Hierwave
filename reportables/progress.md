@@ -120,6 +120,7 @@ Approach: fuse ckernel's 32 reverse-KL steps and 8 ML updates into scans, prefet
 Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
+- 2026-10-16 10:52 cdata finished: coarse data/weight arms (ccdata.py; ideas #18, #22). NO arm cuts L3/L4 starvation by a third (L3 probe 0.20 -> best 0.15, L4 worse); validity unchanged. reportables/2026-10-16_cdata/report.md
 
 ## 2026-10-16 · certfree wave B (600 s cold x2, offset diagnosis) · finished
 Result: [report](2026-10-16_certfree/report.md) (Wave B). R15 lm 0.650/0.667, 126/128 and 128/128 valid, offset -1.22/+0.99 (raw -1.75/+1.31): 30-min result not reproduced; offset is set by the pass (seed-dependent sign), the stage pulls it 0.3-0.5 toward 0. Bench not run (gate failed). GPU 1 shared.
