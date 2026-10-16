@@ -211,15 +211,18 @@ def loop_refresh(P, nattempt, lmax=1024, seed=0, repair=False):
     P = np.ascontiguousarray(np.asarray(P), dtype=np.int64)
     ok = valid_mask(P)
     n_rep = 0
+    n_left = 0
     if repair and not ok.all():
         bad = np.where(~ok)[0]
         sub = np.ascontiguousarray(P[bad])
-        _repair(sub, 20000, DY, DX, OPP, int(seed) + 13)
+        left = _repair(sub, 20000, DY, DX, OPP, int(seed) + 13)
+        sub[sub < 0] = 0           # unrepaired leftovers: a code in range, world stays invalid and is repaired again later
+        n_left = int((left > 0).sum())
         P[bad] = sub
         n_rep = len(bad)
         ok = valid_mask(P)
     acc, chg = _sweep(P, int(nattempt), int(lmax), DY, DX, OPP, ok, int(seed))
-    return P, {"valid_frac": float(ok.mean()), "repaired": n_rep, "acc": float(acc[ok].sum() / max(ok.sum() * nattempt, 1)),
+    return P, {"valid_frac": float(ok.mean()), "repaired": n_rep, "unrepaired": n_left, "acc": float(acc[ok].sum() / max(ok.sum() * nattempt, 1)),
                "changed": float(chg[ok].sum() / max(ok.sum() * nattempt, 1))}
 
 

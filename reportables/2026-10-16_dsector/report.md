@@ -41,3 +41,21 @@ Own draws are 5-15 % violated, so before the worm they are projected onto perfec
 ## Next
 1. Add the worm to the pop-refresh as a registered variant and combine with the penalty / fixed stage that drives validity (the stage keeps ground at 0 violations).
 2. Check a bench row only after the pass reaches <1e-3 violations.
+
+# Wave C: validity for the dimers pass (follow-up, same day)
+Question: does the worm refresh inside a `cfitpen_ml2`-style schedule, with and without the fixed stage (R 30), give a valid pass on dimers?
+
+Built: `castlegen/variants/cdimerworm.py` registers `cdimerworm` (cfitpen_ml2 schedule: 16 ML updates and 32 penalty-only reverse-KL steps per iteration, lam 0-20, refresh 0.1 of nctx 32; the population refresh is one worm sweep after the repair projection; init = cfast default, since the ground init does not fit the dimers layout; ckernel_own's level-1/2 chains do not exist at T = 0, so `_build_uncached` builds only ML step, energy and generator) and `cdimerworm_stage` (`staged = True`, generation = CKPopHardPenStage's). Test: `tests/variants/test_cdimerworm.py` (1 passed). `loop_refresh` now sets unrepairable leftover monomers to code 0 (world stays invalid) after a no-penalty run crashed the energy check with p = -1.
+Scripts: `scripts/precheck.py` (300 s train, then 16 held-out periodic worlds, raw and final), `scripts/smoke.py`. Runs: `runs/wc_stage_pen.*`, `runs/wc_stage_nopen.*`. GPU 1 shared with an Opus diagnostic, cores 8-15; clocks `runs/gpu_wc*`: before 1.8 GHz, 84 C (the after files were read once the card was idle, 210 MHz, so they say nothing about the run).
+
+| arm (300 s, seed 0) | updates | draws | h/v/d | viol/cell | valid |
+|---|---|---|---|---|---|
+| penalty steps (rkl_n 32), raw | 9488 | own pass | .362/.308/.330 | 0.0296 | 0 % |
+| penalty steps, stage R 30 final | | staged | .352/.318/.331 | 0.0043 | 0 % |
+| no penalty (rkl_n 0), raw | 18608 | own pass | .346/.328/.327 | 0.0304 | 0 % |
+| no penalty, stage R 30 final | | staged | .346/.322/.332 | 0.0042 | 0 % |
+
+Per-world std of h/v/d about 0.017-0.02 over 16 worlds. Population during training: 100 % valid, .351/.324/.324 (worm). Penalty lambda hit its cap 20 by iteration ~40; the pass's penalty raw violation fraction at the end 0.008.
+
+Answer: **validity did not come.** The orientation mix is within 0.02 of the exact values with or without the stage (staged final .352/.318/.331, within 0.01 on h and d but v is 0.006 low and the worlds are not valid), but violations per cell are 0.030 raw and 0.004 after the stage (about 8.5 violated instances per 2048-cell world); 0 of 16 worlds are valid in every arm. The penalty steps do not change the raw violation rate (0.0296 vs 0.0304) in 300 s, though they halve the updates. Bench not run (criterion: 0 final violations).
+Not tried: stage R above 30, longer training, a pass window/net change. Next: the stage at R 100-120 on these params (generation-only), and a longer ML fit; the violation floor 0.03 raw is the same as the untrained pass (0.05) and the ML loss plateau (0.479 vs entropy 0.43), so the pass lacks capacity or window for the matching constraint.

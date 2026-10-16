@@ -1,0 +1,48 @@
+{
+ "name": "cdimerworm_stage",
+ "cfg": {
+  "rkl_n": 0
+ },
+ "updates": 18608,
+ "lam": null,
+ "rkl_raw_viol_last": null,
+ "pop_last": {
+  "valid": 1.0,
+  "viol_per_cell": 0.0,
+  "hvd": [
+   0.35400390625,
+   0.322021484375,
+   0.323974609375
+  ]
+ },
+ "kinds": {
+  "raw": {
+   "hvd": [
+    0.3458,
+    0.3275,
+    0.3267
+   ],
+   "viol_per_cell": 0.0303955078125,
+   "valid_frac": 0.0,
+   "hvd_std": [
+    0.02,
+    0.017,
+    0.017
+   ]
+  },
+  "final": {
+   "hvd": [
+    0.3463,
+    0.322,
+    0.3317
+   ],
+   "viol_per_cell": 0.004150390625,
+   "valid_frac": 0.0,
+   "hvd_std": [
+    0.017,
+    0.017,
+    0.018
+   ]
+  }
+ }
+}

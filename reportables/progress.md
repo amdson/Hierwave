@@ -121,6 +121,12 @@ Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
 
+## 2026-10-16 · relax4 (clongfit 4 seeds, relaxed probes + L3 block classes) · finished
+L3 relaxed starved 6.9-8.0 % on all 4 seeds (ml2 21.9 %); hi-slack crossing blocks 26-31 % (= own draws; ml2 81 %); L4 relaxed 4.6-10.0 %. Report: 2026-10-16_relax4/report.md
+
+## 2026-10-16 · relax4 · started
+Train clongfit seeds 2,3 (300 s), relaxed-probe block check on seeds 0-3, L3 slack classes.
+
 ## 2026-10-16 12:25 · l4source (L4 coverage: mixing or stationary?) · finished
 Approach: cfitpen_ml2 params frozen; refresh-cycle chains from own draws and from probe lifts (32/320/3200 iterations = 1x/10x/100x a member's lifetime); L4-only Gibbs; probes with tiles fixed and coarse channels redrawn from p*. GPU 1, shared.
 Result: [report](2026-10-16_l4source/report.md). STATIONARY, not mixing. Probe-start chain reaches the population's L4 within 1x (starved 42 -> 1.6 %, direct weight -2.0 -> -5.4); own-start chain is flat to 100x (1.2/2.3/0.8 %). Under p*, pure L4 cells sit about 8 counts off the lift (rho4 0 vs 7.8), worth ~2.7 nats of subtree free energy per cell that the bench's direct weight omits. With probe tiles fixed and coarse channels redrawn, L4 starvation is 3.6 % (own 2.3 %); L3 unchanged at 22 % (fit problem).
@@ -131,6 +137,9 @@ Approach: p*-invariant alternating-loop (worm excursion) kernel `castlegen/varia
 ## 2026-10-16 · dsector · finished
 Result: [report](2026-10-16_dsector/report.md). Worm (alternating-loop) kernel, exact symmetry test on tiny strips; population from collapsed/tiling/all-h starts reaches .351/.325/.324 in 1 sweep (exact .351/.324/.324), stable to 300. Pass trained on it (300 s, 5088 updates): own draws .347/.330/.323 but 4.4 % violations, 0 valid draws; no bench (fails validity). GPU 1 shared.
 Next: wire into ckernel_pop as a variant plus a validity stage/penalty.
+## 2026-10-16 · dsector Wave C (cdimerworm / cdimerworm_stage, dimers validity) · finished
+Result: [report](2026-10-16_dsector/report.md) (Wave C). 300 s, seed 0: raw viol/cell 0.030 (penalty) / 0.030 (none), staged R 30 final 0.0043 / 0.0042, 0 % valid in all; staged h/v/d .352/.318/.331 (penalty), .346/.322/.332 (none). No bench. GPU 1 shared.
+Next: stage R 100-120 on these params; capacity/window for the matching constraint.
 
 
 ## 2026-10-16 · longfit2 follow-up (bench clongfit_stage R30 vs cfitpen_ml2_stage, 600 s x 2) · finished
