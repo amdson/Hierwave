@@ -106,6 +106,8 @@ On the enumerable hierarchy, optimise the objective with exact expectations, and
 >
 > Status: works as variance reduction; untested as a learner at equal update counts. [Report](2026-10-13_creplay/report.md)
 
+> **Annotation (2026-10-16, longfit):** the cln6 actor trained long on an equilibrated population (70 min, ML only): raw viol fractions at or under the 2e-4 budget at all levels, 46/128 raw worlds valid, stage R 15 makes 128/128 valid (R 30: line_match 0.671, rough 1.41, offset -0.01). Gain over 300 s is +0.04 line_match and halved L3 starvation; saturates by ~10 min. See reportables/2026-10-16_longfit/report.md.
+
 ## 7. Low-to-high scheduling of 1-step updates (from chat, 2026-10-13; low priority)
 "scheduling low to high 1-step updates. not high priority, just worth considering"
 
@@ -131,6 +133,8 @@ On the enumerable hierarchy, optimise the objective with exact expectations, and
 ---
 
 > cconv outcome (2026-10-14, [report](2026-10-13_cconv/report.md)): first GPU bench, 2 x 150 s on a shared GPU. Worse than cfast on all four problems (toy_support F -0.395 vs -0.416; toy_modes 0.29-0.33 vs 0.268; ground violations 0.7-7.6% with no fill line; columns 18% violations), with 5-10x fewer updates (cold compile 130-240 s, 0.6 s/update at B=64). Probably undertrained, not shown to be a worse representation.
+
+> **Annotation (2026-10-16, longfit):** LN+SiLU 6x6 actor trained 70 min (34064 ML updates, no penalty, kernel-equilibrated population, ml_B 32): raw line_match 0.668 (cfitpen_ml2 300 s, same actor: 0.628), L3 probe-starved 0.114 (0.232), flat after ~10 min. Report: reportables/2026-10-16_longfit/report.md.
 
 ## 11. Parent-count residual features for the learned bias (from chat / clamp agent, 2026-10-14)
 From the clamp diagnostic: give every child draw, for each declared count factor, the parent's value minus its known siblings' sum and the number of siblings still unknown (allowed freedom "more information to learned parts").
@@ -241,6 +245,8 @@ Keep the shared-weight actor soft until it has learned context-dependent structu
 > **Annotation (2026-10-16, fitpen):** rebalancing the fit against the penalty in ckpop_hard_pen. 2x ML steps per iteration (`cfitpen_ml2`, upi 16, the same 32 penalty steps) gives bench 300 s x 2 line_match 0.609/0.629 (vs 0.56-0.59) and F −0.08 (vs +0.03). The mid-level dirt deficit is mostly gone (offset +3.1 -> +0.8 rows at 120 s). L2 stays under budget per seed (1.2e-4, 1.8e-4), but pooled L2 is 1.5e-4 (2x the baseline's), and seed 1 fails on one L3 instance. Not accepted. 2x ML lr is worse (L1 raw 6x). The λ ramp and gate were not run: Adam cancels a common λ scale, and the raw L1-L3 rates never fall under the target. The trade-off curve moves (pen16 at the same line_match had L2 4.9e-4) but is not broken. [Report](2026-10-16_fitpen/report.md). Status: partial positive; needs 2 more seeds.
 
 > **Annotation (2026-10-16, combo):** cfitpen_ml2 + the #22 fixed stage at R 30 (`cfitpen_ml2_stage`, 300 s x 2) fixes ml2's violations (pooled L2 1.7e-4 over the coordinator's 4 seeds, 1/4 passing → 0 final at every level) and keeps line_match 0.646/0.665, F −0.106. The only failing gate is the probe flag. See reportables/2026-10-16_combo/report.md.
+
+> **Annotation (2026-10-16, longfit):** the user's brute-force question (sample, intensive MCMC, forward KL, repeat) run for an hour: ML-only, no penalty, cln6 actor, 64-world kernel-equilibrated population, 34064 updates. Own draws raw line_match 0.668 (ml2 300 s 0.628), raw violations at/under the 2e-4 budget (no leak), L3 probe-starved 0.114 (0.232), L4 still 0.35 starved; flat after ~10 min. Stage R 15 -> 128/128 valid, R 30: line_match 0.671, rough 1.41, offset -0.01, |c1| 0.51 (chain 0.69/1.40/-0.15/0.48). Report: reportables/2026-10-16_longfit/report.md.
 
 ## 19. Revising (diffusion-style) generation trained by path KL (from chat, user, 2026-10-14) — AUTHORISED
 **Authorised by the user on 2026-10-14** as an objective change under the constitution; see "Amendment 2026-10-14 (b)" in `notes/coloured_pass_constitution.md`.

@@ -1,0 +1,3 @@
+index, clocks.current.sm [MHz], memory.used [MiB]
+0, 1935 MHz, 1129 MiB
+1, 1875 MHz, 907 MiB

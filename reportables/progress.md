@@ -121,6 +121,11 @@ Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
 
+## 2026-10-16 · longfit (ideas #18/#5/#10, one hour ML-only cln6) · finished
+Approach: clongfit = cfitpen_ml2 population/kernels, rkl_n 0, nctx 64, ml_B 32, 4200 s from scratch on GPU 0, then stage R 15/30/60.
+Result: [report](2026-10-16_longfit/report.md). 34064 updates; raw line_match 0.668 (ml2 0.628), raw viol at/under budget, L3 probe-starved 0.114 (0.232); flat after ~10 min; stage R 15 gives 128/128 valid, R 30 line_match 0.671, rough 1.41, offset -0.01.
+Next: 300 s clongfit to separate batch from run length; L4 starvation.
+
 ## 2026-10-16 · starve (cfitpen_ml2 starvation: fit vs target) · finished
 Approach: block check on probes / re-run training population / own draws with the same line.
 Result: [report](2026-10-16_starve/report.md). L3 starved: probes 23.2%, population 24.5%, own 6.1% (fit problem); L4: probes 40.6%, population 2.3% (population does not cover probe-like L4 blocks). GPU shared.

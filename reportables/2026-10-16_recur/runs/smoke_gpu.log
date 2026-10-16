@@ -1,0 +1,30 @@
+E1016 09:05:27.223250  305716 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 1s:
+
+  %reduce-window.18 = f32[8,16,16,64]{3,2,1,0} reduce-window(%concatenate.645, %constant.3780), window={size=1x1x16x1 pad=0_0x0_0x15_0x0_0}, to_apply=%region_100.278_scalarized_rw_wrapper, metadata={op_type="cumsum" op_name="jit(step)/jit(cumsum)/cumsum" stack_frame_id=662}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1016 09:05:29.372388  305646 slow_operation_alarm.cc:140] The operation took 3.152029633s
+Constant folding an instruction is taking > 1s:
+
+  %reduce-window.18 = f32[8,16,16,64]{3,2,1,0} reduce-window(%concatenate.645, %constant.3780), window={size=1x1x16x1 pad=0_0x0_0x15_0x0_0}, to_apply=%region_100.278_scalarized_rw_wrapper, metadata={op_type="cumsum" op_name="jit(step)/jit(cumsum)/cumsum" stack_frame_id=662}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1016 09:05:31.406608  305716 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 2s:
+
+  %reduce-window.19 = f32[8,16,16,4,16]{3,2,1,0,4} reduce-window(%constant.5042, %constant.3781), window={size=1x1x1x1x16 pad=0_0x0_0x0_0x0_0x15_0}, to_apply=%region_101.281_scalarized_rw_wrapper
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1016 09:05:31.780356  305646 slow_operation_alarm.cc:140] The operation took 2.402434328s
+Constant folding an instruction is taking > 2s:
+
+  %reduce-window.19 = f32[8,16,16,4,16]{3,2,1,0,4} reduce-window(%constant.5042, %constant.3781), window={size=1x1x1x1x16 pad=0_0x0_0x0_0x0_0x15_0}, to_apply=%region_101.281_scalarized_rw_wrapper
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
