@@ -111,3 +111,6 @@ the **block check** is added beside it and is **not an acceptance gate yet**.
 ## 2026-10-16 changes (user decision; the harness is otherwise frozen)
 - `dimers` now has exact orientation fractions h/v/d = 0.351/0.324/0.324 (tol 0.02), from the exact Pfaffian calculation in `reportables/2026-10-15_deq/`; the bench gates on them.
 - Variants may declare `staged = True` (constitution amendment 2026-10-16): raw vs final is then reported, not gated. `ckpop_hard_pen_stage` is the first.
+
+## 2026-10-16 (evening): old probe flag dropped from acceptance (user decision)
+`judge` no longer includes `probes.ok` in the acceptance checks; the flag is still computed and shown in the `probes` column. `board` recomputes `accepted` from the stored checks so older rows are re-judged under the same rule. The v2 block check (rho, starved per level) stays report-only; change request #6 (coarse-relaxed probes) is pending.

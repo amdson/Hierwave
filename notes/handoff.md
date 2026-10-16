@@ -10,7 +10,7 @@ Read `reportables/2026-10-16_overnight/report.md` (plan, every agent's numbers, 
 
 **Dimers (dsector):** worm / alternating-loop kernel (`castlegen/variants/_dimer_loop_kernel.py`, uniform-invariant, tests pass) brings the population to the exact .351/.324/.324 from any start in one sweep (4.6 ms/sweep/world). A pass trained on it (`cdimerworm`, penalty schedule) has the right orientations (staged .352/.318/.331) but 0.03 violations per cell raw and 0.004 after the stage R 30, 0 % valid worlds, with or without penalty steps: the dimers pass lacks capacity for the matching constraint (ML loss plateau 0.479 vs entropy 0.43). Untried: stage R 100+, longer fit, pass window.
 
-**Decisions pending for the user:** (1) old probe flag: drop it or adopt the v2 block check as the gate (then clongfit_stage is the first accepted ground row); (2) change request #6: block check on coarse-relaxed probes instead of exact lifts (until then L4 columns on the board are uninformative); (3) change request #5 (recommend no); (4) make the no-penalty schedule the default.
+**Decision taken 2026-10-16 evening:** the old probe flag is dropped from acceptance (`run.py::judge`, `board.py::_accepted`); clongfit_stage is an accepted ground row. **Decisions pending for the user:** (2) change request #6: block check on coarse-relaxed probes instead of exact lifts (until then L4 columns on the board are uninformative); (3) change request #5 (recommend no); (4) make the no-penalty schedule the default.
 
 **Recommended next:** (a) adopt (2), re-run the board's block check; (b) the L3 training signal on high-slack blocks (what the refresh does to them), not head size; (c) fine-level structure gap (line_match 0.67 vs 0.69).
 

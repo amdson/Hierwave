@@ -265,7 +265,9 @@ def judge(problem: Problem, per_seed, train_s, staged: bool = False):
     fe = [m["free_energy"] for m in per_seed]
     v["free_energy"] = None if any(f is None for f in fe) else float(np.mean(fe))
     v["within_budget"] = all(m["train_s"] <= 1.1 * train_s + 5 for m in per_seed)
+    # user decision 2026-10-16: the old probe flag is reported but no longer an acceptance gate
+    # (it fires on exchangeable draws about half the time; the v2 block check is the informative probe measure).
     checks = [v["final_violations"]["ok"], v["exact_stats"]["ok"], v["raw_vs_final"]["ok"],
-              v["across_seeds"]["ok"], v["probes"]["ok"], v["finite_support"]["ok"], v["within_budget"]]
+              v["across_seeds"]["ok"], v["finite_support"]["ok"], v["within_budget"]]
     v["accepted"] = all(c is not False for c in checks) and v["free_energy"] is not None
     return v
