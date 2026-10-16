@@ -120,6 +120,9 @@ Approach: fuse ckernel's 32 reverse-KL steps and 8 ML updates into scans, prefet
 Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
+## 2026-10-16 · dsector (dimers: sector-changing worm/loop refresh kernel) · started
+Approach: p*-invariant alternating-loop (worm excursion) kernel `castlegen/variants/_dimer_loop_kernel.py`; test detailed balance exactly on tiny strips; run alone on populations (1x/10x/100x sweeps) vs 0.351/0.324/0.324; if within 0.01, 60 s pre-check with it as refresh, then bench. GPU 1 shared with an Opus diagnostic, cores 8-15.
+
 
 ## 2026-10-16 · longfit2 follow-up (bench clongfit_stage R30 vs cfitpen_ml2_stage, 600 s x 2) · finished
 Result: [report](2026-10-16_longfit2/report.md). Both 0 final violations on 2/2 seeds; F -0.165 vs -0.118/-0.123; probe flag True for both (not accepted).
