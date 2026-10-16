@@ -41,3 +41,20 @@ Reference rows (from longfit report): ml2 300 s control: raw lm 0.628, raw viol 
 ## Next
 - Cheapest bench candidate: `clongfit_small` + stage with R 30 at 600 s (4000 updates, best update rate, stage R 15 left 1-9 violations per level); needs a gate decision since L3 violations are 3-4 per 128 worlds raw.
 - A 20 min clongfit_small run (2 seeds) to see whether raw L3/L4 violations reach 0 before 70 min.
+
+## Bench at 600 s
+`clongfit_stage` set to stage R 30 (cstage default, same as `cfitpen_ml2_stage`; the earlier R 15 override is removed). Driver `scripts/bench.sh` (waited for a free training slot, then GPU 1, cores 8-15, GPU 1 otherwise idle of my jobs; other agents' jobs on GPU 0): `bench_warm.py bench <variant> 600 2` for `clongfit_stage` then `cfitpen_ml2_stage`, each warmed first (uncounted). Clocks (GPU 1): clongfit_stage before 210 MHz idle, after 1560 MHz 77 C; cfitpen_ml2_stage before 1560 MHz, after 1830 MHz 84 C (power-cap flag 0x4 only; `runs/bench/nvidia_*`). Bench rows are in results/bench.jsonl (runs 20261016-104727 and 20261016-111117, tag warm); logs in `runs/bench/`. Table by `scripts/bench_table.py`. F = free_energy (bench's number). Offset and |c1| are not in the bench record and the bench saves no params for clongfit_stage, so they are not reported for the bench rows (offset/c1 for these recipes are in the tables above). Updates per seed also not recorded by the bench.
+
+| variant | seed | final viol L0-4 | F | line_match raw/final | rough raw/final | updates? | rho_pool L0-4 | starved_probe L0-4 | starved_own L0-4 | probe flag | accepted |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| clongfit_stage | 0 | 0,0,0,0,0 | -0.1653 | 0.652/0.672 | 1.57/1.34 | - | 0.391/0.869/0.865/0.550/-0.193 | 0.000/0.003/0.043/0.109/0.374 | 0.000/0.006/0.036/0.075/0.016 | True | |
+| clongfit_stage | 1 | 0,0,0,0,0 | -0.1652 | 0.678/0.665 | 1.49/1.44 | - | 0.420/0.863/0.865/0.501/-0.273 | 0.000/0.005/0.043/0.109/0.452 | 0.000/0.006/0.032/0.075/0.020 | True | |
+| cfitpen_ml2_stage | 0 | 0,0,0,0,0 | -0.1229 | 0.617/0.643 | 1.47/1.42 | - | 0.381/0.820/0.689/0.584/-0.271 | 0.000/0.010/0.090/0.188/0.437 | 0.000/0.012/0.035/0.066/0.018 | True | |
+| cfitpen_ml2_stage | 1 | 0,0,0,0,0 | -0.1182 | 0.665/0.675 | 1.17/1.32 | - | 0.328/0.774/0.825/0.548/-0.254 | 0.000/0.006/0.072/0.141/0.411 | 0.000/0.011/0.034/0.061/0.022 | True | |
+
+- Final violations 0 at every level, both seeds, both variants (final_violations ok). clongfit_stage is a clean row.
+- F: -0.165 (clongfit_stage) vs -0.118/-0.123 (cfitpen_ml2_stage); lower is better here.
+- Final line_match 0.672/0.665 vs 0.643/0.675 (chain 0.69); final roughness 1.34/1.44 vs 1.42/1.32.
+- raw_vs_final (not gated): both variants fail only on 'floating' (raw 5.1 floating vs 0 final), as expected for a staged variant; other stats consistent.
+- Probe flag (old check): True on both seeds for both variants, so neither is accepted by the board (accepted false); across_seeds ok.
+- v2 block check: clongfit_stage has better rho_pool at L1/L2 (0.87 vs 0.77-0.82) and lower starved_probe at L2/L3 (0.043/0.109 vs 0.07-0.09/0.14-0.19); L4 starved_probe 0.37-0.45 vs 0.41-0.44, rho L4 negative in both.

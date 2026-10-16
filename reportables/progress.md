@@ -121,6 +121,9 @@ Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
 
+## 2026-10-16 · longfit2 follow-up (bench clongfit_stage R30 vs cfitpen_ml2_stage, 600 s x 2) · finished
+Result: [report](2026-10-16_longfit2/report.md). Both 0 final violations on 2/2 seeds; F -0.165 vs -0.118/-0.123; probe flag True for both (not accepted).
+
 ## 2026-10-16 11:45 · l4source (L4 coverage: mixing or stationary?) · started
 Approach: cfitpen_ml2 params frozen; L4 target weight / logq / lift-tightness of own, probe, kernel-chain states; chains from own draws and from probe lifts under the population refresh cycle for 32/320/3200 iterations, and L4-only Gibbs with fine fixed. GPU 1 (shared).
 
