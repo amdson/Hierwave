@@ -121,6 +121,9 @@ Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
 
+## 2026-10-16 · relax4 deficit decomposition · finished
+No certificate-based weight exists in the bench (cert only in hard constraints). Hi-slack crossing L3: deficit vs D 3.3-3.8 nats, vs S 1.0-2.7, median slack 3-4, rho(deficit,slack) .1-.4, q -0.7..-1.4 nats per slack unit at fixed D. Report section 'Deficit decomposition'.
+
 ## 2026-10-16 · relax4 (clongfit 4 seeds, relaxed probes + L3 block classes) · finished
 L3 relaxed starved 6.9-8.0 % on all 4 seeds (ml2 21.9 %); hi-slack crossing blocks 26-31 % (= own draws; ml2 81 %); L4 relaxed 4.6-10.0 %. Report: 2026-10-16_relax4/report.md
 

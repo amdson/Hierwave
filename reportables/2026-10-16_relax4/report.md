@@ -49,3 +49,21 @@ The L3 fit problem is gone for the no-penalty fit on every seed, not seed-depend
 ## What failed / next
 - Nothing crashed. The update-count mismatch (912 vs 1900) is a confound for the seed comparison; seeds 0-1 could be rerun at equal updates if it matters.
 - Next: look at why L4 relaxed starvation is 8-10 % on seeds 1-3 (is it again a probe-reference effect, e.g. 10 sweeps not mixed at L4, or a real fit gap), using l4source's `relax_{1,10,100}` sweep counts.
+
+## Deficit decomposition (follow-up, 13:05 UTC; no training; `scripts/decomp.py`, `runs/decomp.{json,log}`)
+Per L3 block of the 4 clongfit models, own draws (128 worlds) and relaxed probes (128 worlds), classes as above. **A certificate-based log-weight share as specified does not exist in the bench:** `problems/ground.py` has no soft term in A or B; the certificate enters the target only through hard constraints (support, row honour) and the soft count prior / smoothness on rho. `shares.weight_shares_signed` returns the level-3 factors' energies (direct, D) and D plus all finer levels (subtree, S); the cert channel contributes 0 or -inf there. So (ii) is replaced by the subtree share S and by the certificate slack B-A itself. Deficit = line(own) - log q share, nats, line fitted on own draws separately for D and for S.
+
+| class (median over 4 seeds; range) | set | rho(q, D) | rho(q, S) | deficit vs D | deficit vs S | median D-S | median slack | q-per-slack coef (nats), D held fixed | rho(deficit, slack) |
+|---|---|---|---|---|---|---|---|---|---|
+| hi_cross | own | .30-.31 | .50-.59 | 3.3-3.5 | 1.0-1.4 | +55..+57 | 3 | -1.1..-1.4 | .33-.42 |
+| hi_cross | probe | .27-.36 | .20-.24 | 3.4-3.8 | 2.2-2.7 | +46 | 4 | -0.7..-0.95 | .11-.20 |
+| slack0 | own | .54-.58 | .22-.27 | -0.5..-0.65 | -0.4 | +30 | 0 | n/a | n/a |
+| slack0 | probe | .46-.53 | .23-.26 | -0.5..-0.6 | -0.1..-0.4 | +30 | 0 | n/a | n/a |
+
+D-S is large and positive (D is a 8x8-block-level term only; S adds the fine levels, which are negative), so the two shares are on different scales (line slopes 0.81 vs 0.13) and each is compared to q through its own own-draw line.
+
+Reading, plainly:
+- q does not cleanly track either weight on high-slack crossing blocks. rho(q, D) is only 0.27-0.36 there (vs 0.46-0.58 for slack-0 blocks), and rho(q, S) is 0.5-0.6 on own draws but 0.20-0.24 on probes.
+- The median deficit (3.4-3.8 nats) is the same size as the median slack (3-4), but this is a coincidence of medians, not an identity: the rank correlation of deficit with slack is only 0.11-0.42, and at fixed D, q's log share falls by 0.7-1.4 nats per unit of slack (OLS coefficient, 1.0-1.4 on own draws). So q is paying roughly one nat per unit of certificate slack that the direct weight does not charge: consistent with a block carrying B-A free certificate choices having lower per-sample log q (entropy of the certificate conditional) without a matching weight, but this is not proved here.
+- Against the subtree weight the deficit is smaller on own draws (1.0-1.4 nats) but still 2.2-2.7 on probes, so the subtree does not explain it either.
+- Hence neither "q fits the certificate and the gap is the certificate's" nor "q is a poor fit of the weight" is established. What is established: on probes and own draws alike the high-slack blocks sit about 3.5 nats under the direct line, the same size as their median slack, with a loose slack dependence; slack-0 blocks have no deficit. The test the coordinator wanted (an A/B-based weight) needs a definition of the pass's training target on certificates that the bench does not expose; I did not construct one.
