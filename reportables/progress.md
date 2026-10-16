@@ -120,6 +120,10 @@ Approach: fuse ckernel's 32 reverse-KL steps and 8 ML updates into scans, prefet
 Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
+
+## 2026-10-16 11:45 · l4source (L4 coverage: mixing or stationary?) · started
+Approach: cfitpen_ml2 params frozen; L4 target weight / logq / lift-tightness of own, probe, kernel-chain states; chains from own draws and from probe lifts under the population refresh cycle for 32/320/3200 iterations, and L4-only Gibbs with fine fixed. GPU 1 (shared).
+
 - 2026-10-16 11:20 recur finished: recursion (amendment b) does NOT reduce coarse starvation. 30 min/arm vs control (cfitpen_ml2 continued): starved L3/L4 28/98 (K1), 27/98 (K16), 26/62 (K16+probe-L4 ctx) vs 22/47 %; staged viol 0 (one L3 instance in the probe arm); lm 0.64-0.65 vs 0.66. Guard 1 ok (tiny: bias 1.59/0.82/0.36 at K=1/4/16; 0 with exact fine). Whole-world -log Z_K degenerate on ground (ESS=1/K) -> per-cell subtree form (change request #5). Guard 2: no fine context gap. Diagnosis: L4 entropy falls 2.86->2.3-2.5 (mode-seeking); K irrelevant. No bench. reportables/2026-10-16_recur/report.md
 - 2026-10-16 10:52 cdata finished: coarse data/weight arms (ccdata.py; ideas #18, #22). NO arm cuts L3/L4 starvation by a third (L3 probe 0.20 -> best 0.15, L4 worse); validity unchanged. reportables/2026-10-16_cdata/report.md
 

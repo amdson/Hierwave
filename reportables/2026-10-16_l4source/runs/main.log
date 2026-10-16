@@ -1,0 +1,11 @@
+[   10.5] scored ref_own 64
+[   13.7] scored ref_probe 128
+[   22.6] cfg {'n_cycles': 1, 'cg_sweeps': 20, 'hard_sweeps': 2, 'kernel_lam': 20.0, 'tt_Ls': (4, 3), 'tt_m': 4, 'tt_n': 16, 'm_l2': 4, 'n_fine': 3, 'refresh': 0.03, 'nctx': 32}
+[   24.8] scored l4only_1 64
+[   26.3] scored l4only_10 64
+[   27.8] scored l4only_100 64
+[   29.3] scored chain_0 64
+[  108.5] iter 32 s/iter 2.4749026522040367 {'acc_tt_L4': 0.18359375, 'acc_tt_L3': 0.5078125}
+[  110.0] scored chain_32 64
+[  213.5] iter 100 s/iter 1.8416463255882263 {'acc_tt_L4': 0.14453125, 'acc_tt_L3': 0.54296875}
+[  215.0] scored chain_100 64
