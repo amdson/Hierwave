@@ -1,3 +1,21 @@
+# Handoff: 2026-10-16 overnight (8 h, 1 Opus + 4 Sonnet; recursion, coarse planning, long fits)
+
+Read `reportables/2026-10-16_overnight/report.md` (plan, every agent's numbers, synthesis with decisions for the user). Per-agent reports: `reportables/2026-10-16_{starve,recur,cdata,certfree,longfit,longfit2,l4source,dsector,relax4,l3cap}/`. Board regenerated, all pushed.
+
+**Best ground row:** `clongfit_stage` (`castlegen/variants/clongfit.py` + `clongfit_stage.py`: ML-only fit with NO penalty steps, nctx 64, ml_B 32, cln6 actor; fixed stage R 30). 300 s x 4 seeds: 0 final violations at every level on 4/4 seeds, F -0.164 (ml2 row -0.09), line_match 0.66-0.67 (chain 0.69), roughness 1.37-1.46, gen 0.40 s/world; 600 s and 1200 s rows identical. Fails only the old probe flag. The gain over `cfitpen_ml2_stage` comes from dropping the penalty-ML steps (longfit2), not batch, context or length.
+
+**Ruled out:** recursive K-sample coarse training (Amendment (b)): worse coarse starvation at K 1 and K 16 under the guards; whole-world form degenerate on ground (ESS 1/K; change request #5). More coarse data / coarse-only steps (cdata, 7 arms). Certificate-free pass (certfree): not reproducible at 600 s, offset +-1 row seed-dependent. Longer L4 refresh (l4source): already stationary. L3 head width x2 / 8x8 window (l3cap): deficit unchanged.
+
+**Key reinterpretation (l4source, relax4):** the L4 "coverage problem" was a probe artefact. Exact-lift probes pin rho4 in pure cells to values p* never produces and the direct weight omits ~2.7 nats/pure cell of the rho ladder. With coarse-relaxed probes (10 hard Gibbs sweeps, levels 4..1): L4 starved 4-10 %, rho +0.31 for both models; clongfit's L3 starved 7-8 % on all 4 seeds = its own-draw level (ml2: 22 %). Remaining coarse defect: high-slack (B-A > 1.5) surface-crossing L3 blocks sit ~3 nats under the direct line for probes and own draws alike; q tracks neither the direct nor the subtree weight there and loses 0.7-1.4 nats per unit slack. Slack-0 blocks: no deficit.
+
+**Dimers (dsector):** worm / alternating-loop kernel (`castlegen/variants/_dimer_loop_kernel.py`, uniform-invariant, tests pass) brings the population to the exact .351/.324/.324 from any start in one sweep (4.6 ms/sweep/world). A pass trained on it has the right orientations (.347/.330/.323) but 0.044 violations per cell; wiring it into the penalty schedule + stage was in progress at the end (see the dsector report's Wave C section if present).
+
+**Decisions pending for the user:** (1) old probe flag: drop it or adopt the v2 block check as the gate (then clongfit_stage is the first accepted ground row); (2) change request #6: block check on coarse-relaxed probes instead of exact lifts (until then L4 columns on the board are uninformative); (3) change request #5 (recommend no); (4) make the no-penalty schedule the default.
+
+**Recommended next:** (a) adopt (2), re-run the board's block check; (b) the L3 training signal on high-slack blocks (what the refresh does to them), not head size; (c) fine-level structure gap (line_match 0.67 vs 0.69).
+
+---
+
 # Handoff: 2026-10-16 (waves 3-4; decisions adopted; first clean ground row)
 
 Read `reportables/2026-10-15_waves/report.md` (all waves, synthesis at the end). User decisions adopted 2026-10-16: constitution Amendment 2026-10-16 (fixed-budget generation stage; `Variant.staged`), dimers bench gate = exact 0.351/0.324/0.324. **Best row:** `cfitpen_ml2_stage` (castlegen/variants/cfitpen.py + cfitstage.py + cstage.py): 0 violations at every level on 4 seeds, F -0.09, line_match 0.65, fails only the old probe flag (user decision pending: drop it / adopt the v2 block check). No jobs running; everything pushed.

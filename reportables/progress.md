@@ -8,6 +8,10 @@ and link them.
 Entry format:
 
 ```
+## 2026-10-16 · coordinator (overnight: recursion, coarse planning, long fits; 10 agent lines) · finished
+Approach: waves A-C, 1 Opus + 4 Sonnet; log `reportables/2026-10-16_overnight/report.md`.
+Result: best row `clongfit_stage` 300 s x 4 seeds, 0 violations, F -0.164, line_match 0.66-0.67 (fails only the old probe flag). Recursion, coarse data, certificate-free pass, L4 refresh length, L3 head size ruled out. L4 starvation shown to be a probe artefact (change request #6); L3 fit problem gone for the no-penalty fit. Dimers worm kernel reaches exact fractions.
+
 ## 2026-10-15 · deq (ideas #22 dimers gate: true equilibrium h/v/d) · finished
 Approach: exact Kasteleyn/Pfaffian edge probabilities on the bench strip, no MCMC.
 Result: [report](2026-10-15_deq/report.md). Exact h/v/d = 0.351/0.324/0.324 (32 rows); 0.5/0.25/0.25 is not the equilibrium; k=3 plateaus are slow-mode.
