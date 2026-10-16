@@ -28,3 +28,5 @@ Constant folding an instruction is taking > 2s:
 This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
 
 If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+trained K16_probe {"timing": {"setup": 142.41598677635193, "total": 201.47101712226868, "iters": 22}, "updates": 352, "rkl_updates": 705, "rec_updates": 89, "cfg": {"rec_l0": 3, "rec_K": 16, "rec_n": 4, "rec_B": 8, "rec_lr": 0.001, "rec_mode": "footonly", "rkl_levels": [0, 1, 2], "rkl_lam0": null, "upi": 16}}
+snap K16_probe params_003min.pkl {"rho": [0.32682636073581534, 0.7772711252258352, 0.7127154161877503, 0.4956507854443245, -0.46638301277329747], "starved": [0.0, 0.021484375, 0.08984375, 0.25, 0.5625], "rho_sub": [0.32682636073581534, 0.8403302745964324, 0.6805058096594654, 0.3281724696183836, -0.48460192037203953], "starved_sub": [0.0, 0.01416015625, 0.09765625, 0.25, 0.78125], "n_own": 4, "n_probe": 4} 11s
