@@ -39,6 +39,10 @@ Starting point: `cfitpen_ml2_stage` (fitted own-draws pass + stage R 30): 0 viol
   Read: more coarse data or more coarse steps on the own-draw population does not fix L3 under-weighting and cannot touch L4 coverage. Together with recur (recursion worsens L4) and starve (probes are states the chain never produces), **L4 is a data-source problem, not a fit or objective problem**: nothing trained on the current kernel population reaches the smooth high-weight states.
 - **longfit2 (launched 09:10 UTC, Sonnet, in longfit's slot):** does clongfit's gain reproduce at 300/600 s and is it batch (ml_B 32, nctx 64) or length? 2 seeds x 3 arms, then a `clongfit_stage` bench row if raw line_match >= 0.66 with 0 raw L3-L4 violations.
 
+## Wave C (from 12:35 UTC)
+- **dsector wave C (resumed 12:35 UTC, GPU1):** worm refresh wired into the standard penalty-ML schedule with the stage (`cdimerworm`, `_stage`); 300 s pre-check with and without the stage; dimers bench 300 s x 2 if valid. Due 14:45 UTC.
+- **relax4 (launched 12:40 UTC, Sonnet, GPU0):** clongfit 300 s on 4 seeds under relaxed vs exact-lift probes (starved %, rho per level) and the high-slack vs slack-0 L3 block measure from starve. Due 14:45 UTC.
+
 ## Synthesis (written 12:30 UTC; dsector and the relaxed-probe check appended below when they land)
 
 **Best ground row to date: `clongfit_stage`** (ML-only fit, no penalty steps, nctx 64, ml_B 32, cln6 actor; fixed stage R 30, F 20 tight refill). 300 s x 4 seeds:
