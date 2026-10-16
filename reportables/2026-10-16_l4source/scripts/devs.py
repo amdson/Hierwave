@@ -49,3 +49,14 @@ for cc, hh, pp in zip(c[ok], h[ok], prof):
 pm = cls(PF) == 1
 print("probe mixed-cell d quantiles 5/50/95:", np.quantile(PD[pm], [.05, .5, .95]).round(2),
       " chain:", np.quantile(D[m], [.05, .5, .95]).round(2))
+# pure-air cells: the chain's occupancy of rho4 = d against noise4(d); the gap is the free energy below
+m = cls(F) == 0
+vals, cnt = np.unique(D[m].astype(int), return_counts=True)
+occ = dict(zip(vals.tolist(), cnt.tolist())); N = m.sum()
+print("air cells (f=0): rho4 | chain occupancy | log occ + noise4 (rel. to the mode) | noise4")
+mode = max(occ, key=occ.get); zz = np.log(occ[mode] / N) + G.BETA * mode ** 2 / 256
+for d in range(0, 21, 2):
+    o = occ.get(d, 0)
+    lo = (np.log(o / N) + G.BETA * d ** 2 / 256 - zz) if o else float("nan")
+    print(f"  {d:3d} {o:5d} {lo:7.2f} {G.BETA*d**2/256:6.2f}")
+print("P(rho4 <= 1 | air) chain:", float((D[m] <= 1).mean()), " probes (lift):", float((PD[cls(PF) == 0] <= 1).mean()))

@@ -40,7 +40,7 @@ def summ(f):
     return out
 
 res = {}
-names = ["ref_own", "ref_probe"] + [f"l4only_{k}" for k in (1, 10, 100)] + [f"chain_{k}" for k in (0, 32, 100, 320, 1000, 3200)]
+names = ["ref_own", "ref_probe"] + [f"l4only_{k}" for k in (1, 10, 100)] + [f"relax_{k}" for k in (1, 10, 100)] + [f"chain_{k}" for k in (0, 32, 100, 320, 1000, 3200)]
 for n in names:
     f = os.path.join(d, n + ".npz")
     if os.path.exists(f):
