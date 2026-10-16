@@ -1,0 +1,5 @@
+periodic 32 worlds rep 0: 18.4s viol [0, 0, 0, 0, 0] tiles changed 0.0333
+periodic 32 worlds rep 1: 1.7s viol [0, 0, 0, 0, 0] tiles changed 0.0322
+periodic 32 worlds rep 2: 1.7s viol [0, 0, 0, 0, 0] tiles changed 0.0328
+periodic 32 worlds rep 3: 1.6s viol [0, 0, 0, 0, 0] tiles changed 0.0334
+support R30 F150 reach 2432: 178.0s mismatches {('raw', 'rho4'): 0, ('raw', 'cert4'): 0, ('raw', 'rho3'): 0, ('raw', 'cert3'): 0, ('raw', 'rho2'): 0, ('raw', 'cert2'): 0, ('raw', 'rho1'): 0, ('raw', 'cert1'): 0, ('raw', 't'): 0, ('final', 'rho4'): 0, ('final', 'cert4'): 0, ('final', 'rho3'): 0, ('final', 'cert3'): 0, ('final', 'rho2'): 0, ('final', 'cert2'): 0, ('final', 'rho1'): 0, ('final', 'cert1'): 0, ('final', 't'): 0} TOTAL 0

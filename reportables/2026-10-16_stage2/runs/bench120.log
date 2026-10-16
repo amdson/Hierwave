@@ -1,0 +1,67 @@
+[32mActivated conda/uv virtual environment at [36m/venv/main[0m
+E1016 05:41:07.821286  255605 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 1s:
+
+  %gather.74 = s32[8404992,1]{1,0} gather(%iota.11, %constant.325), offset_dims={1}, collapsed_slice_dims={}, start_index_map={0}, index_vector_dim=1, slice_sizes={1}, metadata={op_name="jit(run_slow)/gather" stack_frame_id=21}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1016 05:41:08.300143  255567 slow_operation_alarm.cc:140] The operation took 1.479003548s
+Constant folding an instruction is taking > 1s:
+
+  %gather.74 = s32[8404992,1]{1,0} gather(%iota.11, %constant.325), offset_dims={1}, collapsed_slice_dims={}, start_index_map={0}, index_vector_dim=1, slice_sizes={1}, metadata={op_name="jit(run_slow)/gather" stack_frame_id=21}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+[seed 0] train 300s  final viol {'0': 0.0, '1': 0.0, '2': 0.0, '3': 0.0, '4': 0.0}  F 0.06635451503098011  support 0
+[seed 1] train 301s  final viol {'0': 0.0, '1': 0.0, '2': 0.0, '3': 0.0, '4': 0.0}  F 0.06157591566443443  support 0
+{
+ "final_violations": {
+  "worst_frac": 0.0,
+  "ok": true
+ },
+ "raw_violations_worst": 4.57763671875e-05,
+ "exact_stats": {
+  "per_stat": {},
+  "ok": null
+ },
+ "raw_vs_final": {
+  "per_stat": {
+   "dirt_frac": true,
+   "dirt_excess": false,
+   "roughness": false,
+   "line_match": false,
+   "floating": true,
+   "fill_err": true
+  },
+  "ok": null,
+  "staged": true
+ },
+ "across_seeds": {
+  "per_stat": {
+   "dirt_frac": true,
+   "dirt_excess": true,
+   "roughness": true,
+   "line_match": true,
+   "floating": true,
+   "fill_err": true
+  },
+  "ok": true
+ },
+ "probes": {
+  "flagged": [
+   true,
+   true
+  ],
+  "ok": false
+ },
+ "finite_support": {
+  "worst_mismatch": 0.0,
+  "ok": true
+ },
+ "free_energy": 0.06396521534770727,
+ "within_budget": true,
+ "accepted": false
+}
+ALL_DONE

@@ -121,6 +121,11 @@ Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
 
+## 2026-10-16 · stage2 (ideas #22: stage finite support, warm vs random start, bench row) · finished
+Approach: coordinate-keyed noise for every stage sweep (castlegen/variants/_cstage_ck.py), exact light-cone reach, padded open windows, batched generation.
+Result: [report](2026-10-16_stage2/report.md). Support PASSES (mismatch 0); exact reach of R 30/F 150 is 1904 fine cols (declared 2432 < pass margin 2752). Pass start beats random/all-dirt at equal budget (random 0/128 valid at R 100). Bench: ckpop_hard_pen_stage (R 30) final worst 1.5e-5, stage120 0; both fail only probes.
+Next: shorten the stage by fixing the pass offset; exact cone for R 120.
+
 ## 2026-10-16 05:40 · fitpen (ckpop_hard_pen fit vs penalty rebalance; ideas #18) · finished
 Approach: castlegen/variants/cfitpen.py; 120 s loop of ckpop_hard_pen vs 2x ML steps/iter (ml2) vs 2x ML lr; bench of ml2.
 Result: [report](2026-10-16_fitpen/report.md). cfitpen_ml2 ground 300 s x 2: lm 0.609/0.629, F −0.082, L2 1.2e-4/1.8e-4 (pooled 1.5e-4, 2x baseline), seed 1 fails on 1 L3 instance; not accepted. Offset +3.1 -> +0.8 rows. GPU 0 shared.

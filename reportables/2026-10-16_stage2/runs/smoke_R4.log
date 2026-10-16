@@ -1,0 +1,3 @@
+periodic 32 worlds rep 0: 38.5s viol [32, 45, 29, 15, 0] cells changed (mean over chans) 0.4377
+periodic 32 worlds rep 1: 0.8s viol [35, 49, 33, 13, 2] cells changed (mean over chans) 0.4396
+support R4 F10 reach 384: 107.8s mismatches {('raw', 'rho4'): 0, ('raw', 'cert4'): 0, ('raw', 'rho3'): 0, ('raw', 'cert3'): 0, ('raw', 'rho2'): 0, ('raw', 'cert2'): 0, ('raw', 'rho1'): 0, ('raw', 'cert1'): 0, ('raw', 't'): 0, ('final', 'rho4'): 14, ('final', 'cert4'): 8, ('final', 'rho3'): 59, ('final', 'cert3'): 14, ('final', 'rho2'): 167, ('final', 'cert2'): 24, ('final', 'rho1'): 117, ('final', 'cert1'): 47, ('final', 't'): 50} TOTAL 500

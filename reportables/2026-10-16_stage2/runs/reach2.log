@@ -1,0 +1,15 @@
+ngroups 1 n 437248
+cell_all right 32 left 30
+J1 right 4 left 6
+F2_0 right 2 left 2
+F2_1 right 2 left 2
+F2_2 right 3 left 3
+F2_3 right 5 left 5
+refill right 0 left 0
+rounds 1 (40, 36)
+rounds 2 (104, 70)
+rounds 3 (167, 101)
+rounds 4 (233, 121)
+refill 1 (236, 122)
+refill 2 (240, 124)
+refill 3 (240, 128)

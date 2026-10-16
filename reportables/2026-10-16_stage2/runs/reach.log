@@ -1,0 +1,9 @@
+ngroups 1 n 437248
+cell_all right 32 left 30
+J1 right 4 left 6
+F2_0 right 4 left 4
+F2_1 right 4 left 4
+F2_2 right 3 left 3
+F2_3 right 5 left 5
+refill right 0 left 0
+round exact (40, 36)
