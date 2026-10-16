@@ -127,6 +127,7 @@ def get_stage(p, W):
 class CKPopHardPenStage(VARIANTS["ckpop_hard_pen"]):
     """ckpop_hard_pen + the fixed v1b-d5 stage as repair (R, F in cfg: stage_R, stage_F)."""
     name = "ckpop_hard_pen_stage"
+    staged = True   # amendment 2026-10-16
     STAGE_R, STAGE_F = 30, 150
     STAGE_PAD = 128          # fine columns of stage padding on open windows (multiple of P << T)
 

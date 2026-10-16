@@ -107,3 +107,7 @@ the **block check** is added beside it and is **not an acceptance gate yet**.
   own blocks (a null) and the five worst probe blocks (level, block, deficit).
 - Board: two new columns, rho per level (pooled) and starved % per level, levels 0 / 1 / ... / T,
   direct [subtree].
+
+## 2026-10-16 changes (user decision; the harness is otherwise frozen)
+- `dimers` now has exact orientation fractions h/v/d = 0.351/0.324/0.324 (tol 0.02), from the exact Pfaffian calculation in `reportables/2026-10-15_deq/`; the bench gates on them.
+- Variants may declare `staged = True` (constitution amendment 2026-10-16): raw vs final is then reported, not gated. `ckpop_hard_pen_stage` is the first.

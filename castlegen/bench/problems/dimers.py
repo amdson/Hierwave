@@ -175,7 +175,9 @@ def build_dimers():
         name="dimers", T=T, H=H,
         chans=[Chan("edge", 0, 3, designed=edge_designed), Chan("p", 0, 6)],
         factors=_factors(), W_train=W, W_eval=W, stats=stats, render=render, probes=probes,
-        exact={},
+        # exact orientation fractions of the 32-row bench strip (Kasteleyn/Pfaffian, reportables/2026-10-15_deq;
+        # user decision 2026-10-16). The earlier pre-check target 0.5/0.25/0.25 was not an enumeration.
+        exact={"horizontal": 0.351, "vertical": 0.324, "diagonal": 0.324},
         tol={"horizontal": 0.02, "vertical": 0.02, "diagonal": 0.02, "flip": 0.03, "flip_cells": 0.03},
         notes="triangular-lattice dimers (square grid + (1,1) diagonal): partner direction per cell, "
               "hard matching consistency, strip edges by a designed edge channel; uniform over "

@@ -215,7 +215,7 @@ def run(variant: str, problem_name: str, seeds=2, train_s=150.0, n_eval=16, tag=
             print(f"[seed {k}] train {t_train:.0f}s  final viol {m['viol']['final']}  "
                   f"F {m['free_energy']}  support {m['support_mismatch']:.3g}", flush=True)
 
-    verdict = judge(problem, per_seed, train_s)
+    verdict = judge(problem, per_seed, train_s, staged=bool(getattr(cls, "staged", False)))
     rec = {"bench_version": BENCH_VERSION, "run": run_id, "time": stamp, "variant": variant, "problem": problem_name,
            "problem_version": problem.version, "harness": harness_hash(), "git": git_rev(),
            "machine": f"{platform.node()} {platform.machine()}", "train_budget_s": train_s,
@@ -229,8 +229,8 @@ def run(variant: str, problem_name: str, seeds=2, train_s=150.0, n_eval=16, tag=
     return rec
 
 
-def judge(problem: Problem, per_seed, train_s):
-    """The constitution's acceptance, check by check."""
+def judge(problem: Problem, per_seed, train_s, staged: bool = False):
+    """The constitution's acceptance, check by check. staged: amendment 2026-10-16, raw vs final is reported, not gated."""
     T = problem.T
     v = {}
     worst = max(max(m["viol"]["final"].values()) for m in per_seed)
@@ -255,7 +255,7 @@ def judge(problem: Problem, per_seed, train_s):
         if len(per_seed) > 1:
             xs[name] = all(_agree(*per_seed[0]["stats"]["final"][name], *m["stats"]["final"][name], tol)
                            is not False for m in per_seed[1:])
-    v["raw_vs_final"] = {"per_stat": rf, "ok": all(rf.values()) if rf else None}
+    v["raw_vs_final"] = {"per_stat": rf, "ok": (None if staged else (all(rf.values()) if rf else None)), "staged": staged}
     v["across_seeds"] = {"per_stat": xs, "ok": all(xs.values()) if xs else None}
     pr = [m["probes"] for m in per_seed]
     v["probes"] = {"flagged": [p["flag"] if p else None for p in pr],

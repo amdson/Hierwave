@@ -35,6 +35,10 @@ def register(cls):
 
 class Variant:
     name = "base"
+    # Constitution amendment 2026-10-16 (fixed-budget generation stage): a variant whose generation ends with a
+    # declared fixed-budget local MCMC stage sets staged = True. The bench then reports raw vs final but does not
+    # gate on it (the stage is meant to move the draw), and gates on the stage's own fixed budget via finite support.
+    staged = False
 
     def __init__(self, problem: Problem, seed: int, workdir: str):
         self.problem, self.seed, self.workdir = problem, seed, workdir
