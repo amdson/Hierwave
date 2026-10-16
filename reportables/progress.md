@@ -121,6 +121,9 @@ Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
 
+## 2026-10-16 · longfit2 follow-up (bench clongfit_stage R30 vs cfitpen_ml2_stage, 600 s x 2 seeds) · started
+Next: [report](2026-10-16_longfit2/report.md) section Bench at 600 s
+
 ## 2026-10-16 · longfit2 (clongfit batch vs length; 300/600 s, 2 seeds; GPU 0 shared) · finished
 Result: [report](2026-10-16_longfit2/report.md). raw lm 0.653-0.670 in all arms (big300/big600/small600), same for small batch; raw valid 11-31/128; gate not met, no bench. clongfit_stage variant registered, unbenched.
 Next: clongfit_small + stage R30 at 600 s, or a 20 min run.
