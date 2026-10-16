@@ -85,7 +85,7 @@ class CKernelOwn(CKernel):
     def refine(self, st, key, phase=2):
         c, d = self.cfg, {}
         kf, k4, k2, kg = jax.random.split(key, 4)
-        n = st["t"].shape[0]
+        n = next(iter(st.values())).shape[0]
         if phase == 2 and c["m_flip"] > 0:
             st, rec = self.flip(self.params, jax.random.split(kf, n), st, c["m_flip"])
             rec = jax.device_get(rec)
@@ -146,7 +146,7 @@ class CKernelOwn(CKernel):
         from castlegen.kernels.explore import snis
         c, lay = self.cfg, self.lay_tr
         h, w = lay.hw[c["an_L"]]
-        idx = self.rng.choice(st["t"].shape[0], c["an_n"], replace=False)
+        idx = self.rng.choice(next(iter(st.values())).shape[0], c["an_n"], replace=False)
         sub = {k: x[idx] for k, x in st.items()}
         cells = np.stack([self.rng.integers(h, size=c["an_n"]), self.rng.integers(w, size=c["an_n"])], 1)
         cand, logw, valid, info = self.ann(self.params, key, sub, jnp.asarray(cells, jnp.int32))
@@ -281,7 +281,8 @@ class CKernelPop(CKernelOwn):
         s, nv, _ = self.E(v)
         nv = np.asarray(nv)
         d["valid"] = float((nv == 0).mean())
-        d["viol_per_cell"] = float(nv.mean() / (self.problem.H * st["t"].shape[2]))
+        fine = [ch.name for ch in self.problem.chans if ch.level == 0][0]
+        d["viol_per_cell"] = float(nv.mean() / (self.problem.H * st[fine].shape[2]))
         T = self.problem.T
         cn = f"cert{T}"
         if cn in st:

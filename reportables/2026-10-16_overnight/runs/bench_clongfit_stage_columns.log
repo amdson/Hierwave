@@ -1,0 +1,44 @@
+[ckernel] init reportables/2026-10-14_sweep2a/runs/armB_s0/params_ground.pkl does not match the columns layout: cfast init
+E1016 15:56:12.114243  404172 slow_operation_alarm.cc:73] Constant folding an instruction is taking > 1s:
+
+  %gather.507 = s32[9139520,1]{1,0} gather(%iota.36, %constant.1702), offset_dims={1}, collapsed_slice_dims={}, start_index_map={0}, index_vector_dim=1, slice_sizes={1}, metadata={op_name="jit(_sweep)/while/body/eval_jaxpr/gather" stack_frame_id=27}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1016 15:56:12.815442  404136 slow_operation_alarm.cc:140] The operation took 1.701366946s
+Constant folding an instruction is taking > 1s:
+
+  %gather.507 = s32[9139520,1]{1,0} gather(%iota.36, %constant.1702), offset_dims={1}, collapsed_slice_dims={}, start_index_map={0}, index_vector_dim=1, slice_sizes={1}, metadata={op_name="jit(_sweep)/while/body/eval_jaxpr/gather" stack_frame_id=27}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1016 15:56:17.798456  404165 gpu_hlo_schedule.cc:1068] The byte size of input/output arguments (60832645144) exceeds the base limit (13401744998). This indicates an error in the calculation!
+E1016 15:56:17.798800  404169 gpu_hlo_schedule.cc:1068] The byte size of input/output arguments (60832645144) exceeds the base limit (13401744998). This indicates an error in the calculation!
+E1016 15:56:17.807384  404169 gpu_hlo_schedule.cc:1068] The byte size of input/output arguments (60832645136) exceeds the base limit (13401744998). This indicates an error in the calculation!
+E1016 15:56:17.807850  404167 gpu_hlo_schedule.cc:1068] The byte size of input/output arguments (60832645136) exceeds the base limit (13401744998). This indicates an error in the calculation!
+W1016 15:56:18.184755  404136 hlo_rematerialization.cc:3363] Can't reduce memory use below 11.12GiB (11935313926 bytes) by rematerialization; only reduced to 111.07GiB (119260980140 bytes), down from 366.83GiB (393885245860 bytes) originally
+W1016 15:56:29.454606  404136 bfc_allocator.cc:598] Allocator (GPU_0_bfc) ran out of memory trying to allocate 254.27GiB (rounded to 273024724736) from the lower end requested by op 
+If this is caused by memory fragmentation, the environment variable 'TF_GPU_ALLOCATOR=cuda_malloc_async' may improve the situation.
+Current allocation summary follows.
+W1016 15:56:29.456766  404136 bfc_allocator.cc:609] ********__________________**************xxxxxxxxxxx______________________________________________***
+Traceback (most recent call last):
+  File "/workspace/Hierwave/reportables/2026-10-16_overnight/scripts/bench_warm_prob.py", line 23, in <module>
+    w.train(1e9, lambda d: None)
+  File "/workspace/Hierwave/castlegen/variants/ckernel_own.py", line 320, in train
+    self._pop_stats(pop, v)
+  File "/workspace/Hierwave/castlegen/variants/ckernel_own.py", line 282, in _pop_stats
+    nv = np.asarray(nv)
+         ^^^^^^^^^^^^^^
+  File "/venv/main/lib/python3.12/site-packages/jax/_src/array.py", line 409, in __array__
+    return np.asarray(self._value, dtype=dtype, **kwds)  # pyrefly: ignore[no-matching-overload]
+                      ^^^^^^^^^^^
+  File "/venv/main/lib/python3.12/site-packages/jax/_src/profiler.py", line 420, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/venv/main/lib/python3.12/site-packages/jax/_src/array.py", line 637, in _value
+    npy_value, did_copy = self._single_device_array_to_np_array_did_copy()
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+jax.errors.JaxRuntimeError: RESOURCE_EXHAUSTED: Out of memory while trying to allocate 254.27GiB with allocator GPU_0_bfc on device 0. [executable_name='jit_energy'] [tf-allocator-allocation-error='']
+EXIT 1

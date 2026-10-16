@@ -72,10 +72,14 @@ class CKernel(CFast):
         if init and os.path.exists(init):
             ck = pickle.load(open(init, "rb"))
             pr = ck["trained"]["params"]
-            assert set(pr) == set(self.params), "init params do not match the layout"
-            self.params = jax.tree_util.tree_map(jnp.asarray, pr)
-            self.lam = np.asarray(ck["trained"]["lam"], float)
-            self.start = init
+            if set(pr) == set(self.params):
+                self.params = jax.tree_util.tree_map(jnp.asarray, pr)
+                self.lam = np.asarray(ck["trained"]["lam"], float)
+                self.start = init
+            else:
+                # the init file is a ground fit; on another problem (different layout) start cold
+                print(f"[ckernel] init {init} does not match the {problem.name} layout: cfast init", flush=True)
+                self.start = "cfast init (init layout mismatch)"
 
     # ------------------------------------------------------------------ kernels
     def _build(self, region):
@@ -303,7 +307,7 @@ class CKernel(CFast):
         """One kernel cycle on a batch of states (dict).  Returns (states, diagnostics)."""
         c, d = self.cfg, {}
         kf, k4, k2, kg = jax.random.split(key, 4)
-        n = st["t"].shape[0]
+        n = next(iter(st.values())).shape[0]
         if c["m_flip"] > 0:
             st, rec = self.flip(self.params, jax.random.split(kf, n), st, c["m_flip"])
             rec = jax.device_get(rec)
