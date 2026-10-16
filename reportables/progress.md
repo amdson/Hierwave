@@ -121,6 +121,14 @@ Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
 
+## 2026-10-16 05:40 · fitpen (ckpop_hard_pen fit vs penalty rebalance; ideas #18) · finished
+Approach: castlegen/variants/cfitpen.py; 120 s loop of ckpop_hard_pen vs 2x ML steps/iter (ml2) vs 2x ML lr; bench of ml2.
+Result: [report](2026-10-16_fitpen/report.md). cfitpen_ml2 ground 300 s x 2: lm 0.609/0.629, F −0.082, L2 1.2e-4/1.8e-4 (pooled 1.5e-4, 2x baseline), seed 1 fails on 1 L3 instance; not accepted. Offset +3.1 -> +0.8 rows. GPU 0 shared.
+Next: 2 more seeds; ml2 + L3 penalty scale.
+
+## 2026-10-16 · stage2 (ideas #22: stage finite support, warm vs random start, bench row) · started
+Approach: coordinate-keyed noise for every stage sweep, exact light-cone reach, padded open windows; R in {30,100,240} from pass / random / all-dirt; bench at 300 s.
+
 ## 2026-10-16 · offset (ideas #22, sampler surface offset) · finished
 Approach: per-level implied offset + coarse clamp on hard_pen/pen16 params. Result: offset accumulates in rho3..rho1 draws (not rho4, tiles or repair); see reportables/2026-10-16_offset/report.md.
 
