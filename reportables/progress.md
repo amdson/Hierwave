@@ -120,6 +120,7 @@ Approach: fuse ckernel's 32 reverse-KL steps and 8 ML updates into scans, prefet
 Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
+- 2026-10-16 dthin finished: thin blocks on dimers NOT ANSWERED (no sweeps; OOM with 12 GB held on GPU 0). In 2M cap: 2x6 (0.58M), 3x5 (1.83M); not: 2x8, 2x12, 3x6. reportables/2026-10-16_dthin/report.md
 
 ## 2026-10-16 06:16 · combo (cfitpen_ml2 + fixed stage; ideas #18, #22) · finished
 Approach: `cfitpen_ml2_stage` (castlegen/variants/cfitstage.py) uses ml2's training and cstage's generation at R 30 / F 150. Offline, the stage ran at R 30/100/240 on the ml2 params; the bench ran 300 s x 2 on GPU 1 (shared).
