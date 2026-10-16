@@ -107,3 +107,70 @@ Sweep: `scripts/sweep_recur.py runs/sweep 1800`. Arms back to back on GPU 0, eac
 - Validity holds; structure moves (offset to ~0, |c1| up to 0.91, line_match down).
 - During training the subtree ESS rose (L3 0.3 → 0.6) and the subtree cost per L3 cell fell (+3.8 → −6.6 nats). The coarse levels moved towards contexts where the fine completions are cheap and certain. That is the mode-seeking behaviour of reverse KL on the coarse level with a lower-biased subtree term, not coverage.
 - λ_0 and λ_1 decay to 0 in both arms (λ control: raw violations stay below ε). This is the same in the control.
+
+## Step 3: ground runs (final, 4 arms; K4 skipped on the coordinator's steering)
+Command: `taskset -c 16-23 python scripts/sweep_recur.py runs/sweep 1800` on GPU 0 (shared; smi in `runs/nvidia_*`).
+- Each arm: 30 min, clocked including setup and compile. All arms start from `arm_cfitpen_ml2/params.pkl`.
+- Fine levels L0-L2 keep training exactly as in cfitpen_ml2 (not frozen).
+- Coarse levels L3-L4:
+  - control: ML + pen as in cfitpen_ml2.
+  - recursion arms: 8 subtree-recursion steps per iteration (B 8, footonly, τ 1, Adam 1e-3, clip 10); no ML, no pen.
+- K16_probe: in half the recursion worlds L4 is clamped to a probe lift (ideas #14 contexts) and only L3 is trained there.
+- Evaluation: bench eval_seed with the stage (R 30, F 150; 16 worlds) and the full v2 block check (128 own worlds, 32 probe seeds). Offsets come from `offset.py`'s measure on the 16 staged worlds.
+- Per-iteration logs (own8 line_match / dirt / offset per level, raw violations per level, λ, ESS) are in `runs/sweep/<arm>/train.jsonl`; print them with `scripts/trend.py`. Starvation / rho were measured at 20 min (reduced pool) and at the end only, not every 50 updates: the full block check costs ~1 min.
+
+| arm | iters / ML / rec upd | starved % L0-L4 (probe, direct) | rho L0-L4 | raw viol L0-L4 | staged viol L0-L4 | lm staged (raw) | rough | F | offset / \|c1\| (first dirt) |
+|---|---|---|---|---|---|---|---|---|---|
+| control | 518 / 8288 / 0 | 0/0.4/7.8/**22.1/47.4** | .38/.85/.83/.38/−.25 | 7.6e-5/2.1e-4/6.1e-5/0/0 | 0/0/0/0/0 | **0.660** (0.633) | 1.50 | −0.149 | +0.34 / 0.58 |
+| K = 1 | 476 / 7616 / 3809 | 0/0.2/4.4/28.4/**97.8** | .37/.80/.87/.08/−.55 | 6.5e-5/0/0/0/0 | 0/0/0/0/0 | 0.647 (0.611) | 1.39 | −0.144 | −0.20 / 0.75 |
+| K = 16 | 321 / 5136 / 2569 | 0/0.1/6.5/26.7/**97.6** | .42/.81/.86/.31/−.46 | 6.1e-5/7.6e-5/0/0/0 | 0/0/0/0/0 | 0.639 (0.599) | 1.45 | −0.137 | −0.01 / 0.91 |
+| K = 16 + probe-L4 contexts | 561 / 8976 / 4489 | 0/0.5/7.0/25.8/**62.0** | .40/.83/.74/**.61**/−.16 | 5.0e-5/2.1e-4/2.4e-4/2.4e-4/0 | 1.1e-5/1.5e-5/6.1e-5/**2.4e-4**/0 (L3 over budget: 1 instance) | 0.645 (0.604) | 1.40 | −0.136 | −1.0 / 0.64 |
+| ref.: chain | | | | | | 0.69 | 1.40 | | −0.15 / 0.48 |
+
+Guard (3), against the ML anchor (the control):
+- **No recursion arm reduces starvation.**
+- L4: 98 % starved (K 1, 16) and 62 % (with probe contexts), against 47 % for the control.
+- L3: 26-28 %, against 22 %.
+- K = 1 and K = 16 are indistinguishable at L3 and L4: the K-sample correction is not what decides the outcome.
+- Probe contexts raise L3 rho (0.61 vs 0.38) but not L3 starvation, and cost one staged L3 violation (2.4e-4, over budget).
+- All arms keep staged violations at 0 except K16_probe. The old probe flag fires for all arms (frac_above 1.0), as before.
+- line_match is 0.01-0.02 lower than the control in every recursion arm; |c1| is higher.
+
+## Step 4: diagnosis (bench not run: no arm beats the control on L4 starvation)
+Command: `scripts/diag.py runs/diag.json init=… control=… K16=… K1=… K16_probe=…` (GPU 0, ~4 min).
+- 32 own worlds per params file, K = 16 subtree completions.
+- Per L3 / L4 cell: R_1, R_16, log-weight std, ESS, and the coarse draw's conditional entropy, grouped by block class (air / dirt / mixed = surface-crossing).
+
+Selected numbers (mixed blocks are 88-99 % of cells):
+
+| params | L4 mixed: R_1 − R_16 (lower bound on K = 1 bias) / pure | L4 coarse entropy (mixed) | L3 mixed: R_1 − R_16 / log-w std / ESS | L3 coarse entropy |
+|---|---|---|---|---|
+| start (cfitpen_ml2 300 s) | **9.1** / 0.5-4.4 | 2.84 | 2.7 / 3.0 / 0.47 | 2.35 |
+| control 30 min | 3.3 / 0.3-1.7 | **2.86** | 1.0 / 1.4 / 0.64 | 2.41 |
+| K = 1 | 2.2 / 0.3-1.0 | 2.30 | 0.6 / 1.1 / 0.55 | 2.27 |
+| K = 16 | 3.3 / −0.1-1.2 | 2.52 | 1.0 / 1.4 / 0.57 | 2.32 |
+| K = 16 + probe | 3.4 / 1.0-1.1 | 2.56 | 1.1 / 1.5 / 0.57 | 2.16 |
+
+Why the subtree bound mode-seeks on ground:
+1. The fine misfit is concentrated in surface-crossing (mixed) coarse blocks. At the start, R_1 − R_16 is 9.1 nats per mixed L4 cell against 0.5 nats for a pure dirt cell. This is only a lower bound on the K = 1 bias, which is the KL of the fine completion. L4's subtree ESS is 0.19 at K = 16 (about 3 samples), so K = 16 removes only a part of it. At L3 it is 2.7 nats (ESS 0.47).
+2. The coarse objective is reverse KL in both K = 1 and K = 16. Each L4 cell's free energy is over-estimated by several nats, more for the blocks the fine levels find hardest, and the over-estimate falls only slowly with K (L4 ESS 0.2-0.3 throughout). So the L4 actor concentrates: its conditional entropy on mixed cells falls from 2.84-2.86 (start, control) to 2.30-2.56.
+3. The probe lifts are smooth, low-entropy, high-weight L4 states (agent starve) that own draws never produce. They lose more log q once the L4 conditional sharpens around the states it already draws: starvation goes from 47 % to 98 %.
+4. K = 1 and K = 16 end in the same place because the decisive bias is not the one K controls. In the K = 1 arm the bias that matters is reverse KL's zero-forcing of what own draws never visit, plus the footprint truncation.
+5. The control's L4 is trained by ML on a population that also never visits the probe states (starve: population starved 2 %). It keeps the entropy and is therefore starved less.
+
+The fine levels improve fast in every arm, the control included: the L3 mixed-cell log-weight std falls from 3.0 to 1.4 in 30 min and the R_1 − R_16 gap from 2.7 to 1.0. So the subtree bias shrinks as the fine fit improves. Guard (2) agrees: no context gap at the fine levels.
+
+Answer: **no.** Training L3/L4 by the K-sample recursive cost (K = 1, 16), on top of cfitpen_ml2's fine levels, does not reduce coarse starvation; it doubles it at L4 (47 → 98 %). Probe-lift L4 contexts for L3 (ideas #14) recover part of it (62 %) and lift L3 rho to 0.61, but not L3 starvation. Validity holds, except one L3 instance with probe contexts. Structure is slightly worse.
+
+## Failed / caveats
+- One seed, 30 min per arm.
+- Different iteration counts per arm: rec steps cost time, and the first arm paid ~125 s of compile.
+- Starvation was measured only at 20 min (reduced pool) and at the end, not every 50 updates.
+- The trained form is the per-cell subtree form, not the amendment's whole-world form, which is degenerate on ground (ESS = 1/K). The subtree form carries a footprint-truncation bias even at K = 1.
+- λ_0 / λ_1 decay to 0 under the λ control in all arms, the control included.
+- K4 was not run (steering). No bench was run.
+
+## Next (one line each)
+- A mixed objective for L4: ML on the population (keeps entropy) plus the recursive term only as a penalty-like correction. This is not covered by the amendment.
+- Recursion only at L3, with L4 kept on ML.
+- Revisit when the fine fit makes the L4 subtree ESS > 0.5.

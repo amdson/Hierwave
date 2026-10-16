@@ -48,6 +48,13 @@ Extremes are depth one forward passes from arbitrary levels, with a low-variance
 > - No acceptance. Violations are still traded for entropy (all-dirt ground, empty columns).
 > - Status: mixed. Use as much realised depth as affordable; the bootstrap is only a fallback.
 
+> **Annotation (2026-10-16, recur; amendment 2026-10-16 (b), recursion revisited):** coarse L3/L4 trained by the K-sample cost −log Ẑ_K over fine completions from cfitpen_ml2's fitted fine levels. [Report](2026-10-16_recur/report.md).
+> - Guard 1: on the tiny two-level problem the bias falls with K (1.59/0.82/0.36 nats at K=1/4/16, prior fine model) and is 0 with exact conditionals. The K=1 gradient equals the joint reverse-KL gradient.
+> - On ground the whole-world form is degenerate: log-weight std ~60 nats, ESS = 1/K. The per-coarse-cell subtree form was used instead (ESS ~0.5 at L3, ~0.2 at L4, K = 16).
+> - Ground, 30 min per arm vs the ML control: starved L3/L4 = 28/98 % (K=1), 27/98 % (K=16), 26/62 % (K=16 + probe-L4 contexts), against 22/47 % (control). Validity is kept.
+> - The L4 conditional entropy drops (2.86 → 2.3-2.5): the coarse level mode-seeks. K does not change the outcome.
+> - Status: tried, negative.
+
 ## 3. Multi-pass sampling within hierarchy level
 Get around issues with conditional independence assumptions within same color groups by simply sampling multiple times. May speed things up in net by allowing for fewer colors. In the limit, two color checkerboard would be possible. 
 
@@ -416,3 +423,5 @@ On ground, this gives unsupported columns for support and the full- or occupied-
 > 2026-10-16 longfit2: ML-only fit at 300/600 s, 2 seeds, big (ml_B 32, nctx 64) vs small (ml_B 8, nctx 32): raw line_match 0.653-0.670 in all arms (ml2 0.628), so the gain over ml2 is from dropping penalty steps, not batch or length; raw validity (11-31/128) and R 15 validity (122-127/128) do not reach the 70-min run (46, 128). No bench. See reportables/2026-10-16_longfit2/report.md.
 
 > cdata (2026-10-16, #22): the stage after retraining the coarse levels harder is unchanged (R 30: 0 violations, 128/128 valid, roughness 1.38-1.46, line_match 0.658-0.669 for all seven arms vs control 0.658); more coarse ML does not make the stage's job easier or harder. reportables/2026-10-16_cdata/report.md
+
+> **Annotation (2026-10-16, recur):** recursive coarse training (amendment (b)) with the fixed stage as generation keeps staged violations at 0 (one L3 instance in the probe-context arm). It does not fix coarse coverage: L4 probe starvation rises from 47 to 98 %. Guard 2 on the fitted fine levels shows no cfast-like context gap: fine cost per cell own/probe −0.074/−0.066 at L4, −0.049/−0.070 at L3. [Report](2026-10-16_recur/report.md).
