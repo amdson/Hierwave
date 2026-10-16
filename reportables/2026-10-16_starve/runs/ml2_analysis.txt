@@ -1,0 +1,47 @@
+level set n  starved%  rho(direct)  medDeficit | slack(B-A) mean/q90 | rho_dirt mean
+L0 direct  own   n=262144 starved=  0.0% rho= 0.213 medDef=  0.00 | slack 0.000/0.000 | dirt 0.485
+L0 direct  probe n=262144 starved=  0.0% rho= 0.776 medDef=  0.00 | slack 0.000/0.000 | dirt 0.511
+L0 direct  pop   n=1179648 starved=  0.0% rho= 0.298 medDef=  0.00 | slack 0.000/0.000 | dirt 0.498
+L0 subtree own   n=262144 starved=  0.0% rho= 0.213 medDef=  0.00 | slack 0.000/0.000 | dirt 0.485
+L0 subtree probe n=262144 starved=  0.0% rho= 0.776 medDef=  0.00 | slack 0.000/0.000 | dirt 0.511
+L0 subtree pop   n=1179648 starved=  0.0% rho= 0.298 medDef=  0.00 | slack 0.000/0.000 | dirt 0.498
+L1 direct  own   n= 65536 starved=  0.8% rho= 0.537 medDef= -0.00 | slack 0.022/0.000 | dirt 0.487
+L1 direct  probe n= 65536 starved=  1.6% rho= 0.451 medDef= -0.56 | slack 0.031/0.000 | dirt 0.511
+L1 direct  pop   n=294912 starved=  2.7% rho= 0.633 medDef=  0.06 | slack 0.036/0.000 | dirt 0.498
+L1 subtree own   n= 65536 starved=  0.1% rho= 0.847 medDef=  0.00 | slack 0.022/0.000 | dirt 0.487
+L1 subtree probe n= 65536 starved=  1.1% rho= 0.452 medDef= -0.05 | slack 0.031/0.000 | dirt 0.511
+L1 subtree pop   n=294912 starved=  1.0% rho= 0.903 medDef=  0.10 | slack 0.036/0.000 | dirt 0.498
+L2 direct  own   n= 16384 starved=  2.3% rho= 0.645 medDef= -0.00 | slack 0.139/0.500 | dirt 0.492
+L2 direct  probe n= 16384 starved=  9.1% rho= 0.643 medDef= -0.71 | slack 0.186/1.000 | dirt 0.511
+L2 direct  pop   n= 73728 starved=  9.3% rho= 0.584 medDef=  0.33 | slack 0.202/1.000 | dirt 0.498
+L2 subtree own   n= 16384 starved=  1.5% rho= 0.593 medDef=  0.00 | slack 0.139/0.500 | dirt 0.492
+L2 subtree probe n= 16384 starved=  9.4% rho= 0.644 medDef= -0.26 | slack 0.186/1.000 | dirt 0.511
+L2 subtree pop   n= 73728 starved=  8.3% rho= 0.676 medDef=  0.37 | slack 0.202/1.000 | dirt 0.498
+L3 direct  own   n=  4096 starved=  6.1% rho= 0.639 medDef=  0.00 | slack 0.764/2.750 | dirt 0.481
+L3 direct  probe n=  4096 starved= 23.2% rho= 0.716 medDef=  1.29 | slack 0.869/3.750 | dirt 0.511
+L3 direct  pop   n= 18432 starved= 24.5% rho= 0.415 medDef=  0.86 | slack 0.919/3.250 | dirt 0.498
+    probe starved n=  952 slack mean 3.220 med 3.500  dirt 0.458  weight -1.4
+    probe ok      n= 3144 slack mean 0.158 med 0.000  dirt 0.527  weight -0.1
+    pop starved n= 4518 slack mean 2.779 med 3.000  dirt 0.428  weight -2.2
+    pop ok      n=13914 slack mean 0.315 med 0.000  dirt 0.521  weight -1.7
+L3 subtree own   n=  4096 starved=  4.3% rho= 0.619 medDef=  0.00 | slack 0.764/2.750 | dirt 0.481
+L3 subtree probe n=  4096 starved= 26.5% rho= 0.732 medDef=  2.66 | slack 0.869/3.750 | dirt 0.511
+L3 subtree pop   n= 18432 starved= 24.4% rho= 0.652 medDef=  1.43 | slack 0.919/3.250 | dirt 0.498
+  slack hist L3 (fraction per bin [0.05 0.1  0.2  0.4  0.8  1.6  3.2 ]):
+    own [0.6   0.    0.    0.036 0.056 0.08  0.154 0.073]
+    probe [0.686 0.    0.    0.018 0.024 0.028 0.078 0.166]
+    pop [0.572 0.    0.    0.031 0.046 0.085 0.146 0.119]
+L4 direct  own   n=  1024 starved=  2.6% rho= 0.283 medDef=  0.00 | slack 3.887/7.250 | dirt 0.495
+L4 direct  probe n=  1024 starved= 40.6% rho= 0.254 medDef=  4.31 | slack 3.759/8.000 | dirt 0.511
+L4 direct  pop   n=  4608 starved=  2.3% rho= 0.337 medDef=  0.14 | slack 3.908/7.500 | dirt 0.498
+    probe starved n=  416 slack mean 3.573 med 3.250  dirt 0.441  weight -2.4
+    probe ok      n=  608 slack mean 3.887 med 4.000  dirt 0.558  weight -2.1
+    pop starved n=  107 slack mean 4.586 med 4.500  dirt 0.199  weight -7.2
+    pop ok      n= 4501 slack mean 3.892 med 3.750  dirt 0.505  weight -5.6
+L4 subtree own   n=  1024 starved=  3.1% rho= 0.105 medDef=  0.00 | slack 3.887/7.250 | dirt 0.495
+L4 subtree probe n=  1024 starved= 34.9% rho= 0.210 medDef=  3.94 | slack 3.759/8.000 | dirt 0.511
+L4 subtree pop   n=  4608 starved=  3.9% rho= 0.165 medDef=  0.40 | slack 3.908/7.500 | dirt 0.498
+  slack hist L4 (fraction per bin [0.05 0.1  0.2  0.4  0.8  1.6  3.2 ]):
+    own [0.053 0.    0.    0.025 0.048 0.062 0.198 0.614]
+    probe [0.227 0.    0.    0.018 0.034 0.042 0.098 0.582]
+    pop [0.063 0.    0.    0.027 0.039 0.071 0.182 0.618]

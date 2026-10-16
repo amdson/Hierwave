@@ -120,6 +120,13 @@ Approach: fuse ckernel's 32 reverse-KL steps and 8 ML updates into scans, prefet
 Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
+
+## 2026-10-16 · starve (cfitpen_ml2 starvation: fit vs target) · finished
+Approach: block check on probes / re-run training population / own draws with the same line.
+Result: [report](2026-10-16_starve/report.md). L3 starved: probes 23.2%, population 24.5%, own 6.1% (fit problem); L4: probes 40.6%, population 2.3% (population does not cover probe-like L4 blocks). GPU shared.
+Next: block-level fit pressure at L2-L3 mixed blocks with slack.
+- 2026-10-16 07:53 cdata started: coarse data/weight in the ML steps of cfitpen_ml2 (castlegen/variants/ccdata.py; ideas #18, #22). 6 arms x 20 min from arm_cfitpen_ml2/params.pkl, GPU 1 cores 8-15. reportables/2026-10-16_cdata/
+- 2026-10-16 07:55 recur started: amendment (b) recursive K-sample coarse training (ideas #2, #22). Coarse L3-L4 by -log Z_K over K fine completions from cfitpen_ml2's fine levels; exact check K=1/4/16, clamp gate, K-sweep vs control on GPU 0. reportables/2026-10-16_recur/
 - 2026-10-16 dthin finished: thin blocks on dimers NOT ANSWERED (no sweeps; OOM with 12 GB held on GPU 0). In 2M cap: 2x6 (0.58M), 3x5 (1.83M); not: 2x8, 2x12, 3x6. reportables/2026-10-16_dthin/report.md
 
 ## 2026-10-16 06:16 · combo (cfitpen_ml2 + fixed stage; ideas #18, #22) · finished

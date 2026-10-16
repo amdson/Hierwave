@@ -11,5 +11,6 @@ Starting point: `cfitpen_ml2_stage` (fitted own-draws pass + stage R 30): 0 viol
 | B | 3-6 | Opus `recur` continues (K sweep on ground, longer runs, bench); Sonnets: follow-ups chosen from A (best cdata config long bench; certfree training + bench; longfit stage/bench; dimers sector kernel if a slot is free). |
 | C | 6-8 | consolidation: 4-seed benches of the best 1-2 rows at 300 s and at a long budget, board, synthesis, handoff. |
 
-## Wave A (launched hour 0)
-Results: pending.
+## Wave A (launched hour 0, 07:40 UTC)
+- **starve (done, ~1 h):** for cfitpen_ml2, starvation is a **fit** problem at L2-L3 (population starved under q 9.3 / 24.5 % vs probes 9.1 / 23.2 %; the starved L3 blocks are surface-crossing blocks with certificate slack B-A > 1.5, drawn at the right frequency but under-weighted; slack-0 blocks never starved) and a **coverage** problem at L4 (population 2.3 % starved, probes 40.6 %: the probes are smooth, low-entropy, high-weight coarse states the chain never produces, log q ~3 nats below the population). More ML on this population cannot fix L4; the earlier hard_pen fit was worse at L3 (29/36 %) and better at L4 (25 %). L4 rho is +0.25..0.34 here, not negative. Forwarded: L4 coverage to recur (score probe-lift coarse states by recursion), L3 fit to cdata (judge arms on high-slack L3 blocks). Report: `reportables/2026-10-16_starve/`.
+- recur, cdata, certfree, longfit: running.

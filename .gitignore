@@ -15,3 +15,4 @@ notes/**/*.synctex.gz
 
 # bench: per-run training logs (results/bench.jsonl and board.md are committed)
 results/runs/
+reportables/2026-10-16_starve/runs/*.npz
