@@ -82,4 +82,5 @@ Results:
 | --- | --- | --- | --- |
 | combo | Opus | GPU 1 / 8-15 | `cfitpen_ml2` + the bench-legal stage (R 30): a row that passes every gate but the old probe flag, with chain-like statistics at fewer rounds than hard_pen needed? |
 
-Results: pending.
+- **cfitpen_ml2 4-seed bench (coordinator):** line_match 0.61-0.63 and F -0.08..-0.09 on all four seeds, across-seed agreement passes; pooled L2 1.7e-4 [8.4e-5, 3.0e-4], L3 1.2e-4; 1/4 seeds within budget (single L3 instances and five L2 on seed 3). Reproducible structure gain, validity on the budget.
+- combo: pending.

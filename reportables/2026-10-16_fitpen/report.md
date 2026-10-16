@@ -48,3 +48,16 @@ For comparison, cr2's pen16 (halved penalty steps) reached lm 0.626 with L2 4.9e
 
 ## Next
 Run 2 more seeds of cfitpen_ml2 to settle the pooled L2. Then try upi 12, or ml2 with the L3 penalty steps scaled up (rkl_level_scale {3: 2}), to buy back the L3/L2 margin while keeping lm ≥ 0.61.
+
+## Addendum (coordinator, 2026-10-16): 4-seed bench of `cfitpen_ml2`
+Run by the coordinator on GPU 0 after the agent finished (`runs/bench4_cfitpen_ml2.log`, shared GPU, 1560 MHz; 300 s x 4 seeds, ~2100 updates per seed). Pooled (`scripts/pool.py`):
+
+| level | count / instances | rate | 95 % CI |
+|---|---|---|---|
+| L0 | 46 / 1 048 576 | 4.4e-5 | [3.2e-5, 5.9e-5] |
+| L1 | 21 / 262 144 | 8.0e-5 | [5.0e-5, 1.2e-4] |
+| L2 | 11 / 65 536 | 1.7e-4 | [8.4e-5, 3.0e-4] |
+| L3 | 2 / 16 384 | 1.2e-4 | [1.5e-5, 4.4e-4] |
+| L4 | 0 / 2 048 | 0 | |
+
+Per seed: worst final 1.2e-4 / 2.4e-4 / 2.4e-4 / 3.1e-4 (1 of 4 within budget; the misses are single L3 instances on seeds 1-2 and five L2 instances on seed 3). line_match 0.609 / 0.629 / 0.626 / 0.627, F -0.083 / -0.080 / -0.093 / -0.090, roughness 1.26-1.50, across-seed agreement passes on every statistic, raw vs final passes, finite support 0, old probe flag fires on all four. Not accepted. Reading: the structure gain is reproducible across four seeds (ckpop_hard_pen: 0.557-0.585, F +0.03); validity sits on the budget with pooled L2 straddling it, which is what the stage is for (wave 4, `combo`).
