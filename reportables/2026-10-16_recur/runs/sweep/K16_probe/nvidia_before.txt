@@ -1,0 +1,3 @@
+index, clocks.current.sm [MHz], temperature.gpu, clocks_event_reasons.active, memory.used [MiB]
+0, 1830 MHz, 80, 0x0000000000000004, 4731 MiB
+1, 1845 MHz, 83, 0x0000000000000004, 1479 MiB

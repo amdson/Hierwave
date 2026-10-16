@@ -90,3 +90,20 @@ Command: `scripts/clamp_gate.py runs/clamp_gate_fitpen.json fitpen_ml2=<params>`
 So the recursion should not starve probe-like L3 contexts through fine misfit. At L4 a ~2-nat bias against probe blocks remains, and K = 16 (L4 ESS ~3) removes only part of it.
 
 (Steps 3-4 below.)
+
+## Interim (10:15 UTC, 2 of 5 arms done)
+Sweep: `scripts/sweep_recur.py runs/sweep 1800`. Arms back to back on GPU 0, each started from `arm_cfitpen_ml2/params.pkl` with λ kept (λ control unchanged).
+- Fine levels keep training as in cfitpen_ml2; they are not frozen in any arm.
+- Recursion arms: 8 recursive steps per iteration, B = 8, footonly mode, lr 1e-3.
+- Final evaluation is the bench evaluation with the stage (16 worlds), plus the full v2 block check (128 own worlds, 32 probe seeds).
+
+| arm | iters / ML upd / rec upd | starved % L2 / L3 / L4 (probe, direct) | rho L3 / L4 | raw viol L0-L4 → staged | lm staged (raw) | rough | F | first-dirt offset / \|c1\| |
+|---|---|---|---|---|---|---|---|---|
+| control (cfitpen_ml2 cont.) | 518 / 8288 / 0 | 7.8 / 22.1 / 47.4 | 0.38 / −0.25 | 7.6e-5, 2.1e-4, 6.1e-5, 0, 0 → 0 | 0.660 (0.633) | 1.50 | −0.149 | +0.34 / 0.58 |
+| K = 16 | 321 / 5136 / 2569 | 6.5 / 26.7 / **97.6** | 0.31 / −0.46 | 6.1e-5, 7.6e-5, 0, 0, 0 → 0 | 0.639 (0.599) | 1.45 | −0.137 | −0.01 / 0.91 |
+
+- Recursion at K = 16 does not reduce starvation.
+- L4 collapses: 98 % of probe L4 blocks are starved, against 47 % for the control. L3 is slightly worse: 27 vs 22 %.
+- Validity holds; structure moves (offset to ~0, |c1| up to 0.91, line_match down).
+- During training the subtree ESS rose (L3 0.3 → 0.6) and the subtree cost per L3 cell fell (+3.8 → −6.6 nats). The coarse levels moved towards contexts where the fine completions are cheap and certain. That is the mode-seeking behaviour of reverse KL on the coarse level with a lower-biased subtree term, not coverage.
+- λ_0 and λ_1 decay to 0 in both arms (λ control: raw violations stay below ε). This is the same in the control.

@@ -4,10 +4,11 @@ import jax, numpy as np
 from castlegen.bench.problems import get
 from castlegen.bench.variant import load_variants
 secs, out = float(sys.argv[1]), sys.argv[2]
+SEED = int(__import__("os").environ.get("CF_SEED", "0"))
 cfg = json.loads(sys.argv[3]) if len(sys.argv) > 3 else {}
 import os; os.makedirs(out, exist_ok=True)
 V = load_variants(); p = get("ground")
-v = V["ccertfree"](p, 0, out, **cfg)
+v = V["ccertfree"](p, SEED, out, **cfg)
 f = open(f"{out}/loop.jsonl", "w")
 t0 = time.time()
 v.train(secs, lambda d: f.write(json.dumps(d, default=float) + "\n"))
