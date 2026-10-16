@@ -1,0 +1,3 @@
+R15 F20 0.24s/world raw viol [51, 70, 41, 17, 9] lm 0.666 rough 1.22 off +0.93 | final viol [0, 0, 0, 0, 0] valid 128/128 lm 0.674 rough 1.39 circ 1.39 off +0.56 c1 0.40 chg 0.024
+R30 F20 0.04s/world raw viol [51, 70, 41, 17, 9] lm 0.666 rough 1.22 off +0.93 | final viol [0, 0, 0, 0, 0] valid 128/128 lm 0.674 rough 1.44 circ 1.43 off +0.48 c1 0.40 chg 0.028
+DONE

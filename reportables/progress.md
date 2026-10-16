@@ -121,6 +121,15 @@ Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
 
+## 2026-10-16 · certfree (ideas #22 target B: certificate-free pass, derived certificates, short refill) · finished (wave A)
+Approach: ground_cf (rho + tiles, support0 only), cfitpen_ml2 training on it, certificates derived bottom-up by the tight map, stage on full ground.
+Result: [report](2026-10-16_certfree/report.md). 30-min pass + stage R 30: 128/128 valid, line_match 0.674, rough 1.43, |c1| 0.40, offset +0.48; refill F 0 = F 20; bench 300 s x2: 0 violations, support 0, lm 0.651/0.629, probe flag fails. GPU shared.
+Next: matched cold cfitpen_ml2 control; block check on ground_cf.
+
+## 2026-10-16 · longfit2 (clongfit batch vs length; 300/600 s, 2 seeds; GPU 0 shared) · started
+Approach: clongfit 300 s, clongfit 600 s, clongfit_small (ml_B 8, nctx 32) 600 s; raw eval + R15 stage + block_check; bench clongfit_stage if gate met.
+Next: [report](2026-10-16_longfit2/report.md)
+
 ## 2026-10-16 · longfit (ideas #18/#5/#10, one hour ML-only cln6) · finished
 Approach: clongfit = cfitpen_ml2 population/kernels, rkl_n 0, nctx 64, ml_B 32, 4200 s from scratch on GPU 0, then stage R 15/30/60.
 Result: [report](2026-10-16_longfit/report.md). 34064 updates; raw line_match 0.668 (ml2 0.628), raw viol at/under budget, L3 probe-starved 0.114 (0.232); flat after ~10 min; stage R 15 gives 128/128 valid, R 30 line_match 0.671, rough 1.41, offset -0.01.

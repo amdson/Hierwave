@@ -29,7 +29,7 @@ from ._crecur_core import build
 from .cpass import adam_init
 
 FITPEN_PARAMS = "reportables/2026-10-16_fitpen/runs/arm_cfitpen_ml2/params.pkl"
-REC = dict(rec_l0=3, rec_K=4, rec_n=4, rec_B=8, rec_lr=1e-3, rec_mode="footonly", rec_clip=10.0,
+REC = dict(rec_l0=3, rec_K=4, rec_n=8, rec_B=8, rec_lr=1e-3, rec_mode="footonly", rec_clip=10.0,
            rec_probe_frac=0.0,   # ideas #14 contexts: this fraction of the rec worlds has L_T clamped to a probe lift
            init_params=None)
 
