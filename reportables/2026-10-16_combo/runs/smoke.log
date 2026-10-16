@@ -1,0 +1,6 @@
+[32mActivated conda/uv virtual environment at [36m/venv/main[0m
+train 68.1s updates 0 info {'R': 30, 'F': 150, 'lam': 20.0, 'kind': 'v1b d5 (p10)'}
+ccombo: params dump failed: [Errno 2] No such file or directory: '/tmp/combo_smoke/params_combo.pkl'
+periodic 32 worlds 16.0s viol [607, 310, 180, 83, 7] tiles changed 0.1126
+support check 59.1s mismatches 0
+ALL_DONE

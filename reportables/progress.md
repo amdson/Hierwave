@@ -121,6 +121,16 @@ Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
 
+## 2026-10-16 06:16 · combo (cfitpen_ml2 + fixed stage; ideas #18, #22) · finished
+Approach: `cfitpen_ml2_stage` (castlegen/variants/cfitstage.py) uses ml2's training and cstage's generation at R 30 / F 150. Offline, the stage ran at R 30/100/240 on the ml2 params; the bench ran 300 s x 2 on GPU 1 (shared).
+Result: [report](2026-10-16_combo/report.md). Yes: final violations 0 at every level, support ok, seeds agree, F −0.106, lm 0.646/0.665, rough 1.43/1.45. Not accepted, because the probe flag fires (it fires for every variant). Offline R 30: circular roughness 1.46, offset +0.33 (chain 1.40/−0.15; hard_pen needed R 240); 2.9 % of tiles changed.
+Next: run 2 more seeds; try stage_R 60 for the |c1| margin (0.68 vs the chain's 0.48 at R 30).
+
+## 2026-10-16 06:00 · combo (cfitpen_ml2 + fixed stage; ideas #18, #22) · started
+Approach: cfitpen_ml2_stage (castlegen/variants/cfitstage.py) = ml2 training + cstage generation at R 30; offline stage R 30/100/240 on ml2 params; bench 300 s x 2 on GPU 1.
+Result: pending.
+Next: -
+
 ## 2026-10-16 · stage2 (ideas #22: stage finite support, warm vs random start, bench row) · finished
 Approach: coordinate-keyed noise for every stage sweep (castlegen/variants/_cstage_ck.py), exact light-cone reach, padded open windows, batched generation.
 Result: [report](2026-10-16_stage2/report.md). Support PASSES (mismatch 0); exact reach of R 30/F 150 is 1904 fine cols (declared 2432 < pass margin 2752). Pass start beats random/all-dirt at equal budget (random 0/128 valid at R 100). Bench: ckpop_hard_pen_stage (R 30) final worst 1.5e-5, stage120 0; both fail only probes.

@@ -1,0 +1,3 @@
+index, clocks.current.sm [MHz], temperature.gpu, clocks_event_reasons.active
+0, 1785 MHz, 80, 0x0000000000000004
+1, 210 MHz, 63, 0x0000000000000001

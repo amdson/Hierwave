@@ -1,0 +1,10 @@
+seed 0: setup 1.0 s, updates 2128/4257, counts [15, 5, 2, 0, 0] of [262144, 65536, 16384, 4096, 512], worst 0.00012, PASS viol, F -0.0831, lm 0.609, rough 1.50, nvalid 2, probes True, rho [0.36, 0.63, 0.84, 0.42, -0.26], starved [0.0, 3.4, 8.0, 23.9, 29.4]
+seed 1: setup 1.1 s, updates 2128/4257, counts [7, 3, 3, 1, 0] of [262144, 65536, 16384, 4096, 512], worst 0.00024, fail viol, F -0.0804, lm 0.629, rough 1.28, nvalid 3, probes True, rho [0.4, 0.82, 0.73, 0.4, -0.22], starved [0.0, 5.8, 10.7, 16.7, 42.9]
+seed 2: setup 1.0 s, updates 2112/4225, counts [13, 2, 1, 1, 0] of [262144, 65536, 16384, 4096, 512], worst 0.00024, fail viol, F -0.0930, lm 0.626, rough 1.26, nvalid 5, probes True, rho [0.33, 0.66, 0.82, 0.55, -0.2], starved [0.0, 2.1, 7.9, 17.5, 36.4]
+seed 3: setup 1.0 s, updates 2112/4225, counts [11, 11, 5, 0, 0] of [262144, 65536, 16384, 4096, 512], worst 0.00031, fail viol, F -0.0901, lm 0.627, rough 1.38, nvalid 2, probes True, rho [0.4, 0.74, 0.81, 0.41, -0.23], starved [0.0, 5.1, 7.6, 22.2, 34.8]
+pooled L0: 46/1048576 = 4.39e-05  95% CI [3.21e-05, 5.85e-05]  under budget 2e-4
+pooled L1: 21/262144 = 8.01e-05  95% CI [4.96e-05, 1.22e-04]  under budget 2e-4
+pooled L2: 11/65536 = 1.68e-04  95% CI [8.38e-05, 3.00e-04]  straddles budget 2e-4
+pooled L3: 2/16384 = 1.22e-04  95% CI [1.48e-05, 4.41e-04]  straddles budget 2e-4
+pooled L4: 0/2048 = 0.00e+00  95% CI [0.00e+00, 1.80e-03]  straddles budget 2e-4
+{"final_violations": {"worst_frac": 0.00030517578125, "ok": false}, "raw_vs_final": {"per_stat": {"dirt_frac": true, "dirt_excess": true, "roughness": true, "line_match": true, "floating": true, "fill_err": true}, "ok": true, "staged": false}, "across_seeds": {"per_stat": {"dirt_frac": true, "dirt_excess": true, "roughness": true, "line_match": true, "floating": true, "fill_err": true}, "ok": true}, "probes": {"flagged": [true, true, true, true], "ok": false}, "finite_support": {"worst_mismatch": 0.0, "ok": true}, "free_energy": -0.08665142115205526, "within_budget": true, "accepted": false}
