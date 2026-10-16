@@ -81,3 +81,33 @@ Where the L4 gap sits (chains at 320 / 1000 / 3200 pooled; d = rho4 − 256 f pe
 - If a context source for ideas #14 is wanted: the same relaxed probes instead of exact lifts.
 
 Files: `scripts/l4src.py`, `scripts/relax.py`, `scripts/analyse.py`, `scripts/devs.py`; `runs/main.log`, `runs/relax.log`, `runs/analysis.txt`, `runs/devs.txt`, `runs/main/*.npz` + `summary.json`, `runs/smi_{before,after}.txt`. Chain states at 320/1000/3200 iterations are in `/workspace/scratch/l4source/` (3.5 MB each).
+
+## Relaxed-probe block check (coordinator follow-up, 12:25-12:28 UTC; report-only, bench unchanged)
+- **What ran:** the full v2 `block_check` (128 own worlds, 32 probe seeds × 4, own seeds as in the bench, k = 0, direct weight), twice per model.
+  - Once on the bench's exact-lift probes.
+  - Once on relaxed probes: tiles fixed, then 10 hard Gibbs sweeps of levels 4..1 with the key fixed by probe seed. These are passed to `run.block_check` through a copy of the problem.
+- **Models:**
+  - (a) `cfitpen_ml2`, `reportables/2026-10-16_fitpen/runs/arm_cfitpen_ml2/params.pkl`.
+  - (b) clongfit 300 s seed 0. The bench run folder `results/runs/20261016-113013_clongfit_stage_ground_warm/` has no params, so I used `reportables/2026-10-16_longfit2/runs/big300/params_s0.pkl`, loaded as `clongfit`. Its raw draws are what `clongfit_stage`'s block check scores.
+- **Run details:** script `scripts/relaxcheck.py`, output `runs/relaxcheck.{json,log}`, GPU 1 shared, about 2.5 min.
+- **Reproduction check:** the exact-lift rows reproduce the board (ml2 starved 0/1.6/9.1/23.2/40.6 %) and longfit2's `blocks_s0.txt` (clongfit).
+
+rho_pool per level L0..L4 (exact-lift → relaxed):
+| model | L0 | L1 | L2 | L3 | L4 |
+|---|---|---|---|---|---|
+| cfitpen_ml2 | .32 → .25 | .83 → .58 | .82 → .61 | .40 → .54 | **−.25 → +.31** |
+| clongfit 300 s | .40 → .30 | .84 → .67 | .86 → .67 | .51 → .53 | **−.16 → +.31** |
+
+Starved % of probe blocks per level L0..L4 (exact-lift → relaxed; own-draw starved % unchanged by construction):
+| model | L0 | L1 | L2 | L3 | L4 | own L3 / L4 |
+|---|---|---|---|---|---|---|
+| cfitpen_ml2 | 0 → 0 | 1.6 → 3.2 | 9.1 → 9.3 | 23.2 → 21.9 | **40.6 → 3.9** | 6.1 / 2.6 |
+| clongfit 300 s | 0 → 0 | 0.5 → 0.9 | 4.4 → 3.0 | 14.3 → 7.8 | **31.0 → 4.6** | 8.3 / 2.0 |
+
+- **Validity as a reference:** the relaxed probes' coarse channels match the chain. The air rho ladder at L1-L4 is 0.24 / 1.18 / 3.59 / 7.56, against the chain's 0.25 / 1.2 / 3.65 / 7.8.
+  - Their tiles are the probes' own, unchanged by construction: line_match 0.77, roughness 1.12. The chain has 0.67-0.69 / 1.40.
+  - So they are a valid reference for coarse given tiles, but not for tile statistics. Neither were the exact lifts.
+- **Reading:**
+  - Under relaxed probes, L4 is not starved for either model (3.9 / 4.6 % vs own 2.6 / 2.0 %), and L4 rho turns positive (+0.31).
+  - L3 remains: ml2 is starved 22 % either way (the fit problem). clongfit halves to 7.8 %, near its own 8.3 %.
+  - L1-L2 rho_pool falls (0.83 → 0.58-0.67), because the relaxed coarse channels add weight spread that q does not rank. Starvation there is unchanged.

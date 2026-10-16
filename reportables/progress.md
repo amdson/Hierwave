@@ -128,6 +128,9 @@ Next: change request #6 (block check on coarse-relaxed probes); relaxed probes a
 
 ## 2026-10-16 · dsector (dimers: sector-changing worm/loop refresh kernel) · started
 Approach: p*-invariant alternating-loop (worm excursion) kernel `castlegen/variants/_dimer_loop_kernel.py`; test detailed balance exactly on tiny strips; run alone on populations (1x/10x/100x sweeps) vs 0.351/0.324/0.324; if within 0.01, 60 s pre-check with it as refresh, then bench. GPU 1 shared with an Opus diagnostic, cores 8-15.
+## 2026-10-16 · dsector · finished
+Result: [report](2026-10-16_dsector/report.md). Worm (alternating-loop) kernel, exact symmetry test on tiny strips; population from collapsed/tiling/all-h starts reaches .351/.325/.324 in 1 sweep (exact .351/.324/.324), stable to 300. Pass trained on it (300 s, 5088 updates): own draws .347/.330/.323 but 4.4 % violations, 0 valid draws; no bench (fails validity). GPU 1 shared.
+Next: wire into ckernel_pop as a variant plus a validity stage/penalty.
 
 
 ## 2026-10-16 · longfit2 follow-up (bench clongfit_stage R30 vs cfitpen_ml2_stage, 600 s x 2) · finished
