@@ -1,0 +1,6 @@
+1 0 rho_pool 0.20 own 0.14 probe 0.34 starved_probe 0.0%
+1 1 rho_pool 0.81 own 0.65 probe 0.46 starved_probe 0.0%
+1 2 rho_pool 0.78 own 0.60 probe 0.59 starved_probe 0.3%
+1 3 rho_pool 0.04 own 0.57 probe 0.65 starved_probe 11.1%
+1 4 rho_pool -0.41 own 0.46 probe -0.18 starved_probe 17.2%
+DONE

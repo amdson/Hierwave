@@ -121,6 +121,9 @@ Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
 
+## 2026-10-16 · certfree wave B (600 s cold x2, offset diagnosis) · finished
+Result: [report](2026-10-16_certfree/report.md) (Wave B). R15 lm 0.650/0.667, 126/128 and 128/128 valid, offset -1.22/+0.99 (raw -1.75/+1.31): 30-min result not reproduced; offset is set by the pass (seed-dependent sign), the stage pulls it 0.3-0.5 toward 0. Bench not run (gate failed). GPU 1 shared.
+
 ## 2026-10-16 · longfit2 follow-up (bench clongfit_stage R30 vs cfitpen_ml2_stage, 600 s x 2 seeds) · started
 Next: [report](2026-10-16_longfit2/report.md) section Bench at 600 s
 

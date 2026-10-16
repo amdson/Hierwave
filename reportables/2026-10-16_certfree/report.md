@@ -45,3 +45,20 @@ Yes for validity and the stage: the pipeline works end to end, 128/128 valid at 
 - R sweep to 100/240 for the offset; warm start by transferring rho/tile nets with a re-initialised first layer.
 
 Files: `castlegen/variants/{_certfree_problem,ccertfree}.py`, `tests/variants/test_certfree.py`, `reportables/2026-10-16_certfree/{scripts/{train,tables,smoke}.py, runs/}`.
+
+## Wave B (600 s cold, 2 seeds; GPU 1, shared with recur / longfit2 / cdata jobs; clocks in runs/b600_s*/nv_*.txt)
+Driver `scripts/sweep_b.sh` (train 600 s -> `tables.py` R 0 and 15, F 20, 128 worlds -> `blockcf.py`); params in `runs/b600_s<seed>/params.pkl`. ML updates 4736 / 4672 (8.4/s).
+
+| seed | raw lm | raw viol L0..L4 | raw offset | R15 lm | R15 rough | R15 offset | R15 abs c1 | R15 viol | valid/128 | tiles chg |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 0.630 | 207,337,205,130,54 | -1.75 | 0.650 | 1.39 | -1.22 | 0.52 | 3,3,0,0,0 | 126 | 2.5 % |
+| 1 | 0.659 | 38,47,25,10,5 | +1.31 | 0.667 | 1.33 | +0.99 | 0.51 | 0,0,0,0,0 | 128 | 2.3 % |
+| (30 min) | 0.666 | 51,70,41,17,9 | +0.93 | 0.674 | 1.39 | +0.56 | 0.40 | 0,0,0,0,0 | 128 | 2.4 % |
+
+Block check on ground_cf (pass only; rho pool / starved % of probe blocks, L0..L4): seed 0 0.31,0.84,0.87,0.25,-0.36 / 0,0,0,14,12; seed 1 0.20,0.81,0.78,0.04,-0.41 / 0,0,0.3,11,17. (Full-ground check at 300 s earlier: 8/7 and 12/2 at L3/L4.) Rho at L3 and L4 pool is weak/negative, own-draw rho 0.5-0.65.
+
+**1. Not reproduced.** 600 s cold gives R15 line_match 0.650 / 0.667 (30 min: 0.674), seed 0 has 6 residual violated instances (126/128 valid), |c1| 0.51-0.52 (not 0.40). Zero violations at 128/128 holds only for seed 1.
+**2. Offset is in the pass, not the stage.** Raw -> R15 offset: -1.75 -> -1.22, +1.31 -> +0.99, (30 min) +0.93 -> +0.48. The stage moves it toward 0 by 0.3-0.5 rows in all three runs; the sign and size are set by the pass and differ by seed (so "+0.5" was one seed's value, not a systematic bias). Per level, the rho-implied offset of own training draws (last 25 iterations, rows; levels 0..4; positive = less dirt) is s0 +0.45,+0.14,+0.26,+0.20,-0.12 (dirt 0.487), s1 +0.17,+0.40,+0.30,+0.18,+0.01 (dirt 0.497), 30 min +0.02,+0.22,+0.19,+0.06,+0.05 (0.500); the kernel population (chain-like) is -0.12..-0.18 (s0), +0.02..+0.12 (s1), -0.1..-0.02 (30 min). So the excess sits at L1-L3 (0.2-0.4 rows) in s1 and the 30-min pass, at L0 (0.45) in s0; it is not a single level. The tile top-row offset in the eval (+1.3 / -1.75) is larger than any rho-implied per-level value, since it also counts invalid (floating, support-violating) raw tiles; the eval measure and the training measure differ, no reconciliation done. No fix tried.
+**3. Not run.** Gate (stage lm >= 0.66 and 0 violations on both seeds) failed (seed 0: 0.650, 6 violations), so the staged 600 s bench was not launched.
+
+Bottom line: certfree at 600 s is no better than the cert-carrying controls on line_match, and has seed-dependent offset; the 30-min result was a good single seed, not yet separated from run length.

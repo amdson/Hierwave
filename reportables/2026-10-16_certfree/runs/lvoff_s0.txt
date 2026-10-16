@@ -1,0 +1,6 @@
+train30/loop.jsonl 
+  own_raw offset/level [0.02, 0.22, 0.19, 0.06, 0.05] dirt 0.5 
+  pop(chain-like) offset/level [-0.1, -0.07, -0.05, -0.04, -0.02] dirt 0.501
+b600_s0/loop.jsonl 
+  own_raw offset/level [0.45, 0.14, 0.26, 0.2, -0.12] dirt 0.487 
+  pop(chain-like) offset/level [-0.12, -0.18, -0.17, -0.13, -0.07] dirt 0.492
