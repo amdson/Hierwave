@@ -205,3 +205,51 @@ Finished refinements differ from the source tiles in 1.4–3.4 % of cells.
 - **Which target is wanted is a modelling choice for the user:**
   1. Keep p as declared (certificates are free variables with uniform weight). Then the scheme needs a correction for #valid certificates, which is not available in closed form. AIS on certificate counts already failed for limbs (memory: limb free energy not estimable).
   2. Treat certificates as derived scaffolding, so that the soft energies alone define the terrain. Then the scheme samples the intended target, and the full chain carries a certificate-entropy artefact.
+
+## 7. Certificate-free MCMC alone, from far starts (`allair.py`, `allair_eq.py`)
+
+**Setup.**
+- Certificate-free ground, 8 fills × 4 replicate chains = 32 worlds, 1500 steps.
+- Starts:
+  - all air and all dirt (both valid);
+  - random tiles and rho (invalid; λ = 20 soft sweeps);
+  - the smooth probe surface (calibration).
+- Schedules:
+  - naive: one full sweep per step;
+  - multiscale: 4 sweeps of levels 4–2, then a full sweep, per step.
+- Reference: the calibration arm's last 500 steps (offset −0.105 rows, roughness 1.396, S 1238).
+
+![allair](allair.png)
+
+| start | valid from step | first entry into band (offset ±0.5, roughness ±0.1, S ±1 %) | wall time (32 worlds, Mac) | strict band (smoothed, ±0.07 rows) | final line_match |
+|---|---|---|---|---|---|
+| probe (calibration) | 0 | 15 | 3 s | 270 | 0.687 |
+| random, λ = 20 | 100 | **100** | 5 s | 1400 | 0.683 |
+| all air | 0 | 220 | 6 s | 1240 | 0.684 |
+| all dirt | 0 | 250 | 7 s | 1070 | 0.684 |
+| all air, multiscale | 0 | 210 | 16 s | 875 | 0.685 |
+| all dirt, multiscale | 0 | 225 | 18 s | 1220 | 0.695 |
+
+- Once inside the band, offset and roughness never leave it in any arm.
+- The soft-energy condition trips on single-record noise in every arm, the calibration arm included.
+
+**Reading.**
+- **Certificate-free single-site MCMC converges on its own from every start**, including all air, all dirt and random, as irreducibility predicts.
+- The bulk reaches equilibrium in 100–250 sweeps, about 0.2 s per world batched on one Mac thread.
+- The strict band, which measures the slow-mode tail (τ ≈ 30–45), takes 1000–1400 sweeps.
+- **The random start with λ = 20 is fastest.** It begins near half full, and the soft phase relaxes it quickly; all air and all dirt have to drift about 30 rows.
+- **Multiscale sweeps don't pay:** about the same number of steps, 2.5× the cost per step.
+
+**Pictures** (`render_allair.py`; red = the designed ground line):
+
+![evolution](allair_evolution.png)
+
+![finals](allair_finals.png)
+
+**What the pictures show:**
+- From all air the surface grows up from the bottom.
+- From all dirt it erodes from the top.
+- From random (λ = 20) floating dirt clears within about 50 sweeps.
+- All starts sit on the line by about 250 sweeps.
+- The final certificate-free worlds track the line with ±1–3-row noise and single-column spikes and pits.
+- Full-ground chain samples look similar but somewhat more blocky (terraced steps), consistent with their certificate slack weighting.
