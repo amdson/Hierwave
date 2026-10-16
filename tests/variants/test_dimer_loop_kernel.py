@@ -80,3 +80,12 @@ def test_sweep_keeps_validity_and_cap_restores():
     assert info["changed"] > 0
     P3, _ = dk.loop_refresh(P.copy(), 200, lmax=1, seed=3)       # cap 1: nothing can close except no-ops
     assert dk.valid_mask(P3).all()
+
+
+def test_repair_makes_valid():
+    H, W = 8, 16
+    rng = np.random.default_rng(0)
+    P = np.zeros((4, H, W), np.int64); P[:, :, 1::2] = 1
+    P[:, 3, 4] = 3; P[:, 5, 7] = 2; P[:, 0, 0] = 3          # corrupt a few cells (incl. off-strip pointer)
+    P2, info = dk.loop_refresh(P.copy(), 0, repair=True, seed=5)
+    assert info["repaired"] == 4 and dk.valid_mask(P2).all()

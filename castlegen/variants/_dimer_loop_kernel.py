@@ -42,6 +42,74 @@ def valid_world(p, H, W, DY, DX, OPP):
 
 
 @njit(cache=True)
+def _repair_world(p, H, W, cap, DY, DX, OPP):
+    """Projection of an invalid draw onto perfect matchings (NOT part of the invariant kernel): cells whose pair is
+    not reciprocated become monomers; each monomer walks as a worm head (random direction, shift along the matched
+    neighbour's dimer) until it lands next to another monomer and pairs with it.  Returns the number of monomers
+    left (0 on success)."""
+    for y in range(H):
+        for x in range(W):
+            d = p[y, x]
+            ok = d >= 0 and d <= 5
+            if ok:
+                y2 = y + DY[d]
+                ok = y2 >= 0 and y2 < H and p[y2, (x + DX[d]) % W] == OPP[d]
+            if not ok:
+                p[y, x] = -2
+    # -2: marked for clearing (must not unmark partners mid-scan, so clear in a second pass)
+    for y in range(H):
+        for x in range(W):
+            if p[y, x] == -2:
+                p[y, x] = -1
+    # a cell that survived but whose partner was cleared cannot occur: reciprocity was tested before clearing, and
+    # clearing cell c only happens if c is unreciprocated, so its pointee (if any) pointed elsewhere.  Re-test.
+    for y in range(H):
+        for x in range(W):
+            d = p[y, x]
+            if d >= 0:
+                y2 = y + DY[d]
+                if p[y2, (x + DX[d]) % W] != OPP[d]:
+                    p[y, x] = -1
+    left = 0
+    for m in range(H * W):
+        my, mx = m // W, m % W
+        if p[my, mx] != -1:
+            continue
+        hy, hx = my, mx
+        done = False
+        for k in range(cap):
+            d = np.random.randint(6)
+            wy = hy + DY[d]
+            if wy < 0 or wy >= H:
+                continue
+            wx = (hx + DX[d]) % W
+            e = p[wy, wx]
+            if e == -1:
+                p[hy, hx] = d
+                p[wy, wx] = OPP[d]
+                done = True
+                break
+            zy, zx = wy + DY[e], (wx + DX[e]) % W
+            p[hy, hx] = d
+            p[wy, wx] = OPP[d]
+            p[zy, zx] = -1
+            hy, hx = zy, zx
+        if not done:
+            left += 1
+    return left
+
+
+@njit(parallel=True, cache=True)
+def _repair(P, cap, DY, DX, OPP, seed):
+    n, H, W = P.shape
+    left = np.zeros(n, np.int64)
+    for b in prange(n):
+        np.random.seed(seed + 7919 * b)
+        left[b] = _repair_world(P[b], H, W, cap, DY, DX, OPP)
+    return left
+
+
+@njit(cache=True)
 def excursion(p, H, W, t, choices, nch, DY, DX, OPP):
     """Deterministic excursion from start cell t (flat index) driven by `choices[:nch]`.  Mutates p.
     Returns (status, used): status 0 closed (p is the new perfect matching), 1 ran out of choices (p is dirty,
@@ -137,13 +205,21 @@ def valid_mask(P):
     return np.array([valid_world(P[b], P.shape[1], P.shape[2], DY, DX, OPP) for b in range(P.shape[0])])
 
 
-def loop_refresh(P, nattempt, lmax=1024, seed=0):
+def loop_refresh(P, nattempt, lmax=1024, seed=0, repair=False):
     """Apply `nattempt` worm excursions per world (a sweep = H*W attempts) to the valid worlds of P (n, H, W)
     in place.  Returns (P, info)."""
     P = np.ascontiguousarray(np.asarray(P), dtype=np.int64)
     ok = valid_mask(P)
+    n_rep = 0
+    if repair and not ok.all():
+        bad = np.where(~ok)[0]
+        sub = np.ascontiguousarray(P[bad])
+        _repair(sub, 20000, DY, DX, OPP, int(seed) + 13)
+        P[bad] = sub
+        n_rep = len(bad)
+        ok = valid_mask(P)
     acc, chg = _sweep(P, int(nattempt), int(lmax), DY, DX, OPP, ok, int(seed))
-    return P, {"valid_frac": float(ok.mean()), "acc": float(acc[ok].sum() / max(ok.sum() * nattempt, 1)),
+    return P, {"valid_frac": float(ok.mean()), "repaired": n_rep, "acc": float(acc[ok].sum() / max(ok.sum() * nattempt, 1)),
                "changed": float(chg[ok].sum() / max(ok.sum() * nattempt, 1))}
 
 

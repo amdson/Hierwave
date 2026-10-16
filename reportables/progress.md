@@ -120,6 +120,12 @@ Approach: fuse ckernel's 32 reverse-KL steps and 8 ML updates into scans, prefet
 Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
+
+## 2026-10-16 12:25 · l4source (L4 coverage: mixing or stationary?) · finished
+Approach: cfitpen_ml2 params frozen; refresh-cycle chains from own draws and from probe lifts (32/320/3200 iterations = 1x/10x/100x a member's lifetime); L4-only Gibbs; probes with tiles fixed and coarse channels redrawn from p*. GPU 1, shared.
+Result: [report](2026-10-16_l4source/report.md). STATIONARY, not mixing. Probe-start chain reaches the population's L4 within 1x (starved 42 -> 1.6 %, direct weight -2.0 -> -5.4); own-start chain is flat to 100x (1.2/2.3/0.8 %). Under p*, pure L4 cells sit about 8 counts off the lift (rho4 0 vs 7.8), worth ~2.7 nats of subtree free energy per cell that the bench's direct weight omits. With probe tiles fixed and coarse channels redrawn, L4 starvation is 3.6 % (own 2.3 %); L3 unchanged at 22 % (fit problem).
+Next: change request #6 (block check on coarse-relaxed probes); relaxed probes as ideas #14 contexts.
+
 ## 2026-10-16 · dsector (dimers: sector-changing worm/loop refresh kernel) · started
 Approach: p*-invariant alternating-loop (worm excursion) kernel `castlegen/variants/_dimer_loop_kernel.py`; test detailed balance exactly on tiny strips; run alone on populations (1x/10x/100x sweeps) vs 0.351/0.324/0.324; if within 0.01, 60 s pre-check with it as refresh, then bench. GPU 1 shared with an Opus diagnostic, cores 8-15.
 

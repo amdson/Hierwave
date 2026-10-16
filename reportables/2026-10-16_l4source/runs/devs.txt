@@ -1,0 +1,33 @@
+class  set        n     mean d   sd d   mean|d|  mean noise4/cell   tile-count dev (s-256f) mean/sd
+air (f=0)   ownchain   1230    7.76   3.92    7.76    1.181      0.90   2.49
+air (f=0)   prbchain   1224    7.65   3.93    7.65    1.156      0.82   2.38
+air (f=0)   probe      1436    0.34   1.58    0.34    0.041
+mixed       ownchain    732   -0.06   5.95    4.77    0.554      0.69  20.67
+mixed       prbchain    756    0.55   5.66    4.49    0.505      2.96  18.94
+mixed       probe      1004   -0.01   6.55    5.16    0.671
+dirt (f=16) ownchain   1110   -7.62   3.93    7.62    1.150     -0.93   2.43
+dirt (f=16) prbchain   1092   -7.58   3.87    7.58    1.131     -0.75   2.27
+dirt (f=16) probe      1656   -0.56   2.12    0.56    0.075
+mixed cells: d bin centre | chain occupancy | log occ + noise4(d) (= -F_rest(d) + const, relative to d=0 bin)
+   -14.0    23    0.28
+   -10.0    80    0.03
+    -6.0   199   -0.06
+    -2.0   348    0.00
+     2.0   403    0.15
+     6.0   281    0.29
+    10.0   118    0.42
+    14.0    30    0.55
+probe mixed-cell d quantiles 5/50/95: [-10.   0.  10.]  chain: [-10.   0.  10.]
+air cells (f=0): rho4 | chain occupancy | log occ + noise4 (rel. to the mode) | noise4
+    0    49   -2.71   0.00
+    2    95   -1.98   0.06
+    4   175   -1.18   0.25
+    6   233   -0.58   0.56
+    8   270    0.00   1.00
+   10   180    0.16   1.56
+   12   137    0.57   2.25
+   14    69    0.70   3.06
+   16    31    0.84   4.00
+   18     7    0.41   5.06
+   20     5    1.26   6.25
+P(rho4 <= 1 | air) chain: 0.04930725346373268  probes (lift): 0.9463788300835655

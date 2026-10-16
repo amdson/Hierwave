@@ -184,6 +184,8 @@ Constitution note: the fine parameters' gradient is a differently weighted avera
 
 > **Annotation (2026-10-14, ccombo):** an f = 1, L = 3 phase (35 %), decaying to full depth, with LN 6x6 + whole-logit τ 8→1 + λ ramp 1→20: levels 3-4 lock into dirt within ~300 updates of release and the fine levels then forget fill contexts (L = 3 fill 1.17). With a 0.5 clamped floor kept to the end, fill beats own at the fine levels (L = 3 0.11 vs 0.71, L = 4 0.56 vs 0.97; cfast 2.23 vs 0.34), but own line_match stays 0.500. Status: tried, gate not passed, no bench. Report: reportables/2026-10-14_ccombo/.
 
+> **Annotation (2026-10-16, l4source):** exact probe lifts are boundary states under p* at the coarse levels. In pure air, rho_l of the lift is about 0 at every level, while p*'s kernel chain sits at 0.25 / 1.2 / 3.65 / 7.8 (L1-L4). Under the chain, 4.9 % of air L4 cells have rho4 ≤ 1; in the lifts, 94.6 %. If #14 contexts are drawn from probes, redraw their coarse channels from p*(coarse | tiles) first (exact hard Gibbs, levels 4..1, ~10 sweeps). That keeps the probe's tile geometry and makes the parents p*-typical (L4 probe starvation 37 % → 3.6 %). `reportables/2026-10-16_l4source/report.md`.
+
 ## 15. Coupled enumeration at the fine levels (from chat / csat agent, 2026-10-14)
 csat's proposal 1: the fine count draws on ground go deterministic and context-blind, and a deterministic policy gets no score-function gradient for actions it never takes. Branch a random subset of non-forced fine draws per world (inverse-inclusion weighted, unbiased), enumerate A when |A| ≤ K with coupled replays scored by the cone, and replay only inside the cone window. Inside the allowed freedoms ("branching at any level, enumerating small candidate sets").
 
@@ -257,6 +259,8 @@ Keep the shared-weight actor soft until it has learned context-dependent structu
 
 
 > cdata (2026-10-16, #18): coarse data/weight in cfitpen_ml2's ML steps (pop x2/x4, coarse step x4, +16/+48 coarse-only ML steps; 20 min each, single seed): no arm cuts L3/L4 starvation by a third (L3 probe 0.20 -> best 0.15; L4 gets worse 0.30 -> 0.29-0.52); validity unchanged. reportables/2026-10-16_cdata/report.md
+
+> **Annotation (2026-10-16, l4source, #18):** the L4 coverage gap is not a mixing problem of the refresh. Chains from probe lifts reach the population's L4 distribution within one refresh lifetime (32 iterations; L4 starved 42 → 1.6 %, direct weight −2.0 → −5.4). Chains from own draws stay put for 100x (starved 1.2 / 2.3 / 0.8 %). The kernels' stationary L4 marginal is p*'s, and exact-lift probes are atypical under it. A longer or different p*-invariant refresh cannot, and should not, cover them. `reportables/2026-10-16_l4source/report.md`.
 
 ## 19. Revising (diffusion-style) generation trained by path KL (from chat, user, 2026-10-14) — AUTHORISED
 **Authorised by the user on 2026-10-14** as an objective change under the constitution; see "Amendment 2026-10-14 (b)" in `notes/coloured_pass_constitution.md`.

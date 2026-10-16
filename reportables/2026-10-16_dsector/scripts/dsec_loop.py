@@ -19,7 +19,7 @@ from castlegen.variants._cfast_core import train_pass
 
 init, budget, outf = sys.argv[1], float(sys.argv[2]), sys.argv[3]
 cfg = dict(k_list="2,3", n_sweeps=3, mt_k=4, mt_moves=8, K_mt=8, nctx=32, upi=8, ml_B=8, ml_lr=1e-3, lam_k=20.0, seed=0,
-           mt_on=1, fb_on=1, worm=3, worm_lmax=1024, fb_lam=0.0, wlam=0.0, rkl_n=0, rkl_lr=1e-3)
+           mt_on=1, fb_on=1, worm=3, worm_lmax=1024, repair=1, fb_lam=0.0, wlam=0.0, rkl_n=0, rkl_lr=1e-3)
 for a in sys.argv[4:]:
     k, v = a.split("="); cfg[k] = type(cfg[k])(v) if not isinstance(cfg[k], str) else v
 ks = [int(x) for x in cfg["k_list"].split(",") if x]
@@ -102,9 +102,9 @@ def refine(st, key, rng):
         d["acc_mt"] = float(np.asarray(acc).mean()); d["chg_mt"] = float(np.asarray(chg).mean())
     if cfg["worm"] > 0:
         P = np.asarray(st["p"], np.int64)
-        P, info = dk.loop_refresh(P, int(cfg["worm"]) * P.shape[1] * P.shape[2], lmax=cfg["worm_lmax"], seed=int(rng.integers(1 << 30)))
+        P, info = dk.loop_refresh(P, int(cfg["worm"]) * P.shape[1] * P.shape[2], lmax=cfg["worm_lmax"], seed=int(rng.integers(1 << 30)), repair=bool(cfg["repair"]))
         st = {**st, "p": jnp.asarray(P, jnp.int32)}
-        d["worm_valid_in"] = info["valid_frac"]; d["worm_acc"] = info["acc"]
+        d["worm_valid_in"] = info["valid_frac"]; d["worm_acc"] = info["acc"]; d["worm_repaired"] = info["repaired"]
     return st, d
 
 opt = ml_opt_init(c.params); on = jnp.ones(1, jnp.float32)
