@@ -71,4 +71,5 @@ Results:
 
 Results:
 - **dgate (done):** (1) no valid trained sampler passes the corrected dimers gate; closest is cbound_lam 0.44-0.47/0.39/0.14-0.17; collapsed samplers ~0.5/0.5/0 or 1/0/0; untrained/greedy draws sit inside the box but with 4-5 % violations. (2) A fixed 3x3 block stage does not reach the gate within 480 sweeps from either start (collapsed -> 0.382/0.382/0.237, tiling -> 0.382/0.310/0.307): the h/v-rich and h/d-rich sectors are not connected by local 3x3 moves; 4x4 is not runnable with the current enumeration cap (2.88M completions). Dimers needs a sector-changing move, or the sampler itself has to place the mass. Report: `reportables/2026-10-16_dgate/`.
-- fitpen, stage2, offset: pending.
+- **offset (done):** the height bias is not coarse (rho4 +0.03 rows), not the tiles (+0.05 with rho >= 2 clamped), not repair (raw = repaired) and not visibly the population (dirt 0.492 vs probe 0.508). It accumulates in the intermediate rho draws: rho3 +1.9, rho2 +3.4, rho1 +4.7 rows, each level drawing too little dirt given its parent (pass draws hold 0.436 dirt vs 0.508; the "surface up" sign in the premise was wrong, the surface is lower). pen16 shows only +0.5, so it is specific to the hard_pen run (penalty pressure pushing mid-level rho sparse). Report: `reportables/2026-10-16_offset/`.
+- fitpen, stage2: pending.

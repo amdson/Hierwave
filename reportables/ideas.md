@@ -388,3 +388,5 @@ On ground, this gives unsupported columns for support and the full- or occupied-
 > **Annotation (2026-10-15, kblock):** P5's joint blocks used as a training-time population kernel in ckpop_hard_pen (not as a post-pass step) make no difference: own line_match 0.545-0.565 vs 0.546 at 120 s. [Report](2026-10-15_kblock/report.md).
 
 - dgate 2026-10-16 (dimers, #22): under the exact gate 0.351/0.324/0.324 no trained sampler passes; fixed 3x3 block stage (64 worlds, lam 20) does not reach it within 480 sweeps from collapsed (.38/.38/.24) or tiling (.38/.31/.31) starts, 4x4 not runnable (2.9M completions/tile > max_out); see reportables/2026-10-16_dgate/report.md.
+
+> **Annotation (2026-10-16, offset):** hard_pen's +4.6 row pass offset (less dirt, not more) is not rho4 (+0.03), not tiles (+0.05 with rho>=2 clamped to a probe), not repair (raw = final); it accumulates in the rho3|rho4, rho2|rho3, rho1|rho2 draws (about +1.6, +1.7, +1.3 rows each); the kernel population is near the line (dirt 0.492 vs 0.508), and pen16 has only +0.5. See reportables/2026-10-16_offset/report.md.

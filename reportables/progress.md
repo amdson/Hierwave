@@ -121,6 +121,9 @@ Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
 
+## 2026-10-16 · offset (ideas #22, sampler surface offset) · finished
+Approach: per-level implied offset + coarse clamp on hard_pen/pen16 params. Result: offset accumulates in rho3..rho1 draws (not rho4, tiles or repair); see reportables/2026-10-16_offset/report.md.
+
 ## 2026-10-16 · dgate (ideas #22 dimers: record under corrected gate, fixed-stage reach) · finished
 Approach: tabulated saved dimers h/v/d vs 0.351/0.324/0.324; 3x3 and 1-site+3x3 stages, 64 worlds, two starts.
 Result: [report](2026-10-16_dgate/report.md). No valid trained sampler passes. 3x3 stage not at gate within 480 sweeps (collapsed .38/.38/.24, tiling .38/.31/.31, sectors differ); 4x4 unsupported (2.9M completions > max_out).
