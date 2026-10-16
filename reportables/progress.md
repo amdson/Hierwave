@@ -120,6 +120,10 @@ Approach: fuse ckernel's 32 reverse-KL steps and 8 ML updates into scans, prefet
 Result: pending. Report: 2026-10-14_wave4_bench/report.md.
 
 ---
+
+## 2026-10-16 · longfit2 (clongfit batch vs length; 300/600 s, 2 seeds; GPU 0 shared) · finished
+Result: [report](2026-10-16_longfit2/report.md). raw lm 0.653-0.670 in all arms (big300/big600/small600), same for small batch; raw valid 11-31/128; gate not met, no bench. clongfit_stage variant registered, unbenched.
+Next: clongfit_small + stage R30 at 600 s, or a 20 min run.
 - 2026-10-16 10:15 recur interim: guard 1 ok (tiny problem: bias 1.59/0.82/0.36 at K=1/4/16 with prior fine, 0 with exact fine; K=1 grad = joint). Whole-world -log Z_K degenerate on ground (log-w std ~60 nats, ESS=1/K); per-cell subtree form used (L3 ESS ~0.5 at K=16). Guard 2: fitpen_ml2 fine cost own/probe L4 -0.074/-0.066, L3 -0.049/-0.070 (no cfast-like gap). Ground K=16 vs control (30 min each): starved L3/L4 26.7/97.6 % vs 22.1/47.4 %: recursion worsens L4. reportables/2026-10-16_recur/
 
 ## 2026-10-16 · certfree (ideas #22 target B: certificate-free pass, derived certificates, short refill) · finished (wave A)

@@ -1,6 +1,6 @@
 """clongfit_stage (2026-10-16 overnight, agent longfit2): clongfit's training (ML only, nctx 64, ml_B 32, no penalty)
 plus cstage's fixed stage (Amendment 2026-10-16) as generation.  Pattern: cfitstage.py.  Stage R/F via cfg stage_R (default 30), stage_F (150);
-bench with stage_R 15 as set below."""
+stage R is the cstage default 30 (as cfitpen_ml2_stage)."""
 from __future__ import annotations
 
 from castlegen.bench.variant import VARIANTS, register
@@ -28,5 +28,4 @@ class CLongFitStage(VARIANTS["clongfit"]):
 
 for _k in _BORROW:
     setattr(CLongFitStage, _k, CKPopHardPenStage.__dict__[_k])
-CLongFitStage.STAGE_R = 15
 register(CLongFitStage)
